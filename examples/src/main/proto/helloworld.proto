@@ -27,7 +27,10 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-syntax = "proto3";
+syntax = "proto2";
+
+import "other_types.proto";
+import "third_level.proto";
 
 option java_multiple_files = true;
 option java_package = "io.grpc.examples.helloworld";
@@ -36,18 +39,30 @@ option objc_class_prefix = "HLW";
 
 package helloworld;
 
+extend OtherRequest {
+  optional int32 bar = 126;
+}
+
+message Baz {
+  extend OtherRequest {
+    optional Baz foo_ext = 127;
+  }
+}
+
+
+
+extend OtherRequest {
+  optional Razz foo_baz_ext = 128;
+}
+
 // The greeting service definition.
 service Greeter {
   // Sends a greeting
   rpc SayHello (HelloRequest) returns (HelloReply) {}
+
+  rpc MoreComplicated (OtherRequest) returns (Empty) {}
 }
 
-// The request message containing the user's name.
-message HelloRequest {
-  string name = 1;
-}
-
-// The response message containing the greetings
-message HelloReply {
-  string message = 1;
-}
+service myService {
+  rpc myMethod (Empty) returns (Empty) {};
+};

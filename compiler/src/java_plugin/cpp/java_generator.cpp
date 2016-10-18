@@ -884,14 +884,47 @@ static void PrintMethodHandlerClass(const ServiceDescriptor* service,
 static void PrintGetServiceDescriptorMethod(const ServiceDescriptor* service,
                                    map<string, string>* vars,
                                    Printer* p,
+                                   ProtoFlavor flavor,
                                    bool generate_nano) {
   (*vars)["service_name"] = service->name();
-  p->Print(
-      *vars,
-      "public static $ServiceDescriptor$ getServiceDescriptor() {\n");
-  p->Indent();
-  p->Print(*vars,
-           "return new $ServiceDescriptor$(SERVICE_NAME");
+  (*vars)["proto_class_name"] = google::protobuf::compiler::java::ClassName(service->file());
+  if (flavor == ProtoFlavor::NORMAL) {
+    p->Print(*vars, "private static class $service_name$ServiceDescriptor extends io.grpc.protobuf.ProtobufServiceDescriptor {\n");
+    p->Indent();
+
+    p->Print(*vars, "public com.google.protobuf.Descriptors.FileDescriptor getFile() {\n");
+    p->Indent();
+    p->Print(*vars, "return $proto_class_name$.getDescriptor();\n");
+    p->Outdent();
+    p->Print(*vars, "}\n");
+
+    p->Print(*vars, "$service_name$ServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {\n");
+    p->Indent();
+    p->Print(*vars, "super(name, methods);\n");
+    p->Outdent();
+    p->Print(*vars, "}\n");
+
+    p->Outdent();
+    p->Print(*vars, "}\n\n");
+  }
+
+
+
+  if (flavor == ProtoFlavor::NORMAL) {
+    p->Print(
+        *vars,
+        "public static io.grpc.AbstractServiceDescriptor getServiceDescriptor() {\n");
+    p->Indent();
+    p->Print(*vars,
+             "return new $service_name$ServiceDescriptor(SERVICE_NAME");
+  } else {
+    p->Print(
+        *vars,
+        "public static $ServiceDescriptor$ getServiceDescriptor() {\n");
+    p->Indent();
+    p->Print(*vars,
+             "return new $ServiceDescriptor$(SERVICE_NAME");
+  }
   p->Indent();
   p->Indent();
   for (int i = 0; i < service->method_count(); ++i) {
@@ -902,6 +935,7 @@ static void PrintGetServiceDescriptorMethod(const ServiceDescriptor* service,
   p->Print(");\n");
   p->Outdent();
   p->Outdent();
+
   p->Outdent();
   p->Print("}\n\n");
 }
@@ -1069,7 +1103,7 @@ static void PrintService(const ServiceDescriptor* service,
         "}\n\n");
   }
   PrintMethodHandlerClass(service, vars, p, generate_nano, enable_deprecated);
-  PrintGetServiceDescriptorMethod(service, vars, p, generate_nano);
+  PrintGetServiceDescriptorMethod(service, vars, p, flavor, generate_nano);
   p->Outdent();
   p->Print("}\n");
 }

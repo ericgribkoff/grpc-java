@@ -29,36 +29,31 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc;
+package io.grpc.protobuf;
 
-import com.google.common.base.Preconditions;
+import com.google.protobuf.Descriptors.FileDescriptor;
 
-import java.util.ArrayList;
-import java.util.Arrays;
+import io.grpc.AbstractServiceDescriptor;
+import io.grpc.MethodDescriptor;
+import io.grpc.ServiceDescriptor;
+
 import java.util.Collection;
-import java.util.Collections;
 
-/**
- * Descriptor for a service.
- */
-public final class ServiceDescriptor extends AbstractServiceDescriptor {
+public abstract class ProtobufServiceDescriptor extends AbstractServiceDescriptor {
+  private final ServiceDescriptor wrappedServiceDescriptor;
 
-  private final String name;
-  private final Collection<MethodDescriptor<?, ?>> methods;
-
-  public ServiceDescriptor(String name, MethodDescriptor<?, ?>... methods) {
-    this(name, Arrays.asList(methods));
+  public ProtobufServiceDescriptor(String name, MethodDescriptor<?, ?>... methods) {
+    wrappedServiceDescriptor = new ServiceDescriptor(name, methods);
   }
 
-  public ServiceDescriptor(String name, Collection<MethodDescriptor<?, ?>> methods) {
-    this.name = Preconditions.checkNotNull(name, "name");
-    this.methods = Collections.unmodifiableList(new ArrayList<MethodDescriptor<?, ?>>(methods));
+  public ProtobufServiceDescriptor(String name, Collection<MethodDescriptor<?, ?>> methods) {
+    wrappedServiceDescriptor = new ServiceDescriptor(name, methods);
   }
 
   /** Simple name of the service. It is not an absolute path. */
   @Override
   public String getName() {
-    return name;
+    return wrappedServiceDescriptor.getName();
   }
 
   /**
@@ -67,6 +62,8 @@ public final class ServiceDescriptor extends AbstractServiceDescriptor {
    */
   @Override
   public Collection<MethodDescriptor<?, ?>> getMethods() {
-    return methods;
+    return wrappedServiceDescriptor.getMethods();
   }
+
+  public abstract FileDescriptor getFile();
 }

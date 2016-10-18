@@ -380,8 +380,17 @@ public class WorkerServiceGrpc {
     }
   }
 
-  public static io.grpc.ServiceDescriptor getServiceDescriptor() {
-    return new io.grpc.ServiceDescriptor(SERVICE_NAME,
+  private static class WorkerServiceServiceDescriptor extends io.grpc.protobuf.ProtobufServiceDescriptor {
+    public com.google.protobuf.Descriptors.FileDescriptor getFile() {
+      return io.grpc.benchmarks.proto.Services.getDescriptor();
+    }
+    WorkerServiceServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
+      super(name, methods);
+    }
+  }
+
+  public static io.grpc.AbstractServiceDescriptor getServiceDescriptor() {
+    return new WorkerServiceServiceDescriptor(SERVICE_NAME,
         METHOD_RUN_SERVER,
         METHOD_RUN_CLIENT,
         METHOD_CORE_COUNT,

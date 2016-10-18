@@ -31,42 +31,10 @@
 
 package io.grpc;
 
-import com.google.common.base.Preconditions;
-
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 
-/**
- * Descriptor for a service.
- */
-public final class ServiceDescriptor extends AbstractServiceDescriptor {
+public abstract class AbstractServiceDescriptor {
+  public abstract String getName();
 
-  private final String name;
-  private final Collection<MethodDescriptor<?, ?>> methods;
-
-  public ServiceDescriptor(String name, MethodDescriptor<?, ?>... methods) {
-    this(name, Arrays.asList(methods));
-  }
-
-  public ServiceDescriptor(String name, Collection<MethodDescriptor<?, ?>> methods) {
-    this.name = Preconditions.checkNotNull(name, "name");
-    this.methods = Collections.unmodifiableList(new ArrayList<MethodDescriptor<?, ?>>(methods));
-  }
-
-  /** Simple name of the service. It is not an absolute path. */
-  @Override
-  public String getName() {
-    return name;
-  }
-
-  /**
-   * A collection of {@link MethodDescriptor} instances describing the methods exposed by the
-   * service.
-   */
-  @Override
-  public Collection<MethodDescriptor<?, ?>> getMethods() {
-    return methods;
-  }
+  public abstract Collection<MethodDescriptor<?, ?>> getMethods();
 }

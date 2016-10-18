@@ -203,8 +203,17 @@ public class HealthGrpc {
     }
   }
 
-  public static io.grpc.ServiceDescriptor getServiceDescriptor() {
-    return new io.grpc.ServiceDescriptor(SERVICE_NAME,
+  private static class HealthServiceDescriptor extends io.grpc.protobuf.ProtobufServiceDescriptor {
+    public com.google.protobuf.Descriptors.FileDescriptor getFile() {
+      return io.grpc.health.v1.HealthProto.getDescriptor();
+    }
+    HealthServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
+      super(name, methods);
+    }
+  }
+
+  public static io.grpc.AbstractServiceDescriptor getServiceDescriptor() {
+    return new HealthServiceDescriptor(SERVICE_NAME,
         METHOD_CHECK);
   }
 

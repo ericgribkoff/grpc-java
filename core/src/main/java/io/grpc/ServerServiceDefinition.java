@@ -49,24 +49,23 @@ public final class ServerServiceDefinition {
     return new Builder(serviceName);
   }
 
-  public static Builder builder(ServiceDescriptor serviceDescriptor) {
+  public static Builder builder(AbstractServiceDescriptor serviceDescriptor) {
     return new Builder(serviceDescriptor);
   }
 
-  private final ServiceDescriptor serviceDescriptor;
+  private final AbstractServiceDescriptor serviceDescriptor;
   private final Map<String, ServerMethodDefinition<?, ?>> methods;
 
   private ServerServiceDefinition(
-      ServiceDescriptor serviceDescriptor, Map<String, ServerMethodDefinition<?, ?>> methods) {
+      AbstractServiceDescriptor serviceDescriptor,
+      Map<String, ServerMethodDefinition<?, ?>> methods) {
     this.serviceDescriptor = checkNotNull(serviceDescriptor, "serviceDescriptor");
-    this.methods = Collections.unmodifiableMap(
-        new HashMap<String, ServerMethodDefinition<?, ?>>(methods));
+    this.methods =
+        Collections.unmodifiableMap(new HashMap<String, ServerMethodDefinition<?, ?>>(methods));
   }
 
-  /**
-   * The descriptor for the service.
-   */
-  public ServiceDescriptor getServiceDescriptor() {
+  /** The descriptor for the service. */
+  public AbstractServiceDescriptor getServiceDescriptor() {
     return serviceDescriptor;
   }
 
@@ -84,12 +83,10 @@ public final class ServerServiceDefinition {
     return methods.get(methodName);
   }
 
-  /**
-   * Builder for constructing Service instances.
-   */
+  /** Builder for constructing Service instances. */
   public static final class Builder {
     private final String serviceName;
-    private final ServiceDescriptor serviceDescriptor;
+    private final AbstractServiceDescriptor serviceDescriptor;
     private final Map<String, ServerMethodDefinition<?, ?>> methods =
         new HashMap<String, ServerMethodDefinition<?, ?>>();
 
@@ -98,7 +95,7 @@ public final class ServerServiceDefinition {
       this.serviceDescriptor = null;
     }
 
-    private Builder(ServiceDescriptor serviceDescriptor) {
+    private Builder(AbstractServiceDescriptor serviceDescriptor) {
       this.serviceDescriptor = checkNotNull(serviceDescriptor, "serviceDescriptor");
       this.serviceName = serviceDescriptor.getName();
     }
@@ -111,9 +108,10 @@ public final class ServerServiceDefinition {
      */
     public <ReqT, RespT> Builder addMethod(
         MethodDescriptor<ReqT, RespT> method, ServerCallHandler<ReqT, RespT> handler) {
-      return addMethod(ServerMethodDefinition.create(
-          checkNotNull(method, "method must not be null"),
-          checkNotNull(handler, "handler must not be null")));
+      return addMethod(
+          ServerMethodDefinition.create(
+              checkNotNull(method, "method must not be null"),
+              checkNotNull(handler, "handler must not be null")));
     }
 
     /** Add a method to be supported by the service. */
@@ -122,21 +120,20 @@ public final class ServerServiceDefinition {
       checkArgument(
           serviceName.equals(MethodDescriptor.extractFullServiceName(method.getFullMethodName())),
           "Service name mismatch. Expected service name: '%s'. Actual method name: '%s'.",
-          serviceName, method.getFullMethodName());
+          serviceName,
+          method.getFullMethodName());
       String name = method.getFullMethodName();
       checkState(!methods.containsKey(name), "Method by same name already registered: %s", name);
       methods.put(name, def);
       return this;
     }
 
-    /**
-     * Construct new ServerServiceDefinition.
-     */
+    /** Construct new ServerServiceDefinition. */
     public ServerServiceDefinition build() {
-      ServiceDescriptor serviceDescriptor = this.serviceDescriptor;
+      AbstractServiceDescriptor serviceDescriptor = this.serviceDescriptor;
       if (serviceDescriptor == null) {
-        List<MethodDescriptor<?, ?>> methodDescriptors
-            = new ArrayList<MethodDescriptor<?, ?>>(methods.size());
+        List<MethodDescriptor<?, ?>> methodDescriptors =
+            new ArrayList<MethodDescriptor<?, ?>>(methods.size());
         for (ServerMethodDefinition<?, ?> serverMethod : methods.values()) {
           methodDescriptors.add(serverMethod.getMethodDescriptor());
         }
@@ -145,15 +142,16 @@ public final class ServerServiceDefinition {
       Map<String, ServerMethodDefinition<?, ?>> tmpMethods =
           new HashMap<String, ServerMethodDefinition<?, ?>>(methods);
       for (MethodDescriptor<?, ?> descriptorMethod : serviceDescriptor.getMethods()) {
-        ServerMethodDefinition<?, ?> removed = tmpMethods.remove(
-            descriptorMethod.getFullMethodName());
+        ServerMethodDefinition<?, ?> removed =
+            tmpMethods.remove(descriptorMethod.getFullMethodName());
         if (removed == null) {
           throw new IllegalStateException(
               "No method bound for descriptor entry " + descriptorMethod.getFullMethodName());
         }
         if (removed.getMethodDescriptor() != descriptorMethod) {
           throw new IllegalStateException(
-              "Bound method for " + descriptorMethod.getFullMethodName()
+              "Bound method for "
+                  + descriptorMethod.getFullMethodName()
                   + " not same instance as method in service descriptor");
         }
       }

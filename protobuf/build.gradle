@@ -1,3 +1,13 @@
+// Add dependency on the protobuf plugin
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath libraries.protobuf_plugin
+    }
+}
+
 plugins {
     id "be.insaneprogramming.gradle.animalsniffer" version "1.4.0"
 }
@@ -6,6 +16,7 @@ description = 'gRPC: Protobuf'
 
 dependencies {
     compile project(':grpc-core'),
+            project(':grpc-stub'),
             libraries.protobuf,
             libraries.guava,
             libraries.protobuf_util
@@ -14,6 +25,8 @@ dependencies {
         exclude group: 'com.google.protobuf', module: 'protobuf-lite'
     }
 }
+
+configureProtoCompilation()
 
 animalsniffer {
     signature = "org.codehaus.mojo.signature:java16:+@signature"
