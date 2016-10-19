@@ -37,4 +37,7 @@ public abstract class AbstractServiceDescriptor {
   public abstract String getName();
 
   public abstract Collection<MethodDescriptor<?, ?>> getMethods();
+
+  /** Utility to get new instance with same name and new methods. */
+  public abstract AbstractServiceDescriptor withMethods(Collection<MethodDescriptor<?, ?>> methods);
 }

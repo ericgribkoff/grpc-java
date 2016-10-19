@@ -69,4 +69,9 @@ public final class ServiceDescriptor extends AbstractServiceDescriptor {
   public Collection<MethodDescriptor<?, ?>> getMethods() {
     return methods;
   }
+  
+  @Override
+  public ServiceDescriptor withMethods(Collection<MethodDescriptor<?, ?>> methods) {
+    return new ServiceDescriptor(name, methods);
+  }
 }

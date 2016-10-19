@@ -17,6 +17,7 @@ description = 'gRPC: Protobuf'
 dependencies {
     compile project(':grpc-core'),
             project(':grpc-stub'),
+            project(':grpc-testing'),
             libraries.protobuf,
             libraries.guava,
             libraries.protobuf_util

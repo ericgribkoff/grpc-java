@@ -884,43 +884,47 @@ static void PrintMethodHandlerClass(const ServiceDescriptor* service,
 static void PrintGetServiceDescriptorMethod(const ServiceDescriptor* service,
                                    map<string, string>* vars,
                                    Printer* p,
-                                   ProtoFlavor flavor,
-                                   bool generate_nano) {
-  (*vars)["service_name"] = service->name();
-  (*vars)["proto_class_name"] = google::protobuf::compiler::java::ClassName(service->file());
+                                   ProtoFlavor flavor) {
   if (flavor == ProtoFlavor::NORMAL) {
-    p->Print(*vars, "private static class $service_name$ServiceDescriptor extends io.grpc.protobuf.ProtobufServiceDescriptor {\n");
-    p->Indent();
+    (*vars)["proto_service_descriptor"] = service->name() + "ServiceDescriptor";
+    (*vars)["proto_class_name"] = google::protobuf::compiler::java::ClassName(service->file());
 
+    p->Print(*vars, "private static class $proto_service_descriptor$ extends $ProtobufServiceDescriptor$ {\n");
+    p->Indent();
+    p->Print(*vars, "public $proto_service_descriptor$(String name, io.grpc.MethodDescriptor<?, ?>... methods) {\n");
+    p->Indent();
+    p->Print(*vars, "super(name, methods);\n");
+    p->Outdent();
+    p->Print(*vars, "}\n\n");
+    p->Print(*vars, "public $proto_service_descriptor$(String name, java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {\n");
+    p->Indent();
+    p->Print(*vars, "super(name, methods);\n");
+    p->Outdent();
+    p->Print(*vars, "}\n\n");
+    p->Print(*vars, "@$Override$\n");
+    p->Print(*vars, "public $proto_service_descriptor$ withMethods(java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {\n");
+    p->Indent();
+    p->Print(*vars, "return new $proto_service_descriptor$(getName(), methods);\n");
+    p->Outdent();
+    p->Print(*vars, "}\n\n");
+    p->Print(*vars, "@$Override$\n");
     p->Print(*vars, "public com.google.protobuf.Descriptors.FileDescriptor getFile() {\n");
     p->Indent();
     p->Print(*vars, "return $proto_class_name$.getDescriptor();\n");
     p->Outdent();
     p->Print(*vars, "}\n");
-
-    p->Print(*vars, "$service_name$ServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {\n");
-    p->Indent();
-    p->Print(*vars, "super(name, methods);\n");
-    p->Outdent();
-    p->Print(*vars, "}\n");
-
     p->Outdent();
     p->Print(*vars, "}\n\n");
-  }
-
-
-
-  if (flavor == ProtoFlavor::NORMAL) {
     p->Print(
         *vars,
-        "public static io.grpc.AbstractServiceDescriptor getServiceDescriptor() {\n");
+        "public static $proto_service_descriptor$ getServiceDescriptor() {\n");
     p->Indent();
     p->Print(*vars,
-             "return new $service_name$ServiceDescriptor(SERVICE_NAME");
+             "return new $proto_service_descriptor$(SERVICE_NAME");
   } else {
     p->Print(
         *vars,
-        "public static $ServiceDescriptor$ getServiceDescriptor() {\n");
+        "public static $AbstractServiceDescriptor$ getServiceDescriptor() {\n");
     p->Indent();
     p->Print(*vars,
              "return new $ServiceDescriptor$(SERVICE_NAME");
@@ -1103,7 +1107,7 @@ static void PrintService(const ServiceDescriptor* service,
         "}\n\n");
   }
   PrintMethodHandlerClass(service, vars, p, generate_nano, enable_deprecated);
-  PrintGetServiceDescriptorMethod(service, vars, p, flavor, generate_nano);
+  PrintGetServiceDescriptorMethod(service, vars, p, flavor);
   p->Outdent();
   p->Print("}\n");
 }
@@ -1161,8 +1165,12 @@ void GenerateService(const ServiceDescriptor* service,
   vars["BindableService"] = "io.grpc.BindableService";
   vars["ServerServiceDefinition"] =
       "io.grpc.ServerServiceDefinition";
+  vars["AbstractServiceDescriptor"] =
+      "io.grpc.AbstractServiceDescriptor";
   vars["ServiceDescriptor"] =
       "io.grpc.ServiceDescriptor";
+  vars["ProtobufServiceDescriptor"] =
+      "io.grpc.protobuf.ProtobufServiceDescriptor";
   vars["AbstractStub"] = "io.grpc.stub.AbstractStub";
   vars["MethodDescriptor"] = "io.grpc.MethodDescriptor";
   vars["NanoUtils"] = "io.grpc.protobuf.nano.NanoUtils";

@@ -381,15 +381,26 @@ public class WorkerServiceGrpc {
   }
 
   private static class WorkerServiceServiceDescriptor extends io.grpc.protobuf.ProtobufServiceDescriptor {
+    public WorkerServiceServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
+      super(name, methods);
+    }
+
+    public WorkerServiceServiceDescriptor(String name, java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
+      super(name, methods);
+    }
+
+    @java.lang.Override
+    public WorkerServiceServiceDescriptor withMethods(java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
+      return new WorkerServiceServiceDescriptor(getName(), methods);
+    }
+
+    @java.lang.Override
     public com.google.protobuf.Descriptors.FileDescriptor getFile() {
       return io.grpc.benchmarks.proto.Services.getDescriptor();
     }
-    WorkerServiceServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
-      super(name, methods);
-    }
   }
 
-  public static io.grpc.AbstractServiceDescriptor getServiceDescriptor() {
+  public static WorkerServiceServiceDescriptor getServiceDescriptor() {
     return new WorkerServiceServiceDescriptor(SERVICE_NAME,
         METHOD_RUN_SERVER,
         METHOD_RUN_CLIENT,

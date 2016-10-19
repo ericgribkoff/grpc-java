@@ -64,6 +64,6 @@ public abstract class ProtobufServiceDescriptor extends AbstractServiceDescripto
   public Collection<MethodDescriptor<?, ?>> getMethods() {
     return wrappedServiceDescriptor.getMethods();
   }
-
+  
   public abstract FileDescriptor getFile();
 }

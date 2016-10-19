@@ -204,15 +204,26 @@ public class HealthGrpc {
   }
 
   private static class HealthServiceDescriptor extends io.grpc.protobuf.ProtobufServiceDescriptor {
+    public HealthServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
+      super(name, methods);
+    }
+
+    public HealthServiceDescriptor(String name, java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
+      super(name, methods);
+    }
+
+    @java.lang.Override
+    public HealthServiceDescriptor withMethods(java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
+      return new HealthServiceDescriptor(getName(), methods);
+    }
+
+    @java.lang.Override
     public com.google.protobuf.Descriptors.FileDescriptor getFile() {
       return io.grpc.health.v1.HealthProto.getDescriptor();
     }
-    HealthServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
-      super(name, methods);
-    }
   }
 
-  public static io.grpc.AbstractServiceDescriptor getServiceDescriptor() {
+  public static HealthServiceDescriptor getServiceDescriptor() {
     return new HealthServiceDescriptor(SERVICE_NAME,
         METHOD_CHECK);
   }

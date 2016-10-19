@@ -196,15 +196,26 @@ public class ServerReflectionGrpc {
   }
 
   private static class ServerReflectionServiceDescriptor extends io.grpc.protobuf.ProtobufServiceDescriptor {
+    public ServerReflectionServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
+      super(name, methods);
+    }
+
+    public ServerReflectionServiceDescriptor(String name, java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
+      super(name, methods);
+    }
+
+    @java.lang.Override
+    public ServerReflectionServiceDescriptor withMethods(java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
+      return new ServerReflectionServiceDescriptor(getName(), methods);
+    }
+
+    @java.lang.Override
     public com.google.protobuf.Descriptors.FileDescriptor getFile() {
       return io.grpc.reflection.v1alpha.ServerReflectionProto.getDescriptor();
     }
-    ServerReflectionServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
-      super(name, methods);
-    }
   }
 
-  public static io.grpc.AbstractServiceDescriptor getServiceDescriptor() {
+  public static ServerReflectionServiceDescriptor getServiceDescriptor() {
     return new ServerReflectionServiceDescriptor(SERVICE_NAME,
         METHOD_SERVER_REFLECTION_INFO);
   }

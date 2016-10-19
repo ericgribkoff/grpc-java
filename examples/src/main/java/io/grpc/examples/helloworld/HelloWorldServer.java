@@ -36,7 +36,6 @@ import static io.grpc.stub.ServerCalls.asyncUnaryCall;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.FileDescriptor;
-import com.google.protobuf.EmptyProtos;
 import com.google.protobuf.Message;
 import io.grpc.HandlerRegistry;
 import io.grpc.Metadata;
@@ -127,7 +126,27 @@ public class HelloWorldServer {
 //        //asyncBidiStreamingCall(new ReflectionMethodHandlers<ServerReflectionRequest,
 //        //  ServerReflectionResponse>(this)));
 
-    //ReflectableServerBuilder serverBuilder = 
+    
+    // This doesn't work yet - need plumbing to get protobuf service descriptors to ReflectionService
+    // instance.
+//    server = ServerBuilder.forPort(port)
+//        .addService(ServerInterceptors.intercept(
+//            new GreeterImpl(),
+//            new ServerInterceptor() {
+//              @Override
+//              public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+//                  ServerCall<ReqT, RespT> call,
+//                  final Metadata requestHeaders,
+//                  ServerCallHandler<ReqT, RespT> next) {
+//                return next.startCall(call, requestHeaders);
+//              }
+//            }
+//            )
+//        )
+//        .addService(new io.grpc.protobuf.ReflectionService(null))
+//        .build();
+    
+    // This works with ReflectableServerBuilder.
     server = ReflectableServerBuilder.forPort(port)
         .addService(ServerInterceptors.intercept(
             new GreeterImpl(),
@@ -142,15 +161,7 @@ public class HelloWorldServer {
             }
             )
         )
-//        .addService(serviceBuilder.build())
         .build();
-        //.addService(reflectionServiceBuilder.build());
-    //reflectionCall.initFileDescriptors(serverBuilder.getProtoMessages());
-//    server = serverBuilder
-        //.fallbackHandlerRegistry(
-        //    new ReflectionFallbackRegistry(reflectionServiceBuilder.build())
-        //  )
-//        .build();
     server.start();
     logger.info("Server started, listening on " + port);
     Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -455,7 +466,7 @@ public class HelloWorldServer {
     @java.lang.Override
     @java.lang.SuppressWarnings("unchecked")
     public void invoke(Req request, io.grpc.stub.StreamObserver<Resp> responseObserver) {
-      ((io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty>) responseObserver).onNext(EmptyProtos.Empty.getDefaultInstance());
+      ((io.grpc.stub.StreamObserver<Empty>) responseObserver).onNext(Empty.getDefaultInstance());
       System.out.println("Yoooooohooo!");
       responseObserver.onCompleted();
 //      hws.emptyCall((com.google.protobuf.EmptyProtos.Empty) request,

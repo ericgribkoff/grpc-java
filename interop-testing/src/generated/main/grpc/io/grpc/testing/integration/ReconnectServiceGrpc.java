@@ -270,15 +270,26 @@ public class ReconnectServiceGrpc {
   }
 
   private static class ReconnectServiceServiceDescriptor extends io.grpc.protobuf.ProtobufServiceDescriptor {
+    public ReconnectServiceServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
+      super(name, methods);
+    }
+
+    public ReconnectServiceServiceDescriptor(String name, java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
+      super(name, methods);
+    }
+
+    @java.lang.Override
+    public ReconnectServiceServiceDescriptor withMethods(java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
+      return new ReconnectServiceServiceDescriptor(getName(), methods);
+    }
+
+    @java.lang.Override
     public com.google.protobuf.Descriptors.FileDescriptor getFile() {
       return io.grpc.testing.integration.Test.getDescriptor();
     }
-    ReconnectServiceServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
-      super(name, methods);
-    }
   }
 
-  public static io.grpc.AbstractServiceDescriptor getServiceDescriptor() {
+  public static ReconnectServiceServiceDescriptor getServiceDescriptor() {
     return new ReconnectServiceServiceDescriptor(SERVICE_NAME,
         METHOD_START,
         METHOD_STOP);

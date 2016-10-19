@@ -425,7 +425,7 @@ public class TestServiceGrpc {
     }
   }
 
-  public static io.grpc.ServiceDescriptor getServiceDescriptor() {
+  public static io.grpc.AbstractServiceDescriptor getServiceDescriptor() {
     return new io.grpc.ServiceDescriptor(SERVICE_NAME,
         METHOD_UNARY_CALL,
         METHOD_STREAMING_OUTPUT_CALL,

@@ -194,15 +194,26 @@ public class LoadBalancerGrpc {
   }
 
   private static class LoadBalancerServiceDescriptor extends io.grpc.protobuf.ProtobufServiceDescriptor {
+    public LoadBalancerServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
+      super(name, methods);
+    }
+
+    public LoadBalancerServiceDescriptor(String name, java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
+      super(name, methods);
+    }
+
+    @java.lang.Override
+    public LoadBalancerServiceDescriptor withMethods(java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
+      return new LoadBalancerServiceDescriptor(getName(), methods);
+    }
+
+    @java.lang.Override
     public com.google.protobuf.Descriptors.FileDescriptor getFile() {
       return io.grpc.grpclb.LoadBalancerProto.getDescriptor();
     }
-    LoadBalancerServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
-      super(name, methods);
-    }
   }
 
-  public static io.grpc.AbstractServiceDescriptor getServiceDescriptor() {
+  public static LoadBalancerServiceDescriptor getServiceDescriptor() {
     return new LoadBalancerServiceDescriptor(SERVICE_NAME,
         METHOD_BALANCE_LOAD);
   }

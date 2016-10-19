@@ -490,15 +490,26 @@ public class TestServiceGrpc {
   }
 
   private static class TestServiceServiceDescriptor extends io.grpc.protobuf.ProtobufServiceDescriptor {
+    public TestServiceServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
+      super(name, methods);
+    }
+
+    public TestServiceServiceDescriptor(String name, java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
+      super(name, methods);
+    }
+
+    @java.lang.Override
+    public TestServiceServiceDescriptor withMethods(java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
+      return new TestServiceServiceDescriptor(getName(), methods);
+    }
+
+    @java.lang.Override
     public com.google.protobuf.Descriptors.FileDescriptor getFile() {
       return io.grpc.testing.integration.Test.getDescriptor();
     }
-    TestServiceServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
-      super(name, methods);
-    }
   }
 
-  public static io.grpc.AbstractServiceDescriptor getServiceDescriptor() {
+  public static TestServiceServiceDescriptor getServiceDescriptor() {
     return new TestServiceServiceDescriptor(SERVICE_NAME,
         METHOD_EMPTY_CALL,
         METHOD_UNARY_CALL,
