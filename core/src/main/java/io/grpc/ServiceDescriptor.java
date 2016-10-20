@@ -41,7 +41,7 @@ import java.util.Collections;
 /**
  * Descriptor for a service.
  */
-public final class ServiceDescriptor {
+public final class ServiceDescriptor extends AbstractServiceDescriptor {
 
   private final String name;
   private final Collection<MethodDescriptor<?, ?>> methods;
@@ -56,6 +56,7 @@ public final class ServiceDescriptor {
   }
 
   /** Simple name of the service. It is not an absolute path. */
+  @Override
   public String getName() {
     return name;
   }
@@ -64,7 +65,13 @@ public final class ServiceDescriptor {
    * A collection of {@link MethodDescriptor} instances describing the methods exposed by the
    * service.
    */
+  @Override
   public Collection<MethodDescriptor<?, ?>> getMethods() {
     return methods;
+  }
+
+  @Override
+  public ServiceDescriptor withMethods(Collection<MethodDescriptor<?, ?>> methods) {
+    return new ServiceDescriptor(name, methods);
   }
 }
