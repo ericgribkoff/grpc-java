@@ -38,6 +38,7 @@ import io.grpc.Server;
 import io.grpc.ServerInterceptors;
 import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NettyServerBuilder;
+import io.grpc.protobuf.reflection.ProtoReflectableServerBuilder;
 import io.grpc.testing.TestUtils;
 import io.netty.handler.ssl.SslContext;
 
@@ -141,9 +142,10 @@ public class TestServiceServer {
       sslContext = GrpcSslContexts.forServer(
               TestUtils.loadCert("server1.pem"), TestUtils.loadCert("server1.key")).build();
     }
-    server = NettyServerBuilder.forPort(port)
+    
+    server = ProtoReflectableServerBuilder.forBuilder(NettyServerBuilder.forPort(port)
         .sslContext(sslContext)
-        .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
+        .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE))
         .addService(ServerInterceptors.intercept(
             new TestServiceImpl(executor),
             TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY)))
