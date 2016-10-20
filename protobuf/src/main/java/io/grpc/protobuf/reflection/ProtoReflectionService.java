@@ -56,16 +56,22 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 
-public class ProtoReflectionService extends ServerReflectionGrpc.ServerReflectionImplBase {
-  private final Set<ProtoServiceDescriptor> protobufServiceDescriptors;
+/** An implementation of the reflection service. */
+public final class ProtoReflectionService extends ServerReflectionGrpc.ServerReflectionImplBase {
+  private final Set<ProtoServiceDescriptor> protoServiceDescriptors;
   private Set<String> serviceNames;
   private Map<String, FileDescriptor> fileDescriptorsByName;
   private Map<String, FileDescriptor> fileDescriptorsBySymbol;
   private Map<String, Map<Integer, FileDescriptor>> fileDescriptorsByExtensionAndNumber;
   private Boolean mapsInitialized = false;
 
-  public ProtoReflectionService(Set<ProtoServiceDescriptor> protobufServiceDescriptors) {
-    this.protobufServiceDescriptors = protobufServiceDescriptors;
+  /**
+   * Create a new instance of the reflection service for a set of {@link ProtoServiceDescriptor}.
+   *
+   * @param protoServiceDescriptors The services that will be reflectable via this service.
+   */
+  public ProtoReflectionService(Set<ProtoServiceDescriptor> protoServiceDescriptors) {
+    this.protoServiceDescriptors = protoServiceDescriptors;
   }
 
   private void processExtension(FieldDescriptor extension, FileDescriptor fd) {
@@ -110,6 +116,10 @@ public class ProtoReflectionService extends ServerReflectionGrpc.ServerReflectio
     }
   }
 
+  /**
+   * Process the service file descriptors. This prepares a list of the service names and indexes the
+   * file descriptors name, symbol, and extension to facilitate answering reflection requests.
+   */
   private synchronized void initFileDescriptorMaps() {
     if (mapsInitialized) {
       return;
@@ -120,7 +130,7 @@ public class ProtoReflectionService extends ServerReflectionGrpc.ServerReflectio
     fileDescriptorsBySymbol = new HashMap<String, FileDescriptor>();
     fileDescriptorsByExtensionAndNumber = new HashMap<String, Map<Integer, FileDescriptor>>();
     Queue<FileDescriptor> fileDescriptorsToProcess = new LinkedList<FileDescriptor>();
-    for (ProtoServiceDescriptor serviceDescriptor : protobufServiceDescriptors) {
+    for (ProtoServiceDescriptor serviceDescriptor : protoServiceDescriptors) {
       serviceNames.add(serviceDescriptor.getName());
       fileDescriptorsToProcess.offer(serviceDescriptor.getFile());
     }

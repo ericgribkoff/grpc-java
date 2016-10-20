@@ -46,26 +46,48 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.Executor;
 
+/**
+ * A builder to simplify the construction of a server implementing the Reflection API for protobuf
+ * services. This builder automatically adds a {@link ProtoReflectionService} to the server and
+ * registers all protobuf services with the reflection service.
+ *
+ * <p>This builder is designed to wrap another {@link ServerBuilder} and delegate to it for the
+ * actual server creation.
+ */
 public final class ProtoReflectableServerBuilder
     extends ServerBuilder<ProtoReflectableServerBuilder> {
   private final ServerBuilder<?> wrappedServerBuilder;
   private final Set<ProtoServiceDescriptor> protobufServiceDescriptors =
       new HashSet<ProtoServiceDescriptor>();
 
+  /**
+   * Create a server builder that will bind to the given port. This wraps a call to {@link
+   * ServerBuilder}.
+   *
+   * @param port the port on which the server is to be bound.
+   * @return the server builder.
+   */
   public static ProtoReflectableServerBuilder forPort(int port) {
     return new ProtoReflectableServerBuilder(ServerBuilder.forPort(port));
   }
 
+  /**
+   * Create a new ProtoReflectableServerBuilder that wraps the {@link ServerBuilder} instance.
+   *
+   * @param serverBuilder the server builder to use internally.
+   * @return the server builder.
+   */
   public static ProtoReflectableServerBuilder forBuilder(ServerBuilder<?> serverBuilder) {
     return new ProtoReflectableServerBuilder(serverBuilder);
   }
 
-  private ProtoReflectableServerBuilder(ServerBuilder<?> serverBuilder) {
-    this.wrappedServerBuilder = serverBuilder;
-  }
-
+  /** Returns the wrapped {@link ServerBuilder} instance. */
   public ServerBuilder<?> getServerBuilder() {
     return wrappedServerBuilder;
+  }
+
+  private ProtoReflectableServerBuilder(ServerBuilder<?> serverBuilder) {
+    this.wrappedServerBuilder = serverBuilder;
   }
 
   @Override
@@ -125,6 +147,10 @@ public final class ProtoReflectableServerBuilder
     return this;
   }
 
+  /*
+   * Build the server. This delegates to {@link ServerBuilder}'s build() method, but first
+   * instantiates a new {@link ProtoReflectionService} and adds to the server builder.
+   */
   @Override
   public Server build() {
     addService(new ProtoReflectionService(protobufServiceDescriptors));

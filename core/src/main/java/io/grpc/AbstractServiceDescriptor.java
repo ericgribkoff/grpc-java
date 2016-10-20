@@ -33,11 +33,18 @@ package io.grpc;
 
 import java.util.Collection;
 
+/**
+ * The base class for service descriptors.
+ */
 public abstract class AbstractServiceDescriptor {
   public abstract String getName();
 
   public abstract Collection<MethodDescriptor<?, ?>> getMethods();
 
-  /** Helper to get new instance with same name and new methods. */
+  /** 
+   * Children of AbstractServiceDescriptor should override this method to return a new concrete
+   * instance with the same name but a different set of methods. This is intended to be used by
+   * helpers that wrap or intercept a service descriptor's methods.
+   */
   public abstract AbstractServiceDescriptor withMethods(Collection<MethodDescriptor<?, ?>> methods);
 }

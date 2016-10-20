@@ -29,7 +29,7 @@
 
 syntax = "proto2";
 
-//import "other_types.proto";
+import "other_types.proto";
 //import "parallel_other_types.proto";
 
 option java_multiple_files = true;
