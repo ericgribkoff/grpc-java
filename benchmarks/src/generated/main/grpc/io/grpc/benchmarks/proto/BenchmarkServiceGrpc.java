@@ -262,7 +262,7 @@ public class BenchmarkServiceGrpc {
     }
   }
 
-  private static class BenchmarkServiceServiceDescriptor extends io.grpc.protobuf.ProtobufServiceDescriptor {
+  public static class BenchmarkServiceServiceDescriptor extends io.grpc.protobuf.reflection.ProtoServiceDescriptor {
     public BenchmarkServiceServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
       super(name, methods);
     }

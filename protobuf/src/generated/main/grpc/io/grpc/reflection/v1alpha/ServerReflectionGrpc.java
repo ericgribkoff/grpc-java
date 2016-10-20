@@ -19,7 +19,7 @@ import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
  */
 @javax.annotation.Generated(
     value = "by gRPC proto compiler (version 1.1.0-SNAPSHOT)",
-    comments = "Source: reflection.proto")
+    comments = "Source: io/grpc/reflection/v1alpha/reflection.proto")
 public class ServerReflectionGrpc {
 
   private ServerReflectionGrpc() {}
@@ -195,7 +195,7 @@ public class ServerReflectionGrpc {
     }
   }
 
-  private static class ServerReflectionServiceDescriptor extends io.grpc.protobuf.ProtobufServiceDescriptor {
+  public static class ServerReflectionServiceDescriptor extends io.grpc.protobuf.reflection.ProtoServiceDescriptor {
     public ServerReflectionServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
       super(name, methods);
     }

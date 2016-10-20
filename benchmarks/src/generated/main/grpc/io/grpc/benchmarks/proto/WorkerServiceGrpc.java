@@ -380,7 +380,7 @@ public class WorkerServiceGrpc {
     }
   }
 
-  private static class WorkerServiceServiceDescriptor extends io.grpc.protobuf.ProtobufServiceDescriptor {
+  public static class WorkerServiceServiceDescriptor extends io.grpc.protobuf.reflection.ProtoServiceDescriptor {
     public WorkerServiceServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
       super(name, methods);
     }

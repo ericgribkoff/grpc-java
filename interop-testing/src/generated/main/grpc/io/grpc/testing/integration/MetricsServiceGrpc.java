@@ -271,7 +271,7 @@ public class MetricsServiceGrpc {
     }
   }
 
-  private static class MetricsServiceServiceDescriptor extends io.grpc.protobuf.ProtobufServiceDescriptor {
+  public static class MetricsServiceServiceDescriptor extends io.grpc.protobuf.reflection.ProtoServiceDescriptor {
     public MetricsServiceServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
       super(name, methods);
     }

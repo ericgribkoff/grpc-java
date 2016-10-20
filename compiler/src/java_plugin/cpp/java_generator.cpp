@@ -889,7 +889,7 @@ static void PrintGetServiceDescriptorMethod(const ServiceDescriptor* service,
     (*vars)["proto_service_descriptor"] = service->name() + "ServiceDescriptor";
     (*vars)["proto_class_name"] = google::protobuf::compiler::java::ClassName(service->file());
 
-    p->Print(*vars, "private static class $proto_service_descriptor$ extends $ProtobufServiceDescriptor$ {\n");
+    p->Print(*vars, "public static class $proto_service_descriptor$ extends $ProtobufServiceDescriptor$ {\n");
     p->Indent();
     p->Print(*vars, "public $proto_service_descriptor$(String name, io.grpc.MethodDescriptor<?, ?>... methods) {\n");
     p->Indent();
@@ -1170,7 +1170,7 @@ void GenerateService(const ServiceDescriptor* service,
   vars["ServiceDescriptor"] =
       "io.grpc.ServiceDescriptor";
   vars["ProtobufServiceDescriptor"] =
-      "io.grpc.protobuf.ProtobufServiceDescriptor";
+      "io.grpc.protobuf.reflection.ProtoServiceDescriptor";
   vars["AbstractStub"] = "io.grpc.stub.AbstractStub";
   vars["MethodDescriptor"] = "io.grpc.MethodDescriptor";
   vars["NanoUtils"] = "io.grpc.protobuf.nano.NanoUtils";

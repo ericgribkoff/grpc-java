@@ -193,7 +193,7 @@ public class LoadBalancerGrpc {
     }
   }
 
-  private static class LoadBalancerServiceDescriptor extends io.grpc.protobuf.ProtobufServiceDescriptor {
+  public static class LoadBalancerServiceDescriptor extends io.grpc.protobuf.reflection.ProtoServiceDescriptor {
     public LoadBalancerServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
       super(name, methods);
     }

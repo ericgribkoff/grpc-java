@@ -489,7 +489,7 @@ public class TestServiceGrpc {
     }
   }
 
-  private static class TestServiceServiceDescriptor extends io.grpc.protobuf.ProtobufServiceDescriptor {
+  public static class TestServiceServiceDescriptor extends io.grpc.protobuf.reflection.ProtoServiceDescriptor {
     public TestServiceServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
       super(name, methods);
     }

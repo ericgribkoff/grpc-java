@@ -269,7 +269,7 @@ public class ReconnectServiceGrpc {
     }
   }
 
-  private static class ReconnectServiceServiceDescriptor extends io.grpc.protobuf.ProtobufServiceDescriptor {
+  public static class ReconnectServiceServiceDescriptor extends io.grpc.protobuf.reflection.ProtoServiceDescriptor {
     public ReconnectServiceServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
       super(name, methods);
     }

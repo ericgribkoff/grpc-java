@@ -203,7 +203,7 @@ public class HealthGrpc {
     }
   }
 
-  private static class HealthServiceDescriptor extends io.grpc.protobuf.ProtobufServiceDescriptor {
+  public static class HealthServiceDescriptor extends io.grpc.protobuf.reflection.ProtoServiceDescriptor {
     public HealthServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
       super(name, methods);
     }

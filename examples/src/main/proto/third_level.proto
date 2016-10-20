@@ -7,6 +7,6 @@ option objc_class_prefix = "HLW";
 
 package helloworld;
 
-message ThirdLevelType {
-  extensions 100 to 199;
-}
+//message ThirdLevelType {
+//  extensions 100 to 199;
+//}

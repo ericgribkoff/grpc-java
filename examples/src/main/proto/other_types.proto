@@ -1,6 +1,6 @@
 syntax = "proto2";
 
-import "third_level.proto";
+//import "third_level.proto";
 
 option java_multiple_files = true;
 option java_package = "io.grpc.examples.helloworld";
@@ -8,40 +8,20 @@ option java_outer_classname = "OtherTypesProto";
 option objc_class_prefix = "HLW";
 
 package helloworld;
-
-message Empty {
-}
-
-
-// The request message containing the user's name.
-message HelloRequest {
-  required string name = 1;
-}
-
-// The response message containing the greetings
-message HelloReply {
-  required string message = 1;
-}
-
-message Razz {
-}
-
-message OtherRequest {
-  optional ThirdLevelType block = 1;
-  extensions 100 to 199;
-}
-
-message Outer {                  // Level 0
-  message MiddleAA {  // Level 1
-    message Inner {   // Level 2
-      required int64 ival = 1;
-      optional bool  booly = 2;
-    }
-  }
-  message MiddleBB {  // Level 1
-    message Inner {   // Level 2
-      required int32 ival = 1;
-      optional bool  booly = 2;
-    }
-  }
-}
+//
+//message Empty {
+//}
+//
+//
+//// The request message containing the user's name.
+//message HelloRequest {
+//  required string name = 1;
+//}
+//
+//// The response message containing the greetings
+//message HelloReply {
+//  required string message = 1;
+//}
+//
+//message Razz {
+//}

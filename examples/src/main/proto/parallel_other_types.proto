@@ -1,6 +1,6 @@
 syntax = "proto2";
 
-import "third_level.proto";
+//import "third_level.proto";
 
 option java_multiple_files = true;
 option java_package = "io.grpc.examples.helloworld";
@@ -9,6 +9,6 @@ option objc_class_prefix = "HLW";
 
 package helloworld;
 
-extend ThirdLevelType {
-  optional int32 foobar = 126;
-}
+//extend ThirdLevelType {
+//  optional int32 foobar = 126;
+//}

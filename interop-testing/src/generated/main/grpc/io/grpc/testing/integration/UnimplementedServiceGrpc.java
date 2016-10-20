@@ -235,7 +235,7 @@ public class UnimplementedServiceGrpc {
     }
   }
 
-  private static class UnimplementedServiceServiceDescriptor extends io.grpc.protobuf.ProtobufServiceDescriptor {
+  public static class UnimplementedServiceServiceDescriptor extends io.grpc.protobuf.reflection.ProtoServiceDescriptor {
     public UnimplementedServiceServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
       super(name, methods);
     }

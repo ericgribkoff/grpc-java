@@ -53,8 +53,8 @@ import io.grpc.ServiceDescriptor;
 import io.grpc.Status;
 import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
 import io.grpc.netty.NettyServerBuilder;
-import io.grpc.protobuf.ProtobufServiceDescriptor;
-import io.grpc.protobuf.ReflectableServerBuilder;
+import io.grpc.protobuf.reflection.ProtoServiceDescriptor;
+import io.grpc.protobuf.reflection.ProtoReflectableServerBuilder;
 import io.grpc.reflection.v1alpha.ErrorResponse;
 import io.grpc.reflection.v1alpha.FileDescriptorResponse;
 import io.grpc.reflection.v1alpha.ListServiceResponse;
@@ -147,7 +147,7 @@ public class HelloWorldServer {
 //        .build();
     
     // This works with ReflectableServerBuilder.
-    server = ReflectableServerBuilder.forPort(port)
+    server = ProtoReflectableServerBuilder.forPort(port)
         .addService(ServerInterceptors.intercept(
             new GreeterImpl(),
             new ServerInterceptor() {
@@ -199,30 +199,30 @@ public class HelloWorldServer {
     server.blockUntilShutdown();
   }
 
-//  private class ProtobufMethodDescriptor<ReqT, RespT> extends MethodDescriptor<ReqT, RespT> {
-//    private FileDescriptor fd;
+////  private class ProtobufMethodDescriptor<ReqT, RespT> extends MethodDescriptor<ReqT, RespT> {
+////    private FileDescriptor fd;
+////
+////    @Override
+////    public FileDescriptor getFileDescriptor() {
+////      return fd;
+////    }
+////
+/////*    public static <RequestT, ResponseT> ProtobufMethodDescriptor<RequestT, ResponseT> create(
+////        MethodType type, String fullMethodName, Marshaller<RequestT> requestMarshaller,
+////        Marshaller<ResponseT> responseMarshaller, FileDescriptor fd) {
+////      return new ProtobufMethodDescriptor<RequestT, ResponseT>(
+////          type, fullMethodName, requestMarshaller, responseMarshaller, false, false, fd);
+////    }
+////*/
+////    protected ProtobufMethodDescriptor(MethodType type, String fullMethodName,
+////      Marshaller<ReqT> requestMarshaller, Marshaller<RespT> responseMarshaller,
+////      boolean idempotent, boolean safe, FileDescriptor fd) {
+////      super(type, fullMethodName, requestMarshaller, responseMarshaller,
+////          idempotent, safe);
+////      this.fd = fd;
+////    }
+////  }
 //
-//    @Override
-//    public FileDescriptor getFileDescriptor() {
-//      return fd;
-//    }
-//
-///*    public static <RequestT, ResponseT> ProtobufMethodDescriptor<RequestT, ResponseT> create(
-//        MethodType type, String fullMethodName, Marshaller<RequestT> requestMarshaller,
-//        Marshaller<ResponseT> responseMarshaller, FileDescriptor fd) {
-//      return new ProtobufMethodDescriptor<RequestT, ResponseT>(
-//          type, fullMethodName, requestMarshaller, responseMarshaller, false, false, fd);
-//    }
-//*/
-//    protected ProtobufMethodDescriptor(MethodType type, String fullMethodName,
-//      Marshaller<ReqT> requestMarshaller, Marshaller<RespT> responseMarshaller,
-//      boolean idempotent, boolean safe, FileDescriptor fd) {
-//      super(type, fullMethodName, requestMarshaller, responseMarshaller,
-//          idempotent, safe);
-//      this.fd = fd;
-//    }
-//  }
-
   private class GreeterImpl extends GreeterGrpc.GreeterImplBase {
 
     @Override
@@ -239,238 +239,256 @@ public class HelloWorldServer {
 //      responseObserver.onCompleted();
 //    }
   }
-
-  public StreamObserver<ServerReflectionRequest> serverReflectionInfo(
-      Map<String, FileDescriptor> fileDescriptors,
-      final StreamObserver<ServerReflectionResponse> responseObserver) {
-    return new StreamObserver<ServerReflectionRequest>() {
-      @Override
-      public void onNext(ServerReflectionRequest request) {
-         switch (request.getMessageRequestCase()) {
-           case FILE_CONTAINING_SYMBOL:
-             getFileContainingSymbol(request);
-             break;
-           case FILE_BY_FILENAME:
-             getFileByName(request);
-             break;
-           case LIST_SERVICES:
-             /*
-             System.out.println("Request: " + request.toString());
-             System.out.println(request.getMessageRequestCase());
-             System.out.println(ServerReflectionRequest.MessageRequestCase.LIST_SERVICES);
-             System.out.println("LIST_SERVICES called (?)");
-             */
-             listServices(request);
-             break;
-           default:
-             sendErrorResponse(request, Status.INVALID_ARGUMENT,
-                 "You gave an invalid MessageRequest: " + request.getMessageRequestCase());
-         }
-      }
-
-      @Override
-      public void onCompleted() {
-        responseObserver.onCompleted();
-      }
-
-      @Override
-      public void onError(Throwable cause) {
-        responseObserver.onError(cause);
-      }
-
-      private void getFileContainingSymbol(ServerReflectionRequest request) {
-        String symbol = request.getFileContainingSymbol();
-        System.out.println("Looking for " + symbol);
-        for (FileDescriptor fd : fileDescriptors.values()) {
-          //com.google.protobuf.Descriptors.ServiceDescriptor sd = fd.findServiceByName(symbol);
-          // findServiceByName uses unqualified name
-          for (com.google.protobuf.Descriptors.ServiceDescriptor sd : fd.getServices()) {
-            if (sd.getFullName().equals(symbol)) {
-              System.out.println("Found it, " + sd.getFullName());
-              responseObserver.onNext(createServerReflectionResponse(request, fd));
-              return;
-            }
-          }
-        }
-        System.out.println("Not found");
-        sendErrorResponse(request, Status.NOT_FOUND, "unknown symbol: " + symbol);
-      }
-
-      private void getFileByName(ServerReflectionRequest request) {
-        /*
-        Map<String, FileDescriptor> fileDescriptors = new HashMap<String,
-            FileDescriptor>();
-        InternalHandlerRegistry registry = server.getRegistry();
-        Map<String, ServerServiceDefinition> services =
-          registry.getServices();
-        for (ServerServiceDefinition serviceDefinition : services.values()) {
-          for (ServerMethodDefinition<?, ?> methodDefinition :
-              serviceDefinition.getMethods()) {
-            MethodDescriptor<?, ?> md =
-                methodDefinition.getMethodDescriptor();
-            FileDescriptor methodFd = md.getFileDescriptor();
-            if (methodFd != null) {
-              fileDescriptors.put(methodFd.getName(), methodFd);
-            }
-          }
-        }
-        */
-
-        String name = request.getFileByFilename();
-        FileDescriptor fd = fileDescriptors.get(name);
-        if (fd != null) {
-          responseObserver.onNext(createServerReflectionResponse(request,
-                fd));
-        } else {
-          sendErrorResponse(request, Status.NOT_FOUND, "unknown filename: " + name);
-        }
-      }
-
-      private void listServices(ServerReflectionRequest request) {
-        /*
-        ListServiceResponse.Builder builder = ListServiceResponse.newBuilder();
-        InternalHandlerRegistry registry = server.getRegistry();
-        Map<String, ServerServiceDefinition> services =
-          registry.getServices();
-        for (String serviceName : services.keySet()) {
-          builder.addService(ServiceResponse.newBuilder().setName(serviceName));
-        }
-        */
-
-        /*
-        Map<String, FileDescriptor> fileDescriptors = new HashMap<String,
-            FileDescriptor>();
-        InternalHandlerRegistry registry = server.getRegistry();
-        Map<String, ServerServiceDefinition> services =
-          registry.getServices();
-        for (ServerServiceDefinition serviceDefinition : services.values()) {
-          for (ServerMethodDefinition<?, ?> methodDefinition :
-              serviceDefinition.getMethods()) {
-            MethodDescriptor<?, ?> md =
-                methodDefinition.getMethodDescriptor();
-            FileDescriptor methodFd = md.getFileDescriptor();
-            if (methodFd != null) {
-              System.out.println(methodFd.getName());
-              fileDescriptors.put(methodFd.getName(), methodFd);
-            }
-          }
-        }
-        */
-        // This approach only shows services that have .proto files - which
-        // makes sense, since the reflection API only works if it can export
-        // the proto file over the wire
-        // On the other hand, it's weird to not show services we know about just
-        // because they aren't reflectable
-        ListServiceResponse.Builder builder = ListServiceResponse.newBuilder();
-        for (FileDescriptor fd : fileDescriptors.values()) {
-          for (com.google.protobuf.Descriptors.ServiceDescriptor sd : fd.getServices()) {
-            builder.addService(ServiceResponse.newBuilder().setName(sd.getFullName()));
-          }
-        }
-        responseObserver.onNext(
-            ServerReflectionResponse.newBuilder()
-              .setValidHost(request.getHost())
-              .setOriginalRequest(request)
-              .setListServicesResponse(builder)
-              .build());
-      }
-
-      private void sendErrorResponse(ServerReflectionRequest request, Status status,
-          String message) {
-        ServerReflectionResponse response = ServerReflectionResponse.newBuilder()
-            .setValidHost(request.getHost())
-            .setOriginalRequest(request)
-            .setErrorResponse(
-                ErrorResponse.newBuilder()
-                    .setErrorCode(status.getCode().value())
-                    .setErrorMessage(message))
-            .build();
-        responseObserver.onNext(response);
-      }
-
-      private ServerReflectionResponse createServerReflectionResponse(
-          ServerReflectionRequest request, FileDescriptor fd) {
-        // get all fd dependencies
-        FileDescriptorResponse.Builder fdRBuilder = FileDescriptorResponse.newBuilder();
-        fdRBuilder.addFileDescriptorProto(fd.toProto().toByteString());
-        for (FileDescriptor dependencyFd : fd.getDependencies()) {
-          fdRBuilder.addFileDescriptorProto(dependencyFd.toProto().toByteString());
-        }
-        return ServerReflectionResponse.newBuilder()
-            .setValidHost(request.getHost())
-            .setOriginalRequest(request)
-            .setFileDescriptorResponse(fdRBuilder)
-            .build();
-      }
-
-    };
-  }
-
-  /*
-  private static class ReflectionFallbackRegistry extends HandlerRegistry {
-    private ServerServiceDefinition reflectionServiceDefinition;
-
-    public ReflectionFallbackRegistry(ServerServiceDefinition reflectionServiceDefinition) {
-      this.reflectionServiceDefinition = reflectionServiceDefinition;
-    }
-
-    @Override
-    public ServerMethodDefinition<?, ?> lookupMethod(String methodName,
-        @Nullable String authority) {
-      //if (methodName.equals("grpc.reflection.v1alpha.ServerReflection.ServerReflectionInfo")) {
-      return reflectionServiceDefinition.getMethod(methodName);
-      //}
-    }
-  }
-  */
-
-  private static class ReflectionMethodHandlers<Req, Resp> implements
-      io.grpc.stub.ServerCalls.BidiStreamingMethod<Req, Resp> {
-    private final HelloWorldServer hws;
-    private Map<String, FileDescriptor> fileDescriptors;
-
-    public ReflectionMethodHandlers(HelloWorldServer hws) {
-      this.hws = hws;
-    }
-
-    public void initFileDescriptors(Map<String, Message> protoMessages) {
-      ListServiceResponse.Builder builder = ListServiceResponse.newBuilder();
-      Map<String, FileDescriptor> fileDescriptors = new HashMap<String,
-          FileDescriptor>();
-      for (Message protoMessage : protoMessages.values()) {
-        FileDescriptor fd = protoMessage.getDescriptorForType().getFile();
-        if (fd != null) {
-          System.out.println(fd.getName());
-          fileDescriptors.put(fd.getName(), fd);
-        }
-      }
-      this.fileDescriptors = fileDescriptors;
-    }
-
-    @java.lang.Override
-    @java.lang.SuppressWarnings("unchecked")
-    public io.grpc.stub.StreamObserver<Req> invoke(io.grpc.stub.StreamObserver<Resp> responseObserver) {
-      return (io.grpc.stub.StreamObserver<Req>) hws.serverReflectionInfo(fileDescriptors,
-          (io.grpc.stub.StreamObserver<io.grpc.reflection.v1alpha.ServerReflectionResponse>) responseObserver);
-    }
-  }
-
-  private static class MethodHandlers<Req, Resp> implements
-      io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp> {
-//    private final HelloWorldServer hws;
+//  
+//  private class GreeterImpl extends GreeterGrpc.GreeterImplBase {
 //
-//    public MethodHandlers(HelloWorldServer hws) {
+//    @Override
+//    public void sayHello(HelloRequest req, StreamObserver<HelloReply> responseObserver) {
+//      HelloReply reply = HelloReply.newBuilder().setMessage("Hello " + req.getName()).build();
+//      responseObserver.onNext(reply);
+//      responseObserver.onCompleted();
+//    }
+//
+////    @Override
+////    public void sayHelloAgain(HelloRequest req, StreamObserver<HelloReply> responseObserver) {
+////      HelloReply reply = HelloReply.newBuilder().setMessage("Hello again " + req.getName()).build();
+////      responseObserver.onNext(reply);
+////      responseObserver.onCompleted();
+////    }
+//  }
+  
+//
+//  public StreamObserver<ServerReflectionRequest> serverReflectionInfo(
+//      Map<String, FileDescriptor> fileDescriptors,
+//      final StreamObserver<ServerReflectionResponse> responseObserver) {
+//    return new StreamObserver<ServerReflectionRequest>() {
+//      @Override
+//      public void onNext(ServerReflectionRequest request) {
+//         switch (request.getMessageRequestCase()) {
+//           case FILE_CONTAINING_SYMBOL:
+//             getFileContainingSymbol(request);
+//             break;
+//           case FILE_BY_FILENAME:
+//             getFileByName(request);
+//             break;
+//           case LIST_SERVICES:
+//             /*
+//             System.out.println("Request: " + request.toString());
+//             System.out.println(request.getMessageRequestCase());
+//             System.out.println(ServerReflectionRequest.MessageRequestCase.LIST_SERVICES);
+//             System.out.println("LIST_SERVICES called (?)");
+//             */
+//             listServices(request);
+//             break;
+//           default:
+//             sendErrorResponse(request, Status.INVALID_ARGUMENT,
+//                 "You gave an invalid MessageRequest: " + request.getMessageRequestCase());
+//         }
+//      }
+//
+//      @Override
+//      public void onCompleted() {
+//        responseObserver.onCompleted();
+//      }
+//
+//      @Override
+//      public void onError(Throwable cause) {
+//        responseObserver.onError(cause);
+//      }
+//
+//      private void getFileContainingSymbol(ServerReflectionRequest request) {
+//        String symbol = request.getFileContainingSymbol();
+//        System.out.println("Looking for " + symbol);
+//        for (FileDescriptor fd : fileDescriptors.values()) {
+//          //com.google.protobuf.Descriptors.ServiceDescriptor sd = fd.findServiceByName(symbol);
+//          // findServiceByName uses unqualified name
+//          for (com.google.protobuf.Descriptors.ServiceDescriptor sd : fd.getServices()) {
+//            if (sd.getFullName().equals(symbol)) {
+//              System.out.println("Found it, " + sd.getFullName());
+//              responseObserver.onNext(createServerReflectionResponse(request, fd));
+//              return;
+//            }
+//          }
+//        }
+//        System.out.println("Not found");
+//        sendErrorResponse(request, Status.NOT_FOUND, "unknown symbol: " + symbol);
+//      }
+//
+//      private void getFileByName(ServerReflectionRequest request) {
+//        /*
+//        Map<String, FileDescriptor> fileDescriptors = new HashMap<String,
+//            FileDescriptor>();
+//        InternalHandlerRegistry registry = server.getRegistry();
+//        Map<String, ServerServiceDefinition> services =
+//          registry.getServices();
+//        for (ServerServiceDefinition serviceDefinition : services.values()) {
+//          for (ServerMethodDefinition<?, ?> methodDefinition :
+//              serviceDefinition.getMethods()) {
+//            MethodDescriptor<?, ?> md =
+//                methodDefinition.getMethodDescriptor();
+//            FileDescriptor methodFd = md.getFileDescriptor();
+//            if (methodFd != null) {
+//              fileDescriptors.put(methodFd.getName(), methodFd);
+//            }
+//          }
+//        }
+//        */
+//
+//        String name = request.getFileByFilename();
+//        FileDescriptor fd = fileDescriptors.get(name);
+//        if (fd != null) {
+//          responseObserver.onNext(createServerReflectionResponse(request,
+//                fd));
+//        } else {
+//          sendErrorResponse(request, Status.NOT_FOUND, "unknown filename: " + name);
+//        }
+//      }
+//
+//      private void listServices(ServerReflectionRequest request) {
+//        /*
+//        ListServiceResponse.Builder builder = ListServiceResponse.newBuilder();
+//        InternalHandlerRegistry registry = server.getRegistry();
+//        Map<String, ServerServiceDefinition> services =
+//          registry.getServices();
+//        for (String serviceName : services.keySet()) {
+//          builder.addService(ServiceResponse.newBuilder().setName(serviceName));
+//        }
+//        */
+//
+//        /*
+//        Map<String, FileDescriptor> fileDescriptors = new HashMap<String,
+//            FileDescriptor>();
+//        InternalHandlerRegistry registry = server.getRegistry();
+//        Map<String, ServerServiceDefinition> services =
+//          registry.getServices();
+//        for (ServerServiceDefinition serviceDefinition : services.values()) {
+//          for (ServerMethodDefinition<?, ?> methodDefinition :
+//              serviceDefinition.getMethods()) {
+//            MethodDescriptor<?, ?> md =
+//                methodDefinition.getMethodDescriptor();
+//            FileDescriptor methodFd = md.getFileDescriptor();
+//            if (methodFd != null) {
+//              System.out.println(methodFd.getName());
+//              fileDescriptors.put(methodFd.getName(), methodFd);
+//            }
+//          }
+//        }
+//        */
+//        // This approach only shows services that have .proto files - which
+//        // makes sense, since the reflection API only works if it can export
+//        // the proto file over the wire
+//        // On the other hand, it's weird to not show services we know about just
+//        // because they aren't reflectable
+//        ListServiceResponse.Builder builder = ListServiceResponse.newBuilder();
+//        for (FileDescriptor fd : fileDescriptors.values()) {
+//          for (com.google.protobuf.Descriptors.ServiceDescriptor sd : fd.getServices()) {
+//            builder.addService(ServiceResponse.newBuilder().setName(sd.getFullName()));
+//          }
+//        }
+//        responseObserver.onNext(
+//            ServerReflectionResponse.newBuilder()
+//              .setValidHost(request.getHost())
+//              .setOriginalRequest(request)
+//              .setListServicesResponse(builder)
+//              .build());
+//      }
+//
+//      private void sendErrorResponse(ServerReflectionRequest request, Status status,
+//          String message) {
+//        ServerReflectionResponse response = ServerReflectionResponse.newBuilder()
+//            .setValidHost(request.getHost())
+//            .setOriginalRequest(request)
+//            .setErrorResponse(
+//                ErrorResponse.newBuilder()
+//                    .setErrorCode(status.getCode().value())
+//                    .setErrorMessage(message))
+//            .build();
+//        responseObserver.onNext(response);
+//      }
+//
+//      private ServerReflectionResponse createServerReflectionResponse(
+//          ServerReflectionRequest request, FileDescriptor fd) {
+//        // get all fd dependencies
+//        FileDescriptorResponse.Builder fdRBuilder = FileDescriptorResponse.newBuilder();
+//        fdRBuilder.addFileDescriptorProto(fd.toProto().toByteString());
+//        for (FileDescriptor dependencyFd : fd.getDependencies()) {
+//          fdRBuilder.addFileDescriptorProto(dependencyFd.toProto().toByteString());
+//        }
+//        return ServerReflectionResponse.newBuilder()
+//            .setValidHost(request.getHost())
+//            .setOriginalRequest(request)
+//            .setFileDescriptorResponse(fdRBuilder)
+//            .build();
+//      }
+//
+//    };
+//  }
+//
+//  /*
+//  private static class ReflectionFallbackRegistry extends HandlerRegistry {
+//    private ServerServiceDefinition reflectionServiceDefinition;
+//
+//    public ReflectionFallbackRegistry(ServerServiceDefinition reflectionServiceDefinition) {
+//      this.reflectionServiceDefinition = reflectionServiceDefinition;
+//    }
+//
+//    @Override
+//    public ServerMethodDefinition<?, ?> lookupMethod(String methodName,
+//        @Nullable String authority) {
+//      //if (methodName.equals("grpc.reflection.v1alpha.ServerReflection.ServerReflectionInfo")) {
+//      return reflectionServiceDefinition.getMethod(methodName);
+//      //}
+//    }
+//  }
+//  */
+//
+//  private static class ReflectionMethodHandlers<Req, Resp> implements
+//      io.grpc.stub.ServerCalls.BidiStreamingMethod<Req, Resp> {
+//    private final HelloWorldServer hws;
+//    private Map<String, FileDescriptor> fileDescriptors;
+//
+//    public ReflectionMethodHandlers(HelloWorldServer hws) {
 //      this.hws = hws;
 //    }
-
-    @java.lang.Override
-    @java.lang.SuppressWarnings("unchecked")
-    public void invoke(Req request, io.grpc.stub.StreamObserver<Resp> responseObserver) {
-      ((io.grpc.stub.StreamObserver<Empty>) responseObserver).onNext(Empty.getDefaultInstance());
-      System.out.println("Yoooooohooo!");
-      responseObserver.onCompleted();
-//      hws.emptyCall((com.google.protobuf.EmptyProtos.Empty) request,
-//        (io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty>) responseObserver);
-    }
-  }
+//
+//    public void initFileDescriptors(Map<String, Message> protoMessages) {
+//      ListServiceResponse.Builder builder = ListServiceResponse.newBuilder();
+//      Map<String, FileDescriptor> fileDescriptors = new HashMap<String,
+//          FileDescriptor>();
+//      for (Message protoMessage : protoMessages.values()) {
+//        FileDescriptor fd = protoMessage.getDescriptorForType().getFile();
+//        if (fd != null) {
+//          System.out.println(fd.getName());
+//          fileDescriptors.put(fd.getName(), fd);
+//        }
+//      }
+//      this.fileDescriptors = fileDescriptors;
+//    }
+//
+//    @java.lang.Override
+//    @java.lang.SuppressWarnings("unchecked")
+//    public io.grpc.stub.StreamObserver<Req> invoke(io.grpc.stub.StreamObserver<Resp> responseObserver) {
+//      return (io.grpc.stub.StreamObserver<Req>) hws.serverReflectionInfo(fileDescriptors,
+//          (io.grpc.stub.StreamObserver<io.grpc.reflection.v1alpha.ServerReflectionResponse>) responseObserver);
+//    }
+//  }
+//
+//  private static class MethodHandlers<Req, Resp> implements
+//      io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp> {
+////    private final HelloWorldServer hws;
+////
+////    public MethodHandlers(HelloWorldServer hws) {
+////      this.hws = hws;
+////    }
+//
+//    @java.lang.Override
+//    @java.lang.SuppressWarnings("unchecked")
+//    public void invoke(Req request, io.grpc.stub.StreamObserver<Resp> responseObserver) {
+//      ((io.grpc.stub.StreamObserver<Empty>) responseObserver).onNext(Empty.getDefaultInstance());
+//      System.out.println("Yoooooohooo!");
+//      responseObserver.onCompleted();
+////      hws.emptyCall((com.google.protobuf.EmptyProtos.Empty) request,
+////        (io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty>) responseObserver);
+//    }
+//  }
 }

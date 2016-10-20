@@ -417,7 +417,7 @@ public class ServerInterceptorsTest {
         Arrays.asList("i2onMessage", "i1onMessage", "handler", "i1sendMessage", "i2sendMessage"),
         order);
   }
-
+  
   @SuppressWarnings("unchecked")
   private static ServerMethodDefinition<String, Integer> getSoleMethod(
       ServerServiceDefinition serviceDef) {
