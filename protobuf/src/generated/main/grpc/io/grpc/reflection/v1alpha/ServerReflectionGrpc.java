@@ -195,18 +195,10 @@ public class ServerReflectionGrpc {
     }
   }
 
-  public static class ServerReflectionServiceDescriptor extends io.grpc.protobuf.reflection.ProtoServiceDescriptor {
-    public ServerReflectionServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
-      super(name, methods);
-    }
-
-    public ServerReflectionServiceDescriptor(String name, java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
-      super(name, methods);
-    }
-
+  public static class ServerReflectionServiceDescriptorWrapper implements io.grpc.protobuf.reflection.ProtoFileDescriptorWrapper {
     @java.lang.Override
-    public ServerReflectionServiceDescriptor withMethods(java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
-      return new ServerReflectionServiceDescriptor(getName(), methods);
+    public String getName() {
+      return SERVICE_NAME;
     }
 
     @java.lang.Override
@@ -215,11 +207,11 @@ public class ServerReflectionGrpc {
     }
   }
 
-  private static ServerReflectionServiceDescriptor serviceDescriptor;
+  private static io.grpc.ServiceDescriptor serviceDescriptor;
 
-  public static synchronized ServerReflectionServiceDescriptor getServiceDescriptor() {
+  public static synchronized io.grpc.ServiceDescriptor getServiceDescriptor() {
     if (serviceDescriptor == null) {
-      serviceDescriptor = new ServerReflectionServiceDescriptor(SERVICE_NAME,
+      serviceDescriptor = new io.grpc.ServiceDescriptor(SERVICE_NAME, new ServerReflectionServiceDescriptorWrapper(),
           METHOD_SERVER_REFLECTION_INFO);
     }
 

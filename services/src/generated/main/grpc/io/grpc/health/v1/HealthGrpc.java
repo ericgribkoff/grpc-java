@@ -203,18 +203,10 @@ public class HealthGrpc {
     }
   }
 
-  public static class HealthServiceDescriptor extends io.grpc.protobuf.reflection.ProtoServiceDescriptor {
-    public HealthServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
-      super(name, methods);
-    }
-
-    public HealthServiceDescriptor(String name, java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
-      super(name, methods);
-    }
-
+  public static class HealthServiceDescriptorWrapper implements io.grpc.protobuf.reflection.ProtoFileDescriptorWrapper {
     @java.lang.Override
-    public HealthServiceDescriptor withMethods(java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
-      return new HealthServiceDescriptor(getName(), methods);
+    public String getName() {
+      return SERVICE_NAME;
     }
 
     @java.lang.Override
@@ -223,11 +215,11 @@ public class HealthGrpc {
     }
   }
 
-  private static HealthServiceDescriptor serviceDescriptor;
+  private static io.grpc.ServiceDescriptor serviceDescriptor;
 
-  public static synchronized HealthServiceDescriptor getServiceDescriptor() {
+  public static synchronized io.grpc.ServiceDescriptor getServiceDescriptor() {
     if (serviceDescriptor == null) {
-      serviceDescriptor = new HealthServiceDescriptor(SERVICE_NAME,
+      serviceDescriptor = new io.grpc.ServiceDescriptor(SERVICE_NAME, new HealthServiceDescriptorWrapper(),
           METHOD_CHECK);
     }
 

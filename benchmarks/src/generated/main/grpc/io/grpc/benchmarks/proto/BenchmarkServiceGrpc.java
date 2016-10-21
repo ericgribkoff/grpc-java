@@ -262,18 +262,10 @@ public class BenchmarkServiceGrpc {
     }
   }
 
-  public static class BenchmarkServiceServiceDescriptor extends io.grpc.protobuf.reflection.ProtoServiceDescriptor {
-    public BenchmarkServiceServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
-      super(name, methods);
-    }
-
-    public BenchmarkServiceServiceDescriptor(String name, java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
-      super(name, methods);
-    }
-
+  public static class BenchmarkServiceServiceDescriptorWrapper implements io.grpc.protobuf.reflection.ProtoFileDescriptorWrapper {
     @java.lang.Override
-    public BenchmarkServiceServiceDescriptor withMethods(java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
-      return new BenchmarkServiceServiceDescriptor(getName(), methods);
+    public String getName() {
+      return SERVICE_NAME;
     }
 
     @java.lang.Override
@@ -282,11 +274,11 @@ public class BenchmarkServiceGrpc {
     }
   }
 
-  private static BenchmarkServiceServiceDescriptor serviceDescriptor;
+  private static io.grpc.ServiceDescriptor serviceDescriptor;
 
-  public static synchronized BenchmarkServiceServiceDescriptor getServiceDescriptor() {
+  public static synchronized io.grpc.ServiceDescriptor getServiceDescriptor() {
     if (serviceDescriptor == null) {
-      serviceDescriptor = new BenchmarkServiceServiceDescriptor(SERVICE_NAME,
+      serviceDescriptor = new io.grpc.ServiceDescriptor(SERVICE_NAME, new BenchmarkServiceServiceDescriptorWrapper(),
           METHOD_UNARY_CALL,
           METHOD_STREAMING_CALL);
     }

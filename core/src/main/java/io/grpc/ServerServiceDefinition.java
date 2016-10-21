@@ -49,15 +49,15 @@ public final class ServerServiceDefinition {
     return new Builder(serviceName);
   }
 
-  public static Builder builder(AbstractServiceDescriptor serviceDescriptor) {
+  public static Builder builder(ServiceDescriptor serviceDescriptor) {
     return new Builder(serviceDescriptor);
   }
 
-  private final AbstractServiceDescriptor serviceDescriptor;
+  private final ServiceDescriptor serviceDescriptor;
   private final Map<String, ServerMethodDefinition<?, ?>> methods;
 
   private ServerServiceDefinition(
-      AbstractServiceDescriptor serviceDescriptor,
+      ServiceDescriptor serviceDescriptor,
       Map<String, ServerMethodDefinition<?, ?>> methods) {
     this.serviceDescriptor = checkNotNull(serviceDescriptor, "serviceDescriptor");
     this.methods = Collections.unmodifiableMap(
@@ -67,7 +67,7 @@ public final class ServerServiceDefinition {
   /**
    * The descriptor for the service.
    */
-  public AbstractServiceDescriptor getServiceDescriptor() {
+  public ServiceDescriptor getServiceDescriptor() {
     return serviceDescriptor;
   }
 
@@ -90,7 +90,7 @@ public final class ServerServiceDefinition {
    */
   public static final class Builder {
     private final String serviceName;
-    private final AbstractServiceDescriptor serviceDescriptor;
+    private final ServiceDescriptor serviceDescriptor;
     private final Map<String, ServerMethodDefinition<?, ?>> methods =
         new HashMap<String, ServerMethodDefinition<?, ?>>();
 
@@ -99,7 +99,7 @@ public final class ServerServiceDefinition {
       this.serviceDescriptor = null;
     }
 
-    private Builder(AbstractServiceDescriptor serviceDescriptor) {
+    private Builder(ServiceDescriptor serviceDescriptor) {
       this.serviceDescriptor = checkNotNull(serviceDescriptor, "serviceDescriptor");
       this.serviceName = serviceDescriptor.getName();
     }
@@ -134,7 +134,7 @@ public final class ServerServiceDefinition {
      * Construct new ServerServiceDefinition.
      */
     public ServerServiceDefinition build() {
-      AbstractServiceDescriptor serviceDescriptor = this.serviceDescriptor;
+      ServiceDescriptor serviceDescriptor = this.serviceDescriptor;
       if (serviceDescriptor == null) {
         List<MethodDescriptor<?, ?>> methodDescriptors
             = new ArrayList<MethodDescriptor<?, ?>>(methods.size());

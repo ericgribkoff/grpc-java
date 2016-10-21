@@ -271,18 +271,10 @@ public class MetricsServiceGrpc {
     }
   }
 
-  public static class MetricsServiceServiceDescriptor extends io.grpc.protobuf.reflection.ProtoServiceDescriptor {
-    public MetricsServiceServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
-      super(name, methods);
-    }
-
-    public MetricsServiceServiceDescriptor(String name, java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
-      super(name, methods);
-    }
-
+  public static class MetricsServiceServiceDescriptorWrapper implements io.grpc.protobuf.reflection.ProtoFileDescriptorWrapper {
     @java.lang.Override
-    public MetricsServiceServiceDescriptor withMethods(java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
-      return new MetricsServiceServiceDescriptor(getName(), methods);
+    public String getName() {
+      return SERVICE_NAME;
     }
 
     @java.lang.Override
@@ -291,11 +283,11 @@ public class MetricsServiceGrpc {
     }
   }
 
-  private static MetricsServiceServiceDescriptor serviceDescriptor;
+  private static io.grpc.ServiceDescriptor serviceDescriptor;
 
-  public static synchronized MetricsServiceServiceDescriptor getServiceDescriptor() {
+  public static synchronized io.grpc.ServiceDescriptor getServiceDescriptor() {
     if (serviceDescriptor == null) {
-      serviceDescriptor = new MetricsServiceServiceDescriptor(SERVICE_NAME,
+      serviceDescriptor = new io.grpc.ServiceDescriptor(SERVICE_NAME, new MetricsServiceServiceDescriptorWrapper(),
           METHOD_GET_ALL_GAUGES,
           METHOD_GET_GAUGE);
     }

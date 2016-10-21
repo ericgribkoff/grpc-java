@@ -38,13 +38,16 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 
+import javax.annotation.Nullable;
+
 /**
  * Descriptor for a service.
  */
-public final class ServiceDescriptor extends AbstractServiceDescriptor {
+public final class ServiceDescriptor {
 
   private final String name;
   private final Collection<MethodDescriptor<?, ?>> methods;
+  private Object attachedObject = null;
 
   public ServiceDescriptor(String name, MethodDescriptor<?, ?>... methods) {
     this(name, Arrays.asList(methods));
@@ -55,8 +58,18 @@ public final class ServiceDescriptor extends AbstractServiceDescriptor {
     this.methods = Collections.unmodifiableList(new ArrayList<MethodDescriptor<?, ?>>(methods));
   }
 
+  public ServiceDescriptor(String name, Object attachedObject, MethodDescriptor<?, ?>... methods) {
+    this(name, methods);
+    this.attachedObject = attachedObject;
+  }
+
+  public ServiceDescriptor(String name, Object attachedObject,
+                           Collection<MethodDescriptor<?, ?>> methods) {
+    this(name, methods);
+    this.attachedObject = attachedObject;
+  }
+
   /** Simple name of the service. It is not an absolute path. */
-  @Override
   public String getName() {
     return name;
   }
@@ -65,13 +78,16 @@ public final class ServiceDescriptor extends AbstractServiceDescriptor {
    * A collection of {@link MethodDescriptor} instances describing the methods exposed by the
    * service.
    */
-  @Override
   public Collection<MethodDescriptor<?, ?>> getMethods() {
     return methods;
   }
 
-  @Override
   public ServiceDescriptor withMethods(Collection<MethodDescriptor<?, ?>> methods) {
     return new ServiceDescriptor(name, methods);
+  }
+
+  @Nullable
+  public Object getAttachedObject() {
+    return attachedObject;
   }
 }

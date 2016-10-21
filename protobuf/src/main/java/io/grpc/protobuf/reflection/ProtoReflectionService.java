@@ -58,7 +58,7 @@ import java.util.Set;
 
 /** An implementation of the reflection service. */
 public final class ProtoReflectionService extends ServerReflectionGrpc.ServerReflectionImplBase {
-  private final Set<ProtoServiceDescriptor> protoServiceDescriptors;
+  private final Set<ProtoFileDescriptorWrapper> protoFileDescriptorWrappers;
   private Set<String> serviceNames;
   private Map<String, FileDescriptor> fileDescriptorsByName;
   private Map<String, FileDescriptor> fileDescriptorsBySymbol;
@@ -66,12 +66,13 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
   private Boolean mapsInitialized = false;
 
   /**
-   * Create a new instance of the reflection service for a set of {@link ProtoServiceDescriptor}.
+   * Create a new instance of the reflection service for a set of
+   * {@link ProtoFileDescriptorWrapper}.
    *
-   * @param protoServiceDescriptors The services that will be reflectable via this service.
+   * @param protoFileDescriptorWrapper The services that will be reflectable via this service.
    */
-  public ProtoReflectionService(Set<ProtoServiceDescriptor> protoServiceDescriptors) {
-    this.protoServiceDescriptors = protoServiceDescriptors;
+  public ProtoReflectionService(Set<ProtoFileDescriptorWrapper> protoFileDescriptorWrapper) {
+    this.protoFileDescriptorWrappers = protoFileDescriptorWrapper;
   }
 
   private void processExtension(FieldDescriptor extension, FileDescriptor fd) {
@@ -130,9 +131,9 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
     fileDescriptorsBySymbol = new HashMap<String, FileDescriptor>();
     fileDescriptorsByExtensionAndNumber = new HashMap<String, Map<Integer, FileDescriptor>>();
     Queue<FileDescriptor> fileDescriptorsToProcess = new LinkedList<FileDescriptor>();
-    for (ProtoServiceDescriptor serviceDescriptor : protoServiceDescriptors) {
-      serviceNames.add(serviceDescriptor.getName());
-      fileDescriptorsToProcess.offer(serviceDescriptor.getFile());
+    for (ProtoFileDescriptorWrapper serviceFileDescriptor : protoFileDescriptorWrappers) {
+      serviceNames.add(serviceFileDescriptor.getName());
+      fileDescriptorsToProcess.offer(serviceFileDescriptor.getFile());
     }
     while (!fileDescriptorsToProcess.isEmpty()) {
       FileDescriptor currentFd = fileDescriptorsToProcess.poll();

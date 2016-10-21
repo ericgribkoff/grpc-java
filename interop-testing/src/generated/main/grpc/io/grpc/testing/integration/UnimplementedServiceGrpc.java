@@ -235,18 +235,10 @@ public class UnimplementedServiceGrpc {
     }
   }
 
-  public static class UnimplementedServiceServiceDescriptor extends io.grpc.protobuf.reflection.ProtoServiceDescriptor {
-    public UnimplementedServiceServiceDescriptor(String name, io.grpc.MethodDescriptor<?, ?>... methods) {
-      super(name, methods);
-    }
-
-    public UnimplementedServiceServiceDescriptor(String name, java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
-      super(name, methods);
-    }
-
+  public static class UnimplementedServiceServiceDescriptorWrapper implements io.grpc.protobuf.reflection.ProtoFileDescriptorWrapper {
     @java.lang.Override
-    public UnimplementedServiceServiceDescriptor withMethods(java.util.Collection<io.grpc.MethodDescriptor<?, ?>> methods) {
-      return new UnimplementedServiceServiceDescriptor(getName(), methods);
+    public String getName() {
+      return SERVICE_NAME;
     }
 
     @java.lang.Override
@@ -255,11 +247,11 @@ public class UnimplementedServiceGrpc {
     }
   }
 
-  private static UnimplementedServiceServiceDescriptor serviceDescriptor;
+  private static io.grpc.ServiceDescriptor serviceDescriptor;
 
-  public static synchronized UnimplementedServiceServiceDescriptor getServiceDescriptor() {
+  public static synchronized io.grpc.ServiceDescriptor getServiceDescriptor() {
     if (serviceDescriptor == null) {
-      serviceDescriptor = new UnimplementedServiceServiceDescriptor(SERVICE_NAME,
+      serviceDescriptor = new io.grpc.ServiceDescriptor(SERVICE_NAME, new UnimplementedServiceServiceDescriptorWrapper(),
           METHOD_UNIMPLEMENTED_CALL);
     }
 

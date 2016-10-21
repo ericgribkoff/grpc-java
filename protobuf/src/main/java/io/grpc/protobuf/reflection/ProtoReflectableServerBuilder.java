@@ -31,7 +31,6 @@
 
 package io.grpc.protobuf.reflection;
 
-import io.grpc.AbstractServiceDescriptor;
 import io.grpc.BindableService;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
@@ -40,6 +39,7 @@ import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.ServerTransportFilter;
+import io.grpc.ServiceDescriptor;
 
 import java.io.File;
 import java.util.HashSet;
@@ -57,8 +57,8 @@ import java.util.concurrent.Executor;
 public final class ProtoReflectableServerBuilder
     extends ServerBuilder<ProtoReflectableServerBuilder> {
   private final ServerBuilder<?> wrappedServerBuilder;
-  private final Set<ProtoServiceDescriptor> protobufServiceDescriptors =
-      new HashSet<ProtoServiceDescriptor>();
+  private final Set<ProtoFileDescriptorWrapper> protoFileDescriptorWrappers =
+      new HashSet<ProtoFileDescriptorWrapper>();
 
   /**
    * Create a server builder that will bind to the given port. This wraps a call to {@link
@@ -104,9 +104,11 @@ public final class ProtoReflectableServerBuilder
 
   @Override
   public ProtoReflectableServerBuilder addService(ServerServiceDefinition serviceDefinition) {
-    AbstractServiceDescriptor serviceDescriptor = serviceDefinition.getServiceDescriptor();
-    if (serviceDescriptor instanceof ProtoServiceDescriptor) {
-      protobufServiceDescriptors.add((ProtoServiceDescriptor) serviceDescriptor);
+    ServiceDescriptor serviceDescriptor = serviceDefinition.getServiceDescriptor();
+    if (serviceDescriptor.getAttachedObject() != null && serviceDescriptor.getAttachedObject()
+            instanceof ProtoFileDescriptorWrapper) {
+      protoFileDescriptorWrappers.add((ProtoFileDescriptorWrapper)
+              serviceDescriptor.getAttachedObject());
     }
     wrappedServerBuilder.addService(serviceDefinition);
     return this;
@@ -153,7 +155,7 @@ public final class ProtoReflectableServerBuilder
    */
   @Override
   public Server build() {
-    addService(new ProtoReflectionService(protobufServiceDescriptors));
+    addService(new ProtoReflectionService(protoFileDescriptorWrappers));
     return wrappedServerBuilder.build();
   }
 }

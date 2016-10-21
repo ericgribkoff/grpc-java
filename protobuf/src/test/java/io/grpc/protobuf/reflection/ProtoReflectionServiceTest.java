@@ -64,10 +64,15 @@ public class ProtoReflectionServiceTest {
   /** Set up for test. */
   @Before
   public void setUp() {
-    Set<ProtoServiceDescriptor> protobufServiceDescriptors = new HashSet<ProtoServiceDescriptor>();
-    protobufServiceDescriptors.add(ReflectableServiceGrpc.getServiceDescriptor());
-    protobufServiceDescriptors.add(ServerReflectionGrpc.getServiceDescriptor());
-    reflectionService = new ProtoReflectionService(protobufServiceDescriptors);
+    Set<ProtoFileDescriptorWrapper> protobufFileDescriptorWrappers
+            = new HashSet<ProtoFileDescriptorWrapper>();
+    protobufFileDescriptorWrappers.add(
+            (ProtoFileDescriptorWrapper)
+                    ReflectableServiceGrpc.getServiceDescriptor().getAttachedObject());
+    protobufFileDescriptorWrappers.add(
+            (ProtoFileDescriptorWrapper)
+                    ServerReflectionGrpc.getServiceDescriptor().getAttachedObject());
+    reflectionService = new ProtoReflectionService(protobufFileDescriptorWrappers);
   }
 
   @Test
