@@ -195,7 +195,7 @@ public class ServerReflectionGrpc {
     }
   }
 
-  public static final class ServerReflectionDescriptorWrapper implements io.grpc.protobuf.reflection.ProtoFileDescriptorWrapper {
+  private static final class ServerReflectionDescriptorSupplier implements io.grpc.protobuf.ProtoFileDescriptorSupplier {
     @java.lang.Override
     public com.google.protobuf.Descriptors.FileDescriptor getFileDescriptor() {
       return io.grpc.reflection.v1alpha.ServerReflectionProto.getDescriptor();
@@ -207,7 +207,7 @@ public class ServerReflectionGrpc {
   public static synchronized io.grpc.ServiceDescriptor getServiceDescriptor() {
     if (serviceDescriptor == null) {
       serviceDescriptor = new io.grpc.ServiceDescriptor(SERVICE_NAME,
-          new ServerReflectionDescriptorWrapper(),
+          new ServerReflectionDescriptorSupplier(),
           METHOD_SERVER_REFLECTION_INFO);
     }
 
