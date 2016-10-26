@@ -207,8 +207,9 @@ public class ServerInterceptors {
     }
     // Build the new service descriptor
     final ServerServiceDefinition.Builder serviceBuilder = ServerServiceDefinition
-        .builder(serviceDef.getServiceDescriptor().withMethods(wrappedDescriptors));
-    // Create the new service definition.
+        .builder(new ServiceDescriptor(serviceDef.getServiceDescriptor().getName(),
+            wrappedDescriptors));
+    // Create the new service definiton.
     for (ServerMethodDefinition<?, ?> definition : wrappedMethods) {
       serviceBuilder.addMethod(definition);
     }

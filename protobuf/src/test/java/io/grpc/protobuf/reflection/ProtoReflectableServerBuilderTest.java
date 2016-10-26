@@ -29,21 +29,25 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc;
+package io.grpc.protobuf.reflection;
 
-import java.util.Collection;
+import static org.junit.Assert.assertTrue;
 
-/** The base class for service descriptors. */
-public abstract class AbstractServiceDescriptor {
-  public abstract String getName();
+import io.grpc.inprocess.InProcessServerBuilder;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
-  public abstract Collection<MethodDescriptor<?, ?>> getMethods();
-
-  /**
-   * Children of AbstractServiceDescriptor should override this method to return a new concrete
-   * instance with the same name but a different set of methods. This is intended to be used by
-   * helpers that wrap or intercept a service descriptor's methods.
-   */
-  protected abstract AbstractServiceDescriptor withMethods(
-      Collection<MethodDescriptor<?, ?>> methods);
+/** Tests for {@link ProtoReflectableServerBuilder}. */
+@RunWith(JUnit4.class)
+public class ProtoReflectableServerBuilderTest {
+  @Test
+  public void setAndRetrieveWrappedServerBuilder() {
+    InProcessServerBuilder inProcessServerBuilder = 
+        InProcessServerBuilder.forName("reflectionTest");
+    ProtoReflectableServerBuilder reflectableServerBuilder = 
+        ProtoReflectableServerBuilder.forBuilder(inProcessServerBuilder);
+    assertTrue(reflectableServerBuilder.getServerBuilder() instanceof InProcessServerBuilder);
+  }
 }
+
