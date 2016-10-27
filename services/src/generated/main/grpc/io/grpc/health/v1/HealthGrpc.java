@@ -203,11 +203,19 @@ public class HealthGrpc {
     }
   }
 
+  private static final class HealthDescriptorSupplier implements io.grpc.protobuf.ProtoFileDescriptorSupplier {
+    @java.lang.Override
+    public com.google.protobuf.Descriptors.FileDescriptor getFileDescriptor() {
+      return io.grpc.health.v1.HealthProto.getDescriptor();
+    }
+  }
+
   private static io.grpc.ServiceDescriptor serviceDescriptor;
 
   public static synchronized io.grpc.ServiceDescriptor getServiceDescriptor() {
     if (serviceDescriptor == null) {
       serviceDescriptor = new io.grpc.ServiceDescriptor(SERVICE_NAME,
+          new HealthDescriptorSupplier(),
           METHOD_CHECK);
     }
 

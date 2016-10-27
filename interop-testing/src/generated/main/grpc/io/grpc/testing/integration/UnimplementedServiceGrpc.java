@@ -235,11 +235,19 @@ public class UnimplementedServiceGrpc {
     }
   }
 
+  private static final class UnimplementedServiceDescriptorSupplier implements io.grpc.protobuf.ProtoFileDescriptorSupplier {
+    @java.lang.Override
+    public com.google.protobuf.Descriptors.FileDescriptor getFileDescriptor() {
+      return io.grpc.testing.integration.Test.getDescriptor();
+    }
+  }
+
   private static io.grpc.ServiceDescriptor serviceDescriptor;
 
   public static synchronized io.grpc.ServiceDescriptor getServiceDescriptor() {
     if (serviceDescriptor == null) {
       serviceDescriptor = new io.grpc.ServiceDescriptor(SERVICE_NAME,
+          new UnimplementedServiceDescriptorSupplier(),
           METHOD_UNIMPLEMENTED_CALL);
     }
 

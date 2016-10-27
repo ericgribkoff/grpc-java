@@ -38,6 +38,8 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 
+import javax.annotation.Nullable;
+
 /**
  * Descriptor for a service.
  */
@@ -45,13 +47,26 @@ public final class ServiceDescriptor {
 
   private final String name;
   private final Collection<MethodDescriptor<?, ?>> methods;
+  private final Object marshallerDescriptor;
 
   public ServiceDescriptor(String name, MethodDescriptor<?, ?>... methods) {
-    this(name, Arrays.asList(methods));
+    this(name, null, Arrays.asList(methods));
   }
 
   public ServiceDescriptor(String name, Collection<MethodDescriptor<?, ?>> methods) {
+    this(name, null, methods);
+  }
+
+  public ServiceDescriptor(String name, Object marshallerDescriptor,
+                           MethodDescriptor<?, ?>... methods) {
+    this(name, marshallerDescriptor, Arrays.asList(methods));
+  }
+
+  /** Creates a new ServiceDescriptor. */
+  public ServiceDescriptor(String name, Object marshallerDescriptor,
+                           Collection<MethodDescriptor<?, ?>> methods) {
     this.name = Preconditions.checkNotNull(name, "name");
+    this.marshallerDescriptor = marshallerDescriptor;
     this.methods = Collections.unmodifiableList(new ArrayList<MethodDescriptor<?, ?>>(methods));
   }
 
@@ -66,5 +81,15 @@ public final class ServiceDescriptor {
    */
   public Collection<MethodDescriptor<?, ?>> getMethods() {
     return methods;
+  }
+
+  /**
+   * Returns a marshaller-specific object that provides additional information about the service.
+   * For example, when using Protobuf this should generally be a
+   * {@link io.grpc.protobuf.reflection.ProtoFileDescriptorWrapper}, when present.
+   */
+  @Nullable
+  public Object getMarshallerDescriptor() {
+    return marshallerDescriptor;
   }
 }
