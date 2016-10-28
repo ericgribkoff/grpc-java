@@ -33,6 +33,7 @@ package io.grpc.examples.helloworld;
 
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.protobuf.ProtoReflectableServerBuilder;
 import io.grpc.stub.StreamObserver;
 
 import java.io.IOException;
@@ -49,7 +50,7 @@ public class HelloWorldServer {
   private Server server;
 
   private void start() throws IOException {
-    server = ServerBuilder.forPort(port)
+    server = ProtoReflectableServerBuilder.forPort(port)
         .addService(new GreeterImpl())
         .build()
         .start();
