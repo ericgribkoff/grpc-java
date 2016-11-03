@@ -72,7 +72,7 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
   private Server server;
   private Set<String> serviceNames;
   private Map<String, FileDescriptor> fileDescriptorsByName;
-  private Map<String, FileDescriptor> fileDescriptorsBySymbol;
+  private Map<String, Set<FileDescriptor>> fileDescriptorsBySymbol;
   private Map<String, Map<Integer, FileDescriptor>> fileDescriptorsByExtensionAndNumber;
   private Boolean mapsInitialized = false;
 
@@ -98,14 +98,26 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
   }
 
   private void processService(ServiceDescriptor service, FileDescriptor fd) {
-    fileDescriptorsBySymbol.put(service.getFullName(), fd);
+    String serviceName = service.getFullName();
+    if (!fileDescriptorsBySymbol.containsKey(serviceName)) {
+      fileDescriptorsBySymbol.put(serviceName, new HashSet<FileDescriptor>());
+    }
+    fileDescriptorsBySymbol.get(serviceName).add(fd);
     for (MethodDescriptor method : service.getMethods()) {
-      fileDescriptorsBySymbol.put(method.getFullName(), fd);
+      String methodName = method.getFullName();
+      if (!fileDescriptorsBySymbol.containsKey(methodName)) {
+        fileDescriptorsBySymbol.put(methodName, new HashSet<FileDescriptor>());
+      }
+      fileDescriptorsBySymbol.get(methodName).add(fd);
     }
   }
 
   private void processType(Descriptor type, FileDescriptor fd) {
-    fileDescriptorsBySymbol.put(type.getFullName(), fd);
+    String typeName = type.getFullName();
+    if (!fileDescriptorsBySymbol.containsKey(typeName)) {
+      fileDescriptorsBySymbol.put(typeName, new HashSet<FileDescriptor>());
+    }
+    fileDescriptorsBySymbol.get(typeName).add(fd);
     for (FieldDescriptor extension : type.getExtensions()) {
       processExtension(extension, fd);
     }
@@ -146,7 +158,7 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
 
     serviceNames = new HashSet<String>();
     fileDescriptorsByName = new HashMap<String, FileDescriptor>();
-    fileDescriptorsBySymbol = new HashMap<String, FileDescriptor>();
+    fileDescriptorsBySymbol = new HashMap<String, Set<FileDescriptor>>();
     fileDescriptorsByExtensionAndNumber = new HashMap<String, Map<Integer, FileDescriptor>>();
 
     List<ServerServiceDefinition> services = server.getServices();
@@ -161,11 +173,9 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
         FileDescriptor fileDescriptor =
             ((ProtoFileDescriptorSupplier) serviceDescriptor.getMarshallerDescriptor())
                 .getFileDescriptor();
-        if (!serviceNames.contains(serviceDescriptor.getName())) {
-          serviceNames.add(serviceDescriptor.getName());
-          seenFiles.add(fileDescriptor.getName());
-          fileDescriptorsToProcess.offer(fileDescriptor);
-        }
+        serviceNames.add(serviceDescriptor.getName());
+        seenFiles.add(fileDescriptor.getName());
+        fileDescriptorsToProcess.offer(fileDescriptor);
       }
     }
 
@@ -233,8 +243,8 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
       private void getFileContainingSymbol(ServerReflectionRequest request) {
         String symbol = request.getFileContainingSymbol();
         if (fileDescriptorsBySymbol.containsKey(symbol)) {
-          FileDescriptor fd = fileDescriptorsBySymbol.get(symbol);
-          responseObserver.onNext(createServerReflectionResponse(request, fd));
+          Set<FileDescriptor> fds = fileDescriptorsBySymbol.get(symbol);
+          responseObserver.onNext(createServerReflectionResponse(request, fds));
           return;
         }
         sendErrorResponse(request, Status.NOT_FOUND, "Symbol not found.");
@@ -305,12 +315,21 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
 
       private ServerReflectionResponse createServerReflectionResponse(
           ServerReflectionRequest request, FileDescriptor fd) {
+        HashSet<FileDescriptor> fds = new HashSet<FileDescriptor>();
+        fds.add(fd);
+        return createServerReflectionResponse(request, fds);
+      }
+
+      private ServerReflectionResponse createServerReflectionResponse(
+          ServerReflectionRequest request, Set<FileDescriptor> fds) {
         FileDescriptorResponse.Builder fdRBuilder = FileDescriptorResponse.newBuilder();
 
         Set<String> seenFiles = new HashSet<String>();
         Queue<FileDescriptor> frontier = new LinkedList<FileDescriptor>();
-        seenFiles.add(fd.getName());
-        frontier.offer(fd);
+        for (FileDescriptor fd : fds) {
+          seenFiles.add(fd.getName());
+          frontier.offer(fd);
+        }
         while (!frontier.isEmpty()) {
           FileDescriptor nextFd = frontier.poll();
           fdRBuilder.addFileDescriptorProto(nextFd.toProto().toByteString());

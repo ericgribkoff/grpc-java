@@ -30,24 +30,25 @@
 syntax = "proto3";
 
 option java_multiple_files = true;
-option java_package = "io.grpc.examples.helloworld";
-option java_outer_classname = "HelloWorldProto";
+option java_package = "io.grpc.protobuf.service";
+option java_outer_classname = "HelloWorldDynamicProto";
 option objc_class_prefix = "HLW";
 
 package helloworld;
 
-// The greeting service definition.
-service Greeter {
-  // Sends a greeting
-  rpc SayHello (HelloRequest) returns (HelloReply) {}
-}
+
 
 // The request message containing the user's name.
-message HelloRequest {
+message DynamicRequest {
   string name = 1;
 }
 
 // The response message containing the greetings
-message HelloReply {
+message DynamicReply {
   string message = 1;
+}
+
+service Greeter {
+  // Sends a greeting
+  rpc SayDynamicHello (DynamicRequest) returns (DynamicReply) {}
 }

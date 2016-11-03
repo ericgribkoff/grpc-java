@@ -27,6 +27,7 @@ def grpcVersion = '1.1.0-SNAPSHOT' // CURRENT_GRPC_VERSION
 dependencies {
   compile "io.grpc:grpc-netty:${grpcVersion}"
   compile "io.grpc:grpc-protobuf:${grpcVersion}"
+  compile "io.grpc:grpc-services:${grpcVersion}"
   compile "io.grpc:grpc-stub:${grpcVersion}"
 }
 

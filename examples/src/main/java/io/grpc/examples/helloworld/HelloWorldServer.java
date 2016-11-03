@@ -33,7 +33,10 @@ package io.grpc.examples.helloworld;
 
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.ServerServiceDefinition;
+import io.grpc.protobuf.service.ProtoReflectionService;
 import io.grpc.stub.StreamObserver;
+import io.grpc.util.MutableHandlerRegistry;
 
 import java.io.IOException;
 import java.util.logging.Logger;
@@ -44,6 +47,8 @@ import java.util.logging.Logger;
 public class HelloWorldServer {
   private static final Logger logger = Logger.getLogger(HelloWorldServer.class.getName());
 
+  private MutableHandlerRegistry handlerRegistry = new MutableHandlerRegistry();
+
   /* The port on which the server should run */
   private int port = 50051;
   private Server server;
@@ -51,9 +56,15 @@ public class HelloWorldServer {
   private void start() throws IOException {
     server = ServerBuilder.forPort(port)
         .addService(new GreeterImpl())
+        .addService(new ProtoReflectionService())
+        .fallbackHandlerRegistry(handlerRegistry)
         .build()
         .start();
     logger.info("Server started, listening on " + port);
+    ServerServiceDefinition dynamicService =
+        (new io.grpc.protobuf.service.GreeterGrpc.GreeterImplBase() {}).bindService();
+    System.out.println(dynamicService);
+    handlerRegistry.addService(dynamicService);
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
       public void run() {
