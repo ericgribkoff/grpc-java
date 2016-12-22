@@ -31,6 +31,7 @@
 
 package io.grpc.examples.helloworld;
 
+import io.grpc.Context;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
@@ -38,11 +39,16 @@ import io.grpc.StatusRuntimeException;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
+import java.util.concurrent.Executors;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ScheduledExecutorService;
 /**
  * A simple client that requests a greeting from the {@link HelloWorldServer}.
  */
 public class HelloWorldClient {
+
+  static final Context.Key<Boolean> IN_CLOUD_LOGGER_KEY = Context.<Boolean>key("inLogger");
+
   private static final Logger logger = Logger.getLogger(HelloWorldClient.class.getName());
 
   private final ManagedChannel channel;
@@ -66,9 +72,41 @@ public class HelloWorldClient {
     channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
   }
 
+
+  public void greetInContext(String name) {
+    Boolean inCloudLogger = IN_CLOUD_LOGGER_KEY.get();
+    if (inCloudLogger == null) {
+      Context newCtx = Context.current().withValue(IN_CLOUD_LOGGER_KEY, true);
+      Context origCtx = newCtx.attach();
+      System.out.println("rpc based logging");
+
+      ScheduledExecutorService testServiceExecutor = Executors.newScheduledThreadPool(2);
+      try {
+        final CountDownLatch latch = new CountDownLatch(1);
+        Runnable r = new Runnable() {
+          @Override
+          public void run() {
+            greet(name);
+            latch.countDown();
+          }
+        };
+        testServiceExecutor.schedule(r, 0, TimeUnit.SECONDS);
+        latch.await(5, TimeUnit.SECONDS);
+      } finally {
+        newCtx.detach(origCtx);
+      }
+    } else {
+      System.out.println("non-rpc based logging");
+    }
+  }
+
   /** Say hello to server. */
   public void greet(String name) {
+
     logger.info("Will try to greet " + name + " ...");
+
+    System.out.println("inCloudLogger: " + IN_CLOUD_LOGGER_KEY.get());
+
     HelloRequest request = HelloRequest.newBuilder().setName(name).build();
     HelloReply response;
     try {
@@ -92,7 +130,7 @@ public class HelloWorldClient {
       if (args.length > 0) {
         user = args[0]; /* Use the arg as the name to greet if provided */
       }
-      client.greet(user);
+      client.greetInContext(user);
     } finally {
       client.shutdown();
     }
