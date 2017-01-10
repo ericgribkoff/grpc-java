@@ -35,6 +35,13 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
 
+import io.grpc.Context;
+import io.grpc.internal.StatsTraceContext;
+import com.google.instrumentation.stats.Stats;
+import com.google.instrumentation.stats.StatsContext;
+import com.google.instrumentation.stats.StatsContextFactory;
+import com.google.instrumentation.stats.StatsContextFactoryImpl;
+
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -78,6 +85,17 @@ public class HelloWorldClient {
       return;
     }
     logger.info("Greeting: " + response.getMessage());
+    StatsContextFactory factory = Stats.getStatsContextFactory();
+
+    Context context = Context.current();
+    logger.info(context.toString());
+
+    logger.info("Factory is null: " + (factory == null));
+//    StatsContext DEFAULT = Stats.getStatsContextFactory().getDefault();
+    Context.Key<StatsContext> STATS_CONTEXT_KEY = Context.key("StatsContextKey");
+    logger.info(STATS_CONTEXT_KEY.get(context).toString());
+//    StatsContext stats = StatsTraceContext.getStatsContext();
+//    logger.info(stats.toString());
   }
 
   /**

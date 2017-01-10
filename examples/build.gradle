@@ -25,10 +25,12 @@ repositories {
 def grpcVersion = '1.1.0-SNAPSHOT' // CURRENT_GRPC_VERSION
 
 dependencies {
+  compile "io.grpc:grpc-core:${grpcVersion}"
   compile "io.grpc:grpc-netty:${grpcVersion}"
   compile "io.grpc:grpc-protobuf:${grpcVersion}"
   compile "io.grpc:grpc-stub:${grpcVersion}"
-
+  compile "com.google.instrumentation:instrumentation-api:0.3.0"
+  compile "com.google.census:census-core_impl:0.1.0-SNAPSHOT"
   testCompile "junit:junit:4.11"
   testCompile "org.mockito:mockito-core:1.9.5"
 }

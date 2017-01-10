@@ -412,6 +412,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     this.compressorRegistry = compressorRegistry;
     this.userAgent = userAgent;
     this.statsFactory = checkNotNull(statsFactory, "statsFactory");
+    log.info(statsFactory.toString());
 
     if (log.isLoggable(Level.INFO)) {
       log.log(Level.INFO, "[{0}] Created with target {1}", new Object[] {getLogId(), target});
