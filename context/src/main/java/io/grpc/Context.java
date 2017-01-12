@@ -857,6 +857,21 @@ public class Context {
     public abstract Context current();
   }
 
+  @Override
+  public String toString() {
+    String s = "";
+    for (Object[] os : keyValueEntries) {
+      for (Object o : os) {
+        if (o == null) {
+          s += "null";
+        } else {
+          s += o.toString();
+        }
+      }
+    }
+    return s;
+  }
+
   /**
    * Stores listener and executor pair.
    */

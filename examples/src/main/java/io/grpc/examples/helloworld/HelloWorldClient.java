@@ -37,6 +37,8 @@ import io.grpc.StatusRuntimeException;
 
 import io.grpc.Context;
 import io.grpc.internal.StatsTraceContext;
+import com.google.instrumentation.stats.TagKey;
+import com.google.instrumentation.stats.TagValue;
 import com.google.instrumentation.stats.Stats;
 import com.google.instrumentation.stats.StatsContext;
 import com.google.instrumentation.stats.StatsContextFactory;
@@ -73,8 +75,44 @@ public class HelloWorldClient {
     channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
   }
 
+  private static final TagKey K1 = TagKey.create("k1");
+  private static final TagKey K2 = TagKey.create("k2");
+  private static final TagKey K3 = TagKey.create("k3");
+  private static final TagKey K4 = TagKey.create("k4");
+
+  private static final TagValue V1 = TagValue.create("v1");
+  private static final TagValue V2 = TagValue.create("v2");
+  private static final TagValue V3 = TagValue.create("v3");
+  private static final TagValue V4 = TagValue.create("v4");
+
+  private static final StatsContext DEFAULT = Stats.getStatsContextFactory().getDefault();
+
+  private static final Context.Key<StatsContext> STATS_CONTEXT_KEY =
+      Context.keyWithDefault("StatsContextKey", DEFAULT);
+
+  private static final StatsContext getCurrentStatsContext() {
+    return getStatsContext(Context.current());
+  }
+
+  private static final StatsContext getStatsContext(Context context) {
+    return STATS_CONTEXT_KEY.get(context);
+  }
+
+  private static final Context withCurrent(StatsContext context) {
+    return Context.current().withValue(STATS_CONTEXT_KEY, context);
+  }
+
   /** Say hello to server. */
   public void greet(String name) {
+    System.out.println("Hello Stats World");
+    System.out.println("Default Tags: " + DEFAULT);
+    System.out.println("Current Tags: " + getCurrentStatsContext());
+    Context context1 = withCurrent(DEFAULT.with(K1, V1, K2, V2));
+    Context original = context1.attach();
+
+    logger.info("DEFAULT: " + DEFAULT);
+    System.out.println("Current Tags: " + getCurrentStatsContext());
+
     logger.info("Will try to greet " + name + " ...");
     HelloRequest request = HelloRequest.newBuilder().setName(name).build();
     HelloReply response;
@@ -91,9 +129,11 @@ public class HelloWorldClient {
     logger.info(context.toString());
 
     logger.info("Factory is null: " + (factory == null));
-//    StatsContext DEFAULT = Stats.getStatsContextFactory().getDefault();
-    Context.Key<StatsContext> STATS_CONTEXT_KEY = Context.key("StatsContextKey");
-    logger.info(STATS_CONTEXT_KEY.get(context).toString());
+    logger.info("DEFAULT: " + DEFAULT.toString());
+    System.out.println("Current Tags: " + getCurrentStatsContext());
+
+//    Context.Key<StatsContext> STATS_CONTEXT_KEY = Context.key("StatsContextKey");
+//    logger.info(STATS_CONTEXT_KEY.get(context).toString());
 //    StatsContext stats = StatsTraceContext.getStatsContext();
 //    logger.info(stats.toString());
   }

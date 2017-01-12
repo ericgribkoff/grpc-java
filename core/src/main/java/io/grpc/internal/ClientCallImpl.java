@@ -108,6 +108,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     // Propagate the context from the thread which initiated the call to all callbacks.
     this.context = Context.current();
     this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
+    log.info("statsTraceCtx in ClientCallImpl: " + statsTraceCtx.toString());
     this.unaryRequest = method.getType() == MethodType.UNARY
         || method.getType() == MethodType.SERVER_STREAMING;
     this.callOptions = callOptions;
@@ -218,8 +219,10 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       ClientTransport transport = clientTransportProvider.get(callOptions);
       Context origContext = context.attach();
       try {
+        log.info("transport: " + transport.toString());
         stream = transport.newStream(method, headers, callOptions, statsTraceCtx);
       } finally {
+        log.info("ClientCallImpl detaching context: " + context);
         context.detach(origContext);
       }
     } else {
