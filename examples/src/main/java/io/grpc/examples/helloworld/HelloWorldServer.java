@@ -33,6 +33,7 @@ package io.grpc.examples.helloworld;
 
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.protobuf.service.ProtoReflectionService;
 import io.grpc.services.StatsServer;
 import io.grpc.stub.StreamObserver;
 
@@ -52,6 +53,7 @@ public class HelloWorldServer {
     int port = 50051;
     server = ServerBuilder.forPort(port)
         .addService(new GreeterImpl())
+        .addService(ProtoReflectionService.getInstance())
         .build()
         .start();
     logger.info("Server started, listening on " + port);

@@ -66,7 +66,7 @@ public final class StatsServer {
       server = ServerBuilder.forPort(port)
         .executor(executor)
         .addService(StatsServiceImpl.getInstance())
-        .addService(ProtoReflectionService.get
+        .addService(ProtoReflectionService.getInstance())
         .build()
         .start();
     } catch (Exception e) {
