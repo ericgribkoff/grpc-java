@@ -1,5 +1,5 @@
 /*
- * Copyright 2015, Google Inc. All rights reserved.
+ * Copyright 2017, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,75 +29,75 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.examples.helloworld;
+package io.grpc.services;
 
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
-import io.grpc.services.StatsServer;
-import io.grpc.stub.StreamObserver;
+import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.SharedResourceHolder;
+import io.grpc.protobuf.service.ProtoReflectionService;
 
 import java.io.IOException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.logging.Logger;
 
-/**
- * Server that manages startup/shutdown of a {@code Greeter} server.
- */
-public class HelloWorldServer {
-  private static final Logger logger = Logger.getLogger(HelloWorldServer.class.getName());
+public final class StatsServer {
+  private static final Logger logger = Logger.getLogger(StatsServer.class.getName());
+  private static StatsServer instance;
+
+  private final boolean usingSharedExecutor;
 
   private Server server;
+  private Executor executor;
+  private ScheduledExecutorService scheduledExecutor;
 
-  private void start() throws IOException {
-    /* The port on which the server should run */
-    int port = 50051;
-    server = ServerBuilder.forPort(port)
-        .addService(new GreeterImpl())
+  private StatsServer(Executor executor) {
+    if (executor == null) {
+      usingSharedExecutor = true;
+      this.executor = SharedResourceHolder.get(GrpcUtil.SHARED_CHANNEL_EXECUTOR);
+    } else {
+      usingSharedExecutor = false;
+      this.executor = executor;
+    };
+
+    int port = 50052; //TODO(ericgribkoff) choose port/address for UDS/Named Pipes
+    try {
+      server = ServerBuilder.forPort(port)
+        .executor(executor)
+        .addService(StatsServiceImpl.getInstance())
+        .addService(ProtoReflectionService.get
         .build()
         .start();
+    } catch (Exception e) {
+      //TODO(ericgribkoff) do something
+      logger.info("Server failed to start");
+      return;
+    }
     logger.info("Server started, listening on " + port);
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
       public void run() {
         // Use stderr here since the logger may have been reset by its JVM shutdown hook.
         System.err.println("*** shutting down gRPC server since JVM is shutting down");
-        HelloWorldServer.this.stop();
+        StatsServer.this.stop();
         System.err.println("*** server shut down");
       }
     });
+
+  }
+
+  //TODO(ericgribkoff) Make this more performant
+  /** Gets the canonical instance of the server. Created with an executor.*/ 
+  public static synchronized void startServer(Executor executor) {
+    if (instance == null) {
+      instance = new StatsServer(executor);
+    }
   }
 
   private void stop() {
     if (server != null) {
       server.shutdown();
-    }
-  }
-
-  /**
-   * Await termination on the main thread since the grpc library uses daemon threads.
-   */
-  private void blockUntilShutdown() throws InterruptedException {
-    if (server != null) {
-      server.awaitTermination();
-    }
-  }
-
-  /**
-   * Main launches the server from the command line.
-   */
-  public static void main(String[] args) throws IOException, InterruptedException {
-    final HelloWorldServer server = new HelloWorldServer();
-    StatsServer.startServer(null);
-    server.start();
-    server.blockUntilShutdown();
-  }
-
-  static class GreeterImpl extends GreeterGrpc.GreeterImplBase {
-
-    @Override
-    public void sayHello(HelloRequest req, StreamObserver<HelloReply> responseObserver) {
-      HelloReply reply = HelloReply.newBuilder().setMessage("Hello " + req.getName()).build();
-      responseObserver.onNext(reply);
-      responseObserver.onCompleted();
     }
   }
 }
