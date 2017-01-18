@@ -51,6 +51,7 @@ import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannel;
+import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.NameResolver;
 import io.grpc.ResolvedServerInfoGroup;
@@ -233,6 +234,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
               IDLE_GRACE_PERIOD_MILLIS, TimeUnit.MILLISECONDS);
           return;
         }
+        log.log(Level.FINE, "[{0}] Entering idle mode", getLogId());
         // Enter idle mode
         savedBalancer = graceLoadBalancer;
         graceLoadBalancer = null;
@@ -287,6 +289,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
       if (loadBalancer != null) {
         return loadBalancer;
       }
+      log.log(Level.FINE, "[{0}] Exiting idle mode", getLogId());
       balancer = loadBalancerFactory.newLoadBalancer(nameResolver.getServiceAuthority(), tm);
       this.loadBalancer = balancer;
       resolver = this.nameResolver;
@@ -359,7 +362,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
 
   private final ClientTransportProvider transportProvider = new ClientTransportProvider() {
     @Override
-    public ClientTransport get(CallOptions callOptions) {
+    public ClientTransport get(CallOptions callOptions, Metadata headers) {
       LoadBalancer<ClientTransport> balancer = loadBalancer;
       if (balancer == null) {
         // Current state is either idle or in grace period
@@ -472,6 +475,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
    */
   @Override
   public ManagedChannelImpl shutdown() {
+    log.log(Level.FINE, "[{0}] shutdown() called", getLogId());
     ArrayList<TransportSet> transportsCopy = new ArrayList<TransportSet>();
     ArrayList<DelayedClientTransport> delayedTransportsCopy =
         new ArrayList<DelayedClientTransport>();
@@ -483,6 +487,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
       if (shutdown) {
         return this;
       }
+      log.log(Level.FINE, "[{0}] Shutting down", getLogId());
       shutdown = true;
       // After shutdown there are no new calls, so no new cancellation tasks are needed
       scheduledExecutor = SharedResourceHolder.release(timerService, scheduledExecutor);
@@ -524,6 +529,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
    */
   @Override
   public ManagedChannelImpl shutdownNow() {
+    log.log(Level.FINE, "[{0}] shutdownNow() called", getLogId());
     synchronized (lock) {
       // Short-circuiting not strictly necessary, but prevents transports from needing to handle
       // multiple shutdownNow invocations.
@@ -751,7 +757,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     return logId;
   }
 
-  private static class NameResolverListenerImpl implements NameResolver.Listener {
+  private class NameResolverListenerImpl implements NameResolver.Listener {
     final LoadBalancer<ClientTransport> balancer;
 
     NameResolverListenerImpl(LoadBalancer<ClientTransport> balancer) {
@@ -764,10 +770,13 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
         onError(Status.UNAVAILABLE.withDescription("NameResolver returned an empty list"));
         return;
       }
+      log.log(Level.FINE, "[{0}] resolved address: {1}, config={2}",
+          new Object[] {getLogId(), servers, config});
 
       try {
         balancer.handleResolvedAddresses(servers, config);
       } catch (Throwable e) {
+        log.log(Level.WARNING, "[" + getLogId() + "] Unexpected exception from LoadBalancer", e);
         // It must be a bug! Push the exception back to LoadBalancer in the hope that it may be
         // propagated to the application.
         balancer.handleNameResolutionError(Status.INTERNAL.withCause(e)
@@ -778,6 +787,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     @Override
     public void onError(Status error) {
       checkArgument(!error.isOk(), "the error status must not be OK");
+      log.log(Level.WARNING, "[{0}] Failed to resolve name. status={1}",
+          new Object[] {getLogId(), error});
       balancer.handleNameResolutionError(error);
     }
   }

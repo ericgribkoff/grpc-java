@@ -45,6 +45,7 @@ import static java.lang.Math.max;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
+import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.Codec;
@@ -128,7 +129,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     /**
      * Returns a transport for a new call.
      */
-    ClientTransport get(CallOptions callOptions);
+    ClientTransport get(CallOptions callOptions, Metadata headers);
   }
 
   ClientCallImpl<ReqT, RespT> setDecompressorRegistry(DecompressorRegistry decompressorRegistry) {
@@ -216,7 +217,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     if (!deadlineExceeded) {
       updateTimeoutHeaders(effectiveDeadline, callOptions.getDeadline(),
           context.getDeadline(), headers);
-      ClientTransport transport = clientTransportProvider.get(callOptions);
+      ClientTransport transport = clientTransportProvider.get(callOptions, headers);
       Context origContext = context.attach();
       try {
         log.info("transport: " + transport.toString());
@@ -412,6 +413,14 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
   @Override
   public boolean isReady() {
     return stream.isReady();
+  }
+
+  @Override
+  public Attributes getAttributes() {
+    if (stream != null) {
+      return stream.getAttributes();
+    }
+    return Attributes.EMPTY;
   }
 
   private void closeObserver(Listener<RespT> observer, Status status, Metadata trailers) {

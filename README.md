@@ -85,7 +85,7 @@ For protobuf-based codegen integrated with the Maven build system, you can use
       <artifactId>protobuf-maven-plugin</artifactId>
       <version>0.5.0</version>
       <configuration>
-        <protocArtifact>com.google.protobuf:protoc:3.1.0:exe:${os.detected.classifier}</protocArtifact>
+        <protocArtifact>com.google.protobuf:protoc:3.0.2:exe:${os.detected.classifier}</protocArtifact>
         <pluginId>grpc-java</pluginId>
         <pluginArtifact>io.grpc:protoc-gen-grpc-java:1.0.3:exe:${os.detected.classifier}</pluginArtifact>
       </configuration>
@@ -123,7 +123,7 @@ buildscript {
 
 protobuf {
   protoc {
-    artifact = "com.google.protobuf:protoc:3.1.0"
+    artifact = "com.google.protobuf:protoc:3.0.2"
   }
   plugins {
     grpc {
@@ -230,8 +230,10 @@ gRPC comes with three Transport implementations:
 * [Server Stream Listener](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/internal/ServerStreamListener.java)
 
 
-### Examples
+Examples
+--------
 
-Tests showing how these layers are composed to execute calls using protobuf
-messages can be found here
-https://github.com/google/grpc-java/tree/master/interop-testing/src/main/java/io/grpc/testing/integration
+The [examples](https://github.com/grpc/grpc-java/tree/master/examples)
+and the
+[Android example](https://github.com/grpc/grpc-java/tree/master/examples/android) are standalone projects that
+showcase the usage of gRPC.
