@@ -32,10 +32,14 @@
 package io.grpc.services;
 
 import io.grpc.Server;
-import io.grpc.ServerBuilder;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourceHolder;
+import io.grpc.netty.NettyServerBuilder;
 import io.grpc.protobuf.service.ProtoReflectionService;
+
+import io.netty.channel.unix.DomainSocketAddress;
+import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.epoll.EpollServerDomainSocketChannel;
 
 import java.io.IOException;
 import java.util.concurrent.Executor;
@@ -52,7 +56,7 @@ public final class StatsServer {
   private Executor executor;
   private ScheduledExecutorService scheduledExecutor;
 
-  private StatsServer(Executor executor) {
+  private StatsServer(Executor executor) throws Exception {
     if (executor == null) {
       usingSharedExecutor = true;
       this.executor = SharedResourceHolder.get(GrpcUtil.SHARED_CHANNEL_EXECUTOR);
@@ -63,7 +67,10 @@ public final class StatsServer {
 
     int port = 50052; //TODO(ericgribkoff) choose port/address for UDS/Named Pipes
     try {
-      server = ServerBuilder.forPort(port)
+      server = NettyServerBuilder.forAddress(new DomainSocketAddress("/tmp/test.sock"))
+        .channelType(EpollServerDomainSocketChannel.class)
+        .bossEventLoopGroup(new EpollEventLoopGroup())
+        .workerEventLoopGroup(new EpollEventLoopGroup())
         .executor(executor)
         .addService(StatsServiceImpl.getInstance())
         .addService(ProtoReflectionService.getInstance())
@@ -71,8 +78,10 @@ public final class StatsServer {
         .start();
     } catch (Exception e) {
       //TODO(ericgribkoff) do something
-      logger.info("Server failed to start");
-      return;
+      //logger.info("Server failed to start");
+      //logger.info(e.getMessage());
+      //return;
+      throw e;
     }
     logger.info("Server started, listening on " + port);
     Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -89,7 +98,7 @@ public final class StatsServer {
 
   //TODO(ericgribkoff) Make this more performant
   /** Gets the canonical instance of the server. Created with an executor.*/ 
-  public static synchronized void startServer(Executor executor) {
+  public static synchronized void startServer(Executor executor) throws Exception {
     if (instance == null) {
       instance = new StatsServer(executor);
     }

@@ -15,8 +15,10 @@ plugins {
 description = "gRPC: Services"
 
 dependencies {
-    compile project(':grpc-protobuf'),
-            project(':grpc-stub')
+    compile project(':grpc-netty'),
+            project(':grpc-protobuf'),
+            project(':grpc-stub'),
+            libraries.netty_epoll
     testCompile project(':grpc-testing')
 }
 
