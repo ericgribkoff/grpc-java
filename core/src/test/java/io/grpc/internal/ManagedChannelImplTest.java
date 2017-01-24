@@ -56,8 +56,8 @@ import static org.mockito.Mockito.when;
 import com.google.common.collect.ImmutableList;
 
 import io.grpc.Attributes;
-import io.grpc.CallCredentials.MetadataApplier;
 import io.grpc.CallCredentials;
+import io.grpc.CallCredentials.MetadataApplier;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -70,6 +70,7 @@ import io.grpc.IntegerMarshaller;
 import io.grpc.LoadBalancer;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.NameResolver;
 import io.grpc.PickFirstBalancerFactory;
 import io.grpc.ResolvedServerInfo;
@@ -115,9 +116,13 @@ public class ManagedChannelImplTest {
       Collections.<ClientInterceptor>emptyList();
   private static final Attributes NAME_RESOLVER_PARAMS =
       Attributes.newBuilder().set(NameResolver.Factory.PARAMS_DEFAULT_PORT, 447).build();
-  private final MethodDescriptor<String, Integer> method = MethodDescriptor.create(
-      MethodDescriptor.MethodType.UNKNOWN, "/service/method",
-      new StringMarshaller(), new IntegerMarshaller());
+  private final MethodDescriptor<String, Integer> method =
+      MethodDescriptor.<String, Integer>newBuilder()
+          .setType(MethodType.UNKNOWN)
+          .setFullMethodName("/service/method")
+          .setRequestMarshaller(new StringMarshaller())
+          .setResponseMarshaller(new IntegerMarshaller())
+          .build();
   private final String serviceName = "fake.example.com";
   private final String authority = serviceName;
   private final String userAgent = "userAgent";
@@ -167,9 +172,7 @@ public class ManagedChannelImplTest {
         ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE,
         executor.getScheduledExecutorService(), userAgent, interceptors, statsCtxFactory);
     // Force-exit the initial idle-mode
-    channel.exitIdleMode();
-    // Will start NameResolver in the scheduled executor
-    assertEquals(1, timer.runDueTasks());
+    channel.exitIdleModeAndGetLb();
   }
 
   @Before
@@ -874,7 +877,7 @@ public class ManagedChannelImplTest {
           any(MetadataApplier.class));
 
     final ConnectionClientTransport transport = mock(ConnectionClientTransport.class);
-    when(transport.getAttrs()).thenReturn(Attributes.EMPTY);
+    when(transport.getAttributes()).thenReturn(Attributes.EMPTY);
     when(mockTransportFactory.newClientTransport(any(SocketAddress.class), any(String.class),
             any(String.class))).thenReturn(transport);
     doAnswer(new Answer<ClientStream>() {

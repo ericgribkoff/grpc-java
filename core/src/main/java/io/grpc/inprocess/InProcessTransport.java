@@ -209,7 +209,7 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
   }
 
   @Override
-  public Attributes getAttrs() {
+  public Attributes getAttributes() {
     return Attributes.EMPTY;
   }
 
@@ -417,7 +417,7 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
       @Override
       public void setDecompressor(Decompressor decompressor) {}
 
-      @Override public Attributes attributes() {
+      @Override public Attributes getAttributes() {
         return serverStreamAttributes;
       }
 

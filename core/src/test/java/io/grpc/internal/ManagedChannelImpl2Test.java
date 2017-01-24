@@ -60,8 +60,8 @@ import static org.mockito.Mockito.when;
 import com.google.common.collect.ImmutableList;
 
 import io.grpc.Attributes;
-import io.grpc.CallCredentials.MetadataApplier;
 import io.grpc.CallCredentials;
+import io.grpc.CallCredentials.MetadataApplier;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -80,6 +80,7 @@ import io.grpc.LoadBalancer2.SubchannelPicker;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.NameResolver;
 import io.grpc.ResolvedServerInfo;
 import io.grpc.ResolvedServerInfoGroup;
@@ -125,9 +126,13 @@ public class ManagedChannelImpl2Test {
       Collections.<ClientInterceptor>emptyList();
   private static final Attributes NAME_RESOLVER_PARAMS =
       Attributes.newBuilder().set(NameResolver.Factory.PARAMS_DEFAULT_PORT, 447).build();
-  private static final MethodDescriptor<String, Integer> method = MethodDescriptor.create(
-      MethodDescriptor.MethodType.UNKNOWN, "/service/method",
-      new StringMarshaller(), new IntegerMarshaller());
+  private static final MethodDescriptor<String, Integer> method =
+      MethodDescriptor.<String, Integer>newBuilder()
+          .setType(MethodType.UNKNOWN)
+          .setFullMethodName("/service/method")
+          .setRequestMarshaller(new StringMarshaller())
+          .setResponseMarshaller(new IntegerMarshaller())
+          .build();
   private static final Attributes.Key<String> SUBCHANNEL_ATTR_KEY =
       Attributes.Key.of("subchannel-attr-key");
   private final String serviceName = "fake.example.com";
@@ -608,7 +613,7 @@ public class ManagedChannelImpl2Test {
             any(MethodDescriptor.class), any(Metadata.class), any(CallOptions.class),
             any(StatsTraceContext.class)))
         .thenReturn(mock(ClientStream.class));
-    
+
     goodTransportInfo.listener.transportReady();
     inOrder.verify(mockLoadBalancer).handleSubchannelState(
         same(subchannel), stateInfoCaptor.capture());
@@ -816,8 +821,8 @@ public class ManagedChannelImpl2Test {
   @Test
   public void subchannelsNoConnectionShutdownNow() {
     createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
-    Subchannel sub1 = helper.createSubchannel(addressGroup, Attributes.EMPTY);
-    Subchannel sub2 = helper.createSubchannel(addressGroup, Attributes.EMPTY);
+    helper.createSubchannel(addressGroup, Attributes.EMPTY);
+    helper.createSubchannel(addressGroup, Attributes.EMPTY);
     channel.shutdownNow();
 
     verify(mockLoadBalancer).shutdown();
@@ -975,8 +980,8 @@ public class ManagedChannelImpl2Test {
   @Test
   public void oobChannelsNoConnectionShutdownNow() {
     createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
-    ManagedChannel oob1 = helper.createOobChannel(addressGroup, "oob1Authority");
-    ManagedChannel oob2 = helper.createOobChannel(addressGroup, "oob2Authority");
+    helper.createOobChannel(addressGroup, "oob1Authority");
+    helper.createOobChannel(addressGroup, "oob2Authority");
     channel.shutdownNow();
 
     verify(mockLoadBalancer).shutdown();
@@ -1039,7 +1044,7 @@ public class ManagedChannelImpl2Test {
         same(socketAddress), eq(authority), eq(userAgent));
     MockClientTransportInfo transportInfo = transports.poll();
     final ConnectionClientTransport transport = transportInfo.transport;
-    when(transport.getAttrs()).thenReturn(Attributes.EMPTY);
+    when(transport.getAttributes()).thenReturn(Attributes.EMPTY);
     doAnswer(new Answer<ClientStream>() {
         @Override
         public ClientStream answer(InvocationOnMock in) throws Throwable {

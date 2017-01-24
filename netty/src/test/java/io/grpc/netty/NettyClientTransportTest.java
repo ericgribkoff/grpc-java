@@ -313,8 +313,8 @@ public class NettyClientTransportTest {
           + " size limit!");
     } catch (Exception e) {
       Throwable rootCause = getRootCause(e);
-      assertTrue(rootCause instanceof StatusException);
-      assertEquals(Status.INTERNAL.getCode(), ((StatusException) rootCause).getStatus().getCode());
+      Status status = ((StatusException) rootCause).getStatus();
+      assertEquals(status.toString(), Status.Code.INTERNAL, status.getCode());
     }
   }
 
@@ -333,7 +333,7 @@ public class NettyClientTransportTest {
           }
         });
 
-    assertEquals(Attributes.EMPTY, transport.getAttrs());
+    assertEquals(Attributes.EMPTY, transport.getAttributes());
 
     transports.clear();
   }
@@ -397,9 +397,13 @@ public class NettyClientTransportTest {
 
   private static class Rpc {
     static final String MESSAGE = "hello";
-    static final MethodDescriptor<String, String> METHOD = MethodDescriptor.create(
-            MethodDescriptor.MethodType.UNARY, "/testService/test", StringMarshaller.INSTANCE,
-            StringMarshaller.INSTANCE);
+    static final MethodDescriptor<String, String> METHOD =
+        MethodDescriptor.<String, String>newBuilder()
+            .setType(MethodDescriptor.MethodType.UNARY)
+            .setFullMethodName("/testService/test")
+            .setRequestMarshaller(StringMarshaller.INSTANCE)
+            .setResponseMarshaller(StringMarshaller.INSTANCE)
+            .build();
 
     final ClientStream stream;
     final TestClientStreamListener listener = new TestClientStreamListener();

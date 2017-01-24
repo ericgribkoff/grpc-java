@@ -53,14 +53,15 @@ import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.IntegerMarshaller;
+import io.grpc.LoadBalancer2;
 import io.grpc.LoadBalancer2.Helper;
 import io.grpc.LoadBalancer2.PickResult;
 import io.grpc.LoadBalancer2.Subchannel;
 import io.grpc.LoadBalancer2.SubchannelPicker;
-import io.grpc.LoadBalancer2;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.NameResolver;
 import io.grpc.ResolvedServerInfo;
 import io.grpc.ResolvedServerInfoGroup;
@@ -101,14 +102,18 @@ public class ManagedChannelImpl2IdlenessTest {
   private static final long IDLE_TIMEOUT_SECONDS = 30;
   private ManagedChannelImpl2 channel;
 
-  private final MethodDescriptor<String, Integer> method = MethodDescriptor.create(
-      MethodDescriptor.MethodType.UNKNOWN, "/service/method",
-      new StringMarshaller(), new IntegerMarshaller());
+  private final MethodDescriptor<String, Integer> method =
+      MethodDescriptor.<String, Integer>newBuilder()
+          .setType(MethodType.UNKNOWN)
+          .setFullMethodName("/service/method")
+          .setRequestMarshaller(new StringMarshaller())
+          .setResponseMarshaller(new IntegerMarshaller())
+          .build();
 
   private final List<ResolvedServerInfoGroup> servers = Lists.newArrayList();
   private final List<EquivalentAddressGroup> addressGroupList =
       new ArrayList<EquivalentAddressGroup>();
-  
+
   @Mock private ObjectPool<ScheduledExecutorService> timerServicePool;
   @Mock private ObjectPool<Executor> executorPool;
   @Mock private ObjectPool<Executor> oobExecutorPool;
@@ -168,14 +173,10 @@ public class ManagedChannelImpl2IdlenessTest {
 
   @Test
   public void newCallExitsIdleness() throws Exception {
-    final EquivalentAddressGroup addressGroup = addressGroupList.get(1);
-
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     call.start(mockCallListener, new Metadata());
 
-    ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(null);
-    verify(mockLoadBalancerFactory).newLoadBalancer(helperCaptor.capture());
-    Helper helper = helperCaptor.getValue();
+    verify(mockLoadBalancerFactory).newLoadBalancer(any(Helper.class));
 
     verify(mockNameResolver).start(nameResolverListenerCaptor.capture());
     // Simulate new address resolved to make sure the LoadBalancer is correctly linked to
@@ -186,17 +187,13 @@ public class ManagedChannelImpl2IdlenessTest {
 
   @Test
   public void newCallRefreshesIdlenessTimer() throws Exception {
-    final EquivalentAddressGroup addressGroup = addressGroupList.get(1);
-
     // First call to exit the initial idleness, then immediately cancel the call.
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     call.start(mockCallListener, new Metadata());
     call.cancel("For testing", null);
 
     // Verify that we have exited the idle mode
-    ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(null);
-    verify(mockLoadBalancerFactory).newLoadBalancer(helperCaptor.capture());
-    Helper helper = helperCaptor.getValue();
+    verify(mockLoadBalancerFactory).newLoadBalancer(any(Helper.class));
     assertFalse(channel.inUseStateAggregator.isInUse());
 
     // Move closer to idleness, but not yet.
@@ -225,7 +222,7 @@ public class ManagedChannelImpl2IdlenessTest {
     assertEquals(2, executor.runDueTasks());
     verify(mockCallListener, times(2)).onClose(any(Status.class), any(Metadata.class));
   }
-  
+
   @Test
   public void delayedTransportHoldsOffIdleness() throws Exception {
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
@@ -297,7 +294,6 @@ public class ManagedChannelImpl2IdlenessTest {
 
   @Test
   public void oobTransportDoesNotAffectIdleness() {
-    FakeClock oobExecutor = new FakeClock();
     // Start a call, which goes to delayed transport
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     call.start(mockCallListener, new Metadata());
@@ -351,11 +347,11 @@ public class ManagedChannelImpl2IdlenessTest {
 
   private static class FakeSocketAddress extends SocketAddress {
     final String name;
- 
+
     FakeSocketAddress(String name) {
       this.name = name;
     }
- 
+
     @Override
     public String toString() {
       return "FakeSocketAddress-" + name;
