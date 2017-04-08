@@ -76,6 +76,7 @@ import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.ManagedClientTransport;
+import io.grpc.internal.MessageDeframer.MessageProducer;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
@@ -1009,6 +1010,9 @@ public abstract class AbstractTransportTest {
         assertEquals("foo", methodDescriptor.parseResponse(message));
         clientStream.cancel(status);
       }
+
+      @Override
+      public void messagesAvailable(MessageProducer mp) {}
 
       @Override
       public void onReady() {

@@ -60,6 +60,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
+import io.grpc.internal.MessageDeframer.MessageProducer;
 import java.io.InputStream;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Executor;
@@ -501,6 +502,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
 
       callExecutor.execute(new MessageRead());
     }
+
+    @Override
+    public void messagesAvailable(MessageProducer mp) {}
 
     /**
      * Must be called from application thread.

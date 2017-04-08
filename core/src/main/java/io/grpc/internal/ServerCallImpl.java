@@ -52,6 +52,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.ServerCall;
 import io.grpc.Status;
+import io.grpc.internal.MessageDeframer.MessageProducer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
@@ -252,6 +253,9 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
         }
       }
     }
+
+    @Override
+    public void messagesAvailable(MessageProducer mp) {}
 
     @Override
     public void halfClosed() {

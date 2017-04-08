@@ -38,6 +38,7 @@ import com.google.common.annotations.VisibleForTesting;
 import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
+import io.grpc.internal.MessageDeframer.MessageProducer;
 import java.io.InputStream;
 import javax.annotation.concurrent.GuardedBy;
 
@@ -164,6 +165,9 @@ public abstract class AbstractStream2 implements Stream {
     public void messageRead(InputStream is) {
       listener().messageRead(is);
     }
+
+    @Override
+    public void messagesAvailable(MessageProducer mp) {}
 
     /**
      * Called when a {@link #deframe(ReadableBuffer, boolean)} operation failed.

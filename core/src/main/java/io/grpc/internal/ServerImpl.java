@@ -51,6 +51,7 @@ import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.ServerTransportFilter;
 import io.grpc.Status;
+import io.grpc.internal.MessageDeframer.MessageProducer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -495,6 +496,9 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
     }
 
     @Override
+    public void messagesAvailable(MessageProducer mp) {}
+
+    @Override
     public void halfClosed() {}
 
     @Override
@@ -562,6 +566,9 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
         }
       });
     }
+
+    @Override
+    public void messagesAvailable(MessageProducer mp) {}
 
     @Override
     public void halfClosed() {

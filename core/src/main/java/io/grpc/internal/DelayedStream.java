@@ -40,6 +40,7 @@ import io.grpc.Compressor;
 import io.grpc.Decompressor;
 import io.grpc.Metadata;
 import io.grpc.Status;
+import io.grpc.internal.MessageDeframer.MessageProducer;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
@@ -387,6 +388,20 @@ class DelayedStream implements ClientStream {
           @Override
           public void run() {
             realListener.messageRead(message);
+          }
+        });
+      }
+    }
+
+    @Override
+    public void messagesAvailable(final MessageProducer mp) {
+      if (passThrough) {
+        realListener.messagesAvailable(mp);
+      } else {
+        delayOrExecute(new Runnable() {
+          @Override
+          public void run() {
+            realListener.messagesAvailable(mp);
           }
         });
       }

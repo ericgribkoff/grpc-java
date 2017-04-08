@@ -45,6 +45,7 @@ import static org.mockito.Mockito.verify;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.AbstractServerStream.TransportState;
+import io.grpc.internal.MessageDeframer.MessageProducer;
 import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -236,6 +237,9 @@ public class AbstractServerStreamTest {
   private static class ServerStreamListenerBase implements ServerStreamListener {
     @Override
     public void messageRead(InputStream message) {}
+
+    @Override
+    public void messagesAvailable(MessageProducer mp) {}
 
     @Override
     public void onReady() {}

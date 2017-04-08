@@ -42,6 +42,7 @@ import java.io.Closeable;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
@@ -55,6 +56,14 @@ public class MessageDeframer implements Closeable {
   private static final int HEADER_LENGTH = 5;
   private static final int COMPRESSED_FLAG_MASK = 1;
   private static final int RESERVED_MASK = 0xFE;
+
+  /**
+   * A message producing object.
+   */
+  public interface MessageProducer {
+    @Nullable
+    InputStream next();
+  }
 
   /**
    * A listener of deframing events.
@@ -76,6 +85,11 @@ public class MessageDeframer implements Closeable {
      * @param is stream containing the message.
      */
     void messageRead(InputStream is);
+
+    /**
+     * Called to schedule deframing in the application thread.
+     */
+    void messagesAvailable(MessageProducer mp);
 
     /**
      * Called when end-of-stream has not yet been reached but there are no complete messages

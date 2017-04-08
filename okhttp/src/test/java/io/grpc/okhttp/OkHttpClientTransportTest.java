@@ -74,6 +74,7 @@ import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ManagedClientTransport;
+import io.grpc.internal.MessageDeframer.MessageProducer;
 import io.grpc.okhttp.OkHttpClientTransport.ClientFrameHandler;
 import io.grpc.okhttp.internal.ConnectionSpec;
 import io.grpc.okhttp.internal.framed.ErrorCode;
@@ -1669,6 +1670,9 @@ public class OkHttpClientTransportTest {
         messages.add(msg);
       }
     }
+
+    @Override
+    public void messagesAvailable(MessageProducer mp) {}
 
     @Override
     public void closed(Status status, Metadata trailers) {
