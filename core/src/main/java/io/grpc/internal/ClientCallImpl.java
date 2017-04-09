@@ -504,7 +504,42 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     }
 
     @Override
-    public void messagesAvailable(MessageProducer mp) {}
+    public void messagesAvailable(final MessageProducer mp) {
+      class MessagesAvailable extends ContextRunnable {
+        MessagesAvailable() {
+          super(context);
+        }
+
+        @Override
+        public final void runInContext() {
+          try {
+            InputStream message;
+            while ((message = mp.next()) != null) {
+              if (closed) {
+                return;
+              }
+              try {
+                observer.onMessage(method.parseResponse(message));
+              } finally {
+                message.close();
+              }
+            }
+          } catch (Throwable t){
+            Status status =
+                Status.CANCELLED.withCause(t).withDescription("Failed to read message.");
+            stream.cancel(status);
+            close(status, new Metadata());
+          }
+        }
+      }
+
+      // TODO(ericgribkoff) Run in callExecutor - requires thread-safety
+      //callExecutor.execute(new MessagesAvailable());
+      InputStream message;
+      while ((message = mp.next()) != null) {
+        messageRead(message);
+      }
+    }
 
     /**
      * Must be called from application thread.

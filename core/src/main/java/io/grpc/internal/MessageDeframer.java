@@ -43,6 +43,7 @@ import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import javax.annotation.Nullable;
+import javax.annotation.OverridingMethodsMustInvokeSuper;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
@@ -169,7 +170,7 @@ public class MessageDeframer implements Closeable {
       return;
     }
     pendingDeliveries += numMessages;
-    deliver();
+    listener.messagesAvailable(producer);
   }
 
   /**
@@ -194,7 +195,7 @@ public class MessageDeframer implements Closeable {
 
       // Indicate that all of the data for this stream has been received.
       this.endOfStream = endOfStream;
-      deliver();
+      listener.messagesAvailable(producer);
     } finally {
       if (needToCloseData) {
         data.close();
@@ -243,36 +244,35 @@ public class MessageDeframer implements Closeable {
     Preconditions.checkState(!isClosed(), "MessageDeframer is already closed");
   }
 
-  /**
-   * Reads and delivers as many messages to the listener as possible.
-   */
-  private void deliver() {
-    // We can have reentrancy here when using a direct executor, triggered by calls to
-    // request more messages. This is safe as we simply loop until pendingDelivers = 0
-    if (inDelivery) {
-      return;
-    }
-    inDelivery = true;
-    try {
+  final Producer producer = new Producer();
+
+  private class Producer implements MessageProducer {
+    /**
+     * Reads and delivers as many messages to the listener as possible.
+     */
+    @Override
+    public InputStream next() {
+      InputStream toReturn = null;
       // Process the uncompressed bytes.
-      while (pendingDeliveries > 0 && readRequiredBytes()) {
+      while (toReturn == null && pendingDeliveries > 0 && readRequiredBytes()) {
         switch (state) {
           case HEADER:
             processHeader();
             break;
           case BODY:
             // Read the body and deliver the message.
-            processBody();
+            toReturn = processBody();
 
             // Since we've delivered a message, decrement the number of pending
             // deliveries remaining.
             pendingDeliveries--;
-            break;
+            return toReturn;
           default:
             throw new AssertionError("Invalid state: " + state);
         }
       }
 
+      // TODO: handle this with return type
       /*
        * We are stalled when there are no more bytes to process. This allows delivering errors as
        * soon as the buffered input has been consumed, independent of whether the application
@@ -288,7 +288,7 @@ public class MessageDeframer implements Closeable {
         if (!havePartialMessage) {
           listener.endOfStream();
           deliveryStalled = false;
-          return;
+          return null;
         } else {
           // We've received the entire stream and have data available but we don't have
           // enough to read the next frame ... this is bad.
@@ -303,105 +303,102 @@ public class MessageDeframer implements Closeable {
       if (stalled && !previouslyStalled) {
         listener.deliveryStalled();
       }
-    } finally {
-      inDelivery = false;
+      return null;
     }
-  }
 
-  /**
-   * Attempts to read the required bytes into nextFrame.
-   *
-   * @return {@code true} if all of the required bytes have been read.
-   */
-  private boolean readRequiredBytes() {
-    int totalBytesRead = 0;
-    try {
-      if (nextFrame == null) {
-        nextFrame = new CompositeReadableBuffer();
-      }
-
-      // Read until the buffer contains all the required bytes.
-      int missingBytes;
-      while ((missingBytes = requiredLength - nextFrame.readableBytes()) > 0) {
-        if (unprocessed.readableBytes() == 0) {
-          // No more data is available.
-          return false;
+    /**
+     * Attempts to read the required bytes into nextFrame.
+     *
+     * @return {@code true} if all of the required bytes have been read.
+     */
+    private boolean readRequiredBytes() {
+      int totalBytesRead = 0;
+      try {
+        if (nextFrame == null) {
+          nextFrame = new CompositeReadableBuffer();
         }
-        int toRead = Math.min(missingBytes, unprocessed.readableBytes());
-        totalBytesRead += toRead;
-        nextFrame.addBuffer(unprocessed.readBytes(toRead));
-      }
-      return true;
-    } finally {
-      if (totalBytesRead > 0) {
-        listener.bytesRead(totalBytesRead);
-        if (state == State.BODY) {
-          statsTraceCtx.inboundWireSize(totalBytesRead);
+
+        // Read until the buffer contains all the required bytes.
+        int missingBytes;
+        while ((missingBytes = requiredLength - nextFrame.readableBytes()) > 0) {
+          if (unprocessed.readableBytes() == 0) {
+            // No more data is available.
+            return false;
+          }
+          int toRead = Math.min(missingBytes, unprocessed.readableBytes());
+          totalBytesRead += toRead;
+          nextFrame.addBuffer(unprocessed.readBytes(toRead));
+        }
+        return true;
+      } finally {
+        if (totalBytesRead > 0) {
+          listener.bytesRead(totalBytesRead);
+          if (state == State.BODY) {
+            statsTraceCtx.inboundWireSize(totalBytesRead);
+          }
         }
       }
     }
-  }
 
-  /**
-   * Processes the GRPC compression header which is composed of the compression flag and the outer
-   * frame length.
-   */
-  private void processHeader() {
-    int type = nextFrame.readUnsignedByte();
-    if ((type & RESERVED_MASK) != 0) {
-      throw Status.INTERNAL.withDescription(
-          debugString + ": Frame header malformed: reserved bits not zero")
-          .asRuntimeException();
-    }
-    compressedFlag = (type & COMPRESSED_FLAG_MASK) != 0;
+    /**
+     * Processes the GRPC compression header which is composed of the compression flag and the outer
+     * frame length.
+     */
+    private void processHeader() {
+      int type = nextFrame.readUnsignedByte();
+      if ((type & RESERVED_MASK) != 0) {
+        throw Status.INTERNAL.withDescription(
+            debugString + ": Frame header malformed: reserved bits not zero")
+            .asRuntimeException();
+      }
+      compressedFlag = (type & COMPRESSED_FLAG_MASK) != 0;
 
-    // Update the required length to include the length of the frame.
-    requiredLength = nextFrame.readInt();
-    if (requiredLength < 0 || requiredLength > maxInboundMessageSize) {
-      throw Status.RESOURCE_EXHAUSTED.withDescription(
-          String.format("%s: Frame size %d exceeds maximum: %d. ",
-              debugString, requiredLength, maxInboundMessageSize))
-          .asRuntimeException();
-    }
-
-    statsTraceCtx.inboundMessage();
-    // Continue reading the frame body.
-    state = State.BODY;
-  }
-
-  /**
-   * Processes the GRPC message body, which depending on frame header flags may be compressed.
-   */
-  private void processBody() {
-    InputStream stream = compressedFlag ? getCompressedBody() : getUncompressedBody();
-    nextFrame = null;
-    listener.messageRead(stream);
-
-    // Done with this frame, begin processing the next header.
-    state = State.HEADER;
-    requiredLength = HEADER_LENGTH;
-  }
-
-  private InputStream getUncompressedBody() {
-    statsTraceCtx.inboundUncompressedSize(nextFrame.readableBytes());
-    return ReadableBuffers.openStream(nextFrame, true);
-  }
-
-  private InputStream getCompressedBody() {
-    if (decompressor == Codec.Identity.NONE) {
-      throw Status.INTERNAL.withDescription(
-          debugString + ": Can't decode compressed frame as compression not configured.")
-          .asRuntimeException();
+      // Update the required length to include the length of the frame.
+      requiredLength = nextFrame.readInt();
+      if (requiredLength < 0 || requiredLength > maxInboundMessageSize) {
+        throw Status.INTERNAL.withDescription(String.format("%s: Frame size %d exceeds maximum: %d. ",
+                debugString, requiredLength, maxInboundMessageSize)).asRuntimeException();
+      }
+      statsTraceCtx.inboundMessage();
+      // Continue reading the frame body.
+      state = State.BODY;
     }
 
-    try {
-      // Enforce the maxMessageSize limit on the returned stream.
-      InputStream unlimitedStream =
-          decompressor.decompress(ReadableBuffers.openStream(nextFrame, true));
-      return new SizeEnforcingInputStream(
-          unlimitedStream, maxInboundMessageSize, statsTraceCtx, debugString);
-    } catch (IOException e) {
-      throw new RuntimeException(e);
+    /**
+     * Processes the GRPC message body, which depending on frame header flags may be compressed.
+     */
+    private InputStream processBody() {
+      InputStream stream = compressedFlag ? getCompressedBody() : getUncompressedBody();
+      nextFrame = null;
+
+      // Done with this frame, begin processing the next header.
+      state = State.HEADER;
+      requiredLength = HEADER_LENGTH;
+
+      return stream;
+    }
+
+    private InputStream getUncompressedBody() {
+      statsTraceCtx.inboundUncompressedSize(nextFrame.readableBytes());
+      return ReadableBuffers.openStream(nextFrame, true);
+    }
+
+    private InputStream getCompressedBody() {
+      if (decompressor == Codec.Identity.NONE) {
+        throw Status.INTERNAL.withDescription(
+            debugString + ": Can't decode compressed frame as compression not configured.")
+            .asRuntimeException();
+      }
+
+      try {
+        // Enforce the maxMessageSize limit on the returned stream.
+        InputStream unlimitedStream =
+            decompressor.decompress(ReadableBuffers.openStream(nextFrame, true));
+        return new SizeEnforcingInputStream(
+            unlimitedStream, maxInboundMessageSize, statsTraceCtx, debugString);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
     }
   }
 

@@ -167,7 +167,9 @@ public abstract class AbstractStream2 implements Stream {
     }
 
     @Override
-    public void messagesAvailable(MessageProducer mp) {}
+    public void messagesAvailable(MessageProducer mp) {
+      listener().messagesAvailable(mp);
+    }
 
     /**
      * Called when a {@link #deframe(ReadableBuffer, boolean)} operation failed.
