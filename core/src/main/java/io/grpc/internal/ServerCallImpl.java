@@ -254,8 +254,60 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
       }
     }
 
+    @SuppressWarnings("Finally") // The code avoids suppressing the exception thrown from try
     @Override
-    public void messagesAvailable(MessageProducer mp) {}
+    public void messagesAvailable(final MessageProducer mp) {
+      class MessagesAvailable extends ContextRunnable {
+        MessagesAvailable() {
+          super(context);
+        }
+
+        @Override
+        public final void runInContext() {
+          InputStream message;
+          while ((message = mp.next()) != null) {
+            Throwable t = null;
+            try {
+              if (call.cancelled) {
+                return;
+              }
+              // Special case for unary calls.
+              if (messageReceived && call.method.getType() == MethodType.UNARY) {
+                call.stream.close(Status.INTERNAL.withDescription(
+                    "More than one request messages for unary call or server streaming call"),
+                    new Metadata());
+                return;
+              }
+              messageReceived = true;
+
+              listener.onMessage(call.method.parseRequest(message));
+            } catch (Throwable e) {
+              t = e;
+            } finally {
+              try {
+                message.close();
+              } catch (IOException e) {
+                throw new RuntimeException(e);
+              } finally {
+                if (t != null) {
+                  // TODO(carl-mastrangelo): Maybe log e here.
+                  MoreThrowables.throwIfUnchecked(t);
+                  throw new RuntimeException(t);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // TODO(ericgribkoff) Run in callExecutor - requires thread-safety
+      //callExecutor.execute(new MessagesAvailable());
+      InputStream message;
+      while ((message = mp.next()) != null) {
+        messageRead(message);
+      }
+      mp.checkEndOfStreamOrStalled();
+    }
 
     @Override
     public void halfClosed() {

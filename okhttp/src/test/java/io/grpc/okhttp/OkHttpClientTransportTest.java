@@ -1672,7 +1672,13 @@ public class OkHttpClientTransportTest {
     }
 
     @Override
-    public void messagesAvailable(MessageProducer mp) {}
+    public void messagesAvailable(MessageProducer mp) {
+      InputStream message;
+      while ((message = mp.next()) != null) {
+        messageRead(message);
+      }
+      mp.checkEndOfStreamOrStalled();
+    }
 
     @Override
     public void closed(Status status, Metadata trailers) {

@@ -369,7 +369,7 @@ public abstract class AbstractInteropTest {
     responseObserver.awaitCompletion();
   }
 
-  @Test(timeout = 10000)
+  @Test(timeout = 100000)
   public void pingPong() throws Exception {
     final List<StreamingOutputCallRequest> requests = Arrays.asList(
         StreamingOutputCallRequest.newBuilder()

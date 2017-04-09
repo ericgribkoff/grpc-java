@@ -168,7 +168,14 @@ public abstract class AbstractStream2 implements Stream {
 
     @Override
     public void messagesAvailable(MessageProducer mp) {
-      listener().messagesAvailable(mp);
+      InputStream message;
+      while ((message = mp.next()) != null) {
+        messageRead(message);
+      }
+      mp.checkEndOfStreamOrStalled();
+      // TODO(ericgribkoff) Move this back into the listener implementation (fixes mocks, which
+      //   except messageRead to be invoked on listener)
+      //listener().messagesAvailable(mp);
     }
 
     /**

@@ -43,7 +43,6 @@ import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import javax.annotation.Nullable;
-import javax.annotation.OverridingMethodsMustInvokeSuper;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
@@ -64,6 +63,8 @@ public class MessageDeframer implements Closeable {
   public interface MessageProducer {
     @Nullable
     InputStream next();
+
+    boolean checkEndOfStreamOrStalled();
   }
 
   /**
@@ -217,6 +218,7 @@ public class MessageDeframer implements Closeable {
    */
   @Override
   public void close() {
+    // TODO(ericgribkoff) Figure out how close will work with deframing in client application thread
     try {
       if (unprocessed != null) {
         unprocessed.close();
@@ -252,27 +254,44 @@ public class MessageDeframer implements Closeable {
      */
     @Override
     public InputStream next() {
-      InputStream toReturn = null;
-      // Process the uncompressed bytes.
-      while (toReturn == null && pendingDeliveries > 0 && readRequiredBytes()) {
-        switch (state) {
-          case HEADER:
-            processHeader();
-            break;
-          case BODY:
-            // Read the body and deliver the message.
-            toReturn = processBody();
-
-            // Since we've delivered a message, decrement the number of pending
-            // deliveries remaining.
-            pendingDeliveries--;
-            return toReturn;
-          default:
-            throw new AssertionError("Invalid state: " + state);
-        }
+      // We can have reentrancy here when using a direct executor, triggered by calls to
+      // request more messages. This is safe as we simply loop until pendingDelivers = 0
+      // TODO(ericgribkoff) Make sure this is safe because the loop is no longer in this class
+      if (inDelivery) {
+        return null;
       }
+      inDelivery = true;
+      try {
+        // Process the uncompressed bytes.
+        while (pendingDeliveries > 0 && readRequiredBytes()) {
+          switch (state) {
+            case HEADER:
+              processHeader();
+              break;
+            case BODY:
+              // Read the body and deliver the message.
+              InputStream toReturn = processBody();
 
-      // TODO: handle this with return type
+              // Since we've delivered a message, decrement the number of pending
+              // deliveries remaining.
+              pendingDeliveries--;
+              return toReturn;
+            default:
+              throw new AssertionError("Invalid state: " + state);
+          }
+        }
+        return null;
+      } finally {
+        inDelivery = false;
+      }
+    }
+
+    @Override
+    public boolean checkEndOfStreamOrStalled() {
+      // TODO(ericgribkoff) Do we actually need a return value for this? No - if we stall or reach
+      //   end of stream, call next() won't return anything - this is true in transport thread,
+      //   maybe different in client thread?
+      // TODO(ericgribkoff) handle this with return type - needs to be separate function?
       /*
        * We are stalled when there are no more bytes to process. This allows delivering errors as
        * soon as the buffered input has been consumed, independent of whether the application
@@ -286,9 +305,15 @@ public class MessageDeframer implements Closeable {
       if (endOfStream && stalled) {
         boolean havePartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
         if (!havePartialMessage) {
+          // TODO(ericgribkoff) Verify that it's ok to call endOfStream() here even though we may
+          // return a message:
+          //   in transport thread, this will execute immediately...not ok (closes listener, then we
+          //     signal listener we have a new message with the return value below)
+          //   in application thread, this should get queued on the transport thread and may or may
+          //     run before we get the message to the client logic...also not ok
           listener.endOfStream();
           deliveryStalled = false;
-          return null;
+          return true;
         } else {
           // We've received the entire stream and have data available but we don't have
           // enough to read the next frame ... this is bad.
@@ -302,8 +327,9 @@ public class MessageDeframer implements Closeable {
       deliveryStalled = stalled;
       if (stalled && !previouslyStalled) {
         listener.deliveryStalled();
+        return true;
       }
-      return null;
+      return false;
     }
 
     /**
@@ -356,7 +382,9 @@ public class MessageDeframer implements Closeable {
       // Update the required length to include the length of the frame.
       requiredLength = nextFrame.readInt();
       if (requiredLength < 0 || requiredLength > maxInboundMessageSize) {
-        throw Status.INTERNAL.withDescription(String.format("%s: Frame size %d exceeds maximum: %d. ",
+        // TODO(ericgribkoff) google code format
+        throw Status.INTERNAL.withDescription(
+            String.format("%s: Frame size %d exceeds maximum: %d. ",
                 debugString, requiredLength, maxInboundMessageSize)).asRuntimeException();
       }
       statsTraceCtx.inboundMessage();

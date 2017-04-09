@@ -496,7 +496,13 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
     }
 
     @Override
-    public void messagesAvailable(MessageProducer mp) {}
+    public void messagesAvailable(MessageProducer mp) {
+      InputStream message;
+      while ((message = mp.next()) != null) {
+        messageRead(message);
+      }
+      mp.checkEndOfStreamOrStalled();
+    }
 
     @Override
     public void halfClosed() {}
@@ -568,7 +574,14 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
     }
 
     @Override
-    public void messagesAvailable(MessageProducer mp) {}
+    public void messagesAvailable(MessageProducer mp) {
+      // TODO(ericgribkoff) Run in callExecutor - requires thread-safety
+      InputStream message;
+      while ((message = mp.next()) != null) {
+        messageRead(message);
+      }
+      mp.checkEndOfStreamOrStalled();
+    }
 
     @Override
     public void halfClosed() {

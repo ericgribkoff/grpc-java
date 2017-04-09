@@ -563,7 +563,13 @@ public class NettyClientTransportTest {
     }
 
     @Override
-    public void messagesAvailable(MessageProducer mp) {}
+    public void messagesAvailable(MessageProducer mp) {
+      InputStream message;
+      while ((message = mp.next()) != null) {
+        messageRead(message);
+      }
+      mp.checkEndOfStreamOrStalled();
+    }
 
     @Override
     public void onReady() {
@@ -591,7 +597,13 @@ public class NettyClientTransportTest {
     }
 
     @Override
-    public void messagesAvailable(MessageProducer mp) {}
+    public void messagesAvailable(MessageProducer mp) {
+      InputStream message;
+      while ((message = mp.next()) != null) {
+        messageRead(message);
+      }
+      mp.checkEndOfStreamOrStalled();
+    }
 
     @Override
     public void onReady() {

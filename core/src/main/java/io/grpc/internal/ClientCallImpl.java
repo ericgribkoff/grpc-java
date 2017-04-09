@@ -512,9 +512,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
 
         @Override
         public final void runInContext() {
-          try {
-            InputStream message;
-            while ((message = mp.next()) != null) {
+          InputStream message;
+          while ((message = mp.next()) != null) {
+            try {
               if (closed) {
                 return;
               }
@@ -523,12 +523,12 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
               } finally {
                 message.close();
               }
+            } catch (Throwable t) {
+              Status status =
+                  Status.CANCELLED.withCause(t).withDescription("Failed to read message.");
+              stream.cancel(status);
+              close(status, new Metadata());
             }
-          } catch (Throwable t){
-            Status status =
-                Status.CANCELLED.withCause(t).withDescription("Failed to read message.");
-            stream.cancel(status);
-            close(status, new Metadata());
           }
         }
       }
@@ -539,6 +539,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       while ((message = mp.next()) != null) {
         messageRead(message);
       }
+      mp.checkEndOfStreamOrStalled();
     }
 
     /**
