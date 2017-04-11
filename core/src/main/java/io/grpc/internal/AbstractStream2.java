@@ -168,14 +168,18 @@ public abstract class AbstractStream2 implements Stream {
 
     @Override
     public void messagesAvailable(MessageProducer mp) {
-      InputStream message;
-      while ((message = mp.next()) != null) {
-        messageRead(message);
+      //            InputStream message;
+      //            while ((message = mp.next()) != null) {
+      //              messageRead(message);
+      //            }
+      //            mp.checkEndOfStreamOrStalled();
+      // TODO(ericgribkoff) listener() can return null here, at least for ServerStream via
+      //   setListener() - this occurs in io.grpc.internal.ServerTransportListener.streamCreated(),
+      //   as the stream listener initialization hits request before it's actually added to the
+      //   stream. This should either be avoided or this null-check must remain.
+      if (listener() != null) {
+        listener().messagesAvailable(mp);
       }
-      mp.checkEndOfStreamOrStalled();
-      // TODO(ericgribkoff) Move this back into the listener implementation (fixes mocks, which
-      //   except messageRead to be invoked on listener)
-      //listener().messagesAvailable(mp);
     }
 
     /**
