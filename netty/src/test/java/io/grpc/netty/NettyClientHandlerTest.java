@@ -51,6 +51,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.notNull;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -69,6 +70,7 @@ import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransport.PingCallback;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.KeepAliveManager;
+import io.grpc.internal.MessageDeframer.MessageProducer;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ClientHeadersDecoder;
 import io.netty.buffer.ByteBuf;
@@ -99,6 +101,8 @@ import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 /**
  * Tests for {@link NettyClientHandler}.
@@ -136,6 +140,19 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     if (setKeepaliveManagerFor.contains(testNameRule.getMethodName())) {
       mockKeepAliveManager = mock(KeepAliveManager.class);
     }
+
+    doAnswer(new Answer<Void>() {
+      @Override
+      public Void answer(InvocationOnMock invocation) {
+        MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
+        InputStream message;
+        while ((message = mp.next()) != null) {
+          streamListener.messageRead(message);
+        }
+        mp.checkEndOfStreamOrStalled();
+        return null;
+      }
+    }).when(streamListener).messagesAvailable(any(MessageProducer.class));
 
     initChannel(new GrpcHttp2ClientHeadersDecoder(GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE));
     streamTransportState = new TransportStateImpl(handler(), DEFAULT_MAX_MESSAGE_SIZE);

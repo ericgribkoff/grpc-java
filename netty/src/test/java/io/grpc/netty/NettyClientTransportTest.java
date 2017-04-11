@@ -530,11 +530,11 @@ public class NettyClientTransportTest {
     }
 
     void waitForResponse() throws InterruptedException, ExecutionException, TimeoutException {
-      listener.responseFuture.get(10, TimeUnit.SECONDS);
+      listener.responseFuture.get(100, TimeUnit.SECONDS);
     }
 
     void waitForClose() throws InterruptedException, ExecutionException, TimeoutException {
-      listener.closedFuture.get(10, TimeUnit.SECONDS);
+      listener.closedFuture.get(100, TimeUnit.SECONDS);
     }
   }
 

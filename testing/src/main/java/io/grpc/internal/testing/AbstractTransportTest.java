@@ -168,7 +168,7 @@ public abstract class AbstractTransportTest {
 
   private ManagedClientTransport.Listener mockClientTransportListener
       = mock(ManagedClientTransport.Listener.class);
-  private ClientStreamListener mockClientStreamListener = mock(ClientStreamListener.class);
+  private final ClientStreamListener mockClientStreamListener = mock(ClientStreamListener.class);
   private MockServerListener serverListener = new MockServerListener();
   private ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
   private ArgumentCaptor<Throwable> throwableCaptor = ArgumentCaptor.forClass(Throwable.class);
@@ -193,6 +193,19 @@ public abstract class AbstractTransportTest {
     when(serverStreamTracerFactory.newServerStreamTracer(anyString(), any(Metadata.class)))
         .thenReturn(serverStreamTracer);
     callOptions = CallOptions.DEFAULT.withStreamTracerFactory(clientStreamTracerFactory);
+
+    doAnswer(new Answer<Void>() {
+      @Override
+      public Void answer(InvocationOnMock invocation) {
+        MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
+        InputStream message;
+        while ((message = mp.next()) != null) {
+          mockClientStreamListener.messageRead(message);
+        }
+        mp.checkEndOfStreamOrStalled();
+        return null;
+      }
+    }).when(mockClientStreamListener).messagesAvailable(any(MessageProducer.class));
   }
 
   @After
@@ -350,7 +363,19 @@ public abstract class AbstractTransportTest {
     StreamCreation serverStreamCreation
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     ServerStream serverStream = serverStreamCreation.stream;
-    ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
+    final ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
+    doAnswer(new Answer<Void>() {
+      @Override
+      public Void answer(InvocationOnMock invocation) {
+        MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
+        InputStream message;
+        while ((message = mp.next()) != null) {
+          mockServerStreamListener.messageRead(message);
+        }
+        mp.checkEndOfStreamOrStalled();
+        return null;
+      }
+    }).when(mockServerStreamListener).messagesAvailable(any(MessageProducer.class));
 
     client.shutdown();
     client = null;
@@ -670,7 +695,19 @@ public abstract class AbstractTransportTest {
     assertEquals(Lists.newArrayList(clientHeadersCopy.getAll(binaryKey)),
         Lists.newArrayList(serverStreamCreation.headers.getAll(binaryKey)));
     ServerStream serverStream = serverStreamCreation.stream;
-    ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
+    final ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
+    doAnswer(new Answer<Void>() {
+      @Override
+      public Void answer(InvocationOnMock invocation) {
+        MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
+        InputStream message;
+        while ((message = mp.next()) != null) {
+          mockServerStreamListener.messageRead(message);
+        }
+        mp.checkEndOfStreamOrStalled();
+        return null;
+      }
+    }).when(mockServerStreamListener).messagesAvailable(any(MessageProducer.class));
 
     if (metricsExpected()) {
       serverInOrder.verify(serverStreamTracerFactory).newServerStreamTracer(
@@ -690,6 +727,7 @@ public abstract class AbstractTransportTest {
     }
 
     clientStream.flush();
+
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).messageRead(inputStreamCaptor.capture());
     if (metricsExpected()) {
       clientInOrder.verify(clientStreamTracer).outboundWireSize(anyLong());
@@ -698,7 +736,6 @@ public abstract class AbstractTransportTest {
     }
     assertEquals("Hello!", methodDescriptor.parseRequest(inputStreamCaptor.getValue()));
     inputStreamCaptor.getValue().close();
-
     clientStream.halfClose();
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).halfClosed();
 
@@ -801,7 +838,19 @@ public abstract class AbstractTransportTest {
     StreamCreation serverStreamCreation
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     ServerStream serverStream = serverStreamCreation.stream;
-    ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
+    final ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
+    doAnswer(new Answer<Void>() {
+      @Override
+      public Void answer(InvocationOnMock invocation) {
+        MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
+        InputStream message;
+        while ((message = mp.next()) != null) {
+          mockServerStreamListener.messageRead(message);
+        }
+        mp.checkEndOfStreamOrStalled();
+        return null;
+      }
+    }).when(mockServerStreamListener).messagesAvailable(any(MessageProducer.class));
 
     clientStream.halfClose();
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).halfClosed();
@@ -1122,7 +1171,19 @@ public abstract class AbstractTransportTest {
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     assertEquals(methodDescriptor.getFullMethodName(), serverStreamCreation.method);
     ServerStream serverStream = serverStreamCreation.stream;
-    ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
+    final ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
+    doAnswer(new Answer<Void>() {
+      @Override
+      public Void answer(InvocationOnMock invocation) {
+        MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
+        InputStream message;
+        while ((message = mp.next()) != null) {
+          mockServerStreamListener.messageRead(message);
+        }
+        mp.checkEndOfStreamOrStalled();
+        return null;
+      }
+    }).when(mockServerStreamListener).messagesAvailable(any(MessageProducer.class));
     serverStream.writeHeaders(new Metadata());
 
     Answer<Void> closeStream = new Answer<Void>() {
