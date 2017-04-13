@@ -33,6 +33,7 @@ package io.grpc.internal;
 
 import io.grpc.Metadata;
 import io.grpc.Status;
+import io.grpc.internal.MessageDeframer.MessageProducer;
 
 /** An observer of client-side stream events. */
 public interface ClientStreamListener extends StreamListener {
@@ -61,4 +62,9 @@ public interface ClientStreamListener extends StreamListener {
    * @param trailers trailing metadata
    */
   void closed(Status status, Metadata trailers);
+
+  /**
+   * Called when stream is fully closed pending closure of the message producer.
+   */
+  void closed(Status status, Metadata trailers, MessageProducer mp);
 }

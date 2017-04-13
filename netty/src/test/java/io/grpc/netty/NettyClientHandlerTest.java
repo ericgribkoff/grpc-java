@@ -79,6 +79,7 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
+import io.netty.channel.EventLoop;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Connection;
@@ -155,7 +156,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     }).when(streamListener).messagesAvailable(any(MessageProducer.class));
 
     initChannel(new GrpcHttp2ClientHeadersDecoder(GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE));
-    streamTransportState = new TransportStateImpl(handler(), DEFAULT_MAX_MESSAGE_SIZE);
+    streamTransportState = new TransportStateImpl(handler(), channel.eventLoop(),
+        DEFAULT_MAX_MESSAGE_SIZE);
     streamTransportState.setListener(streamListener);
 
     grpcHeaders = new DefaultHttp2Headers()
@@ -184,7 +186,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     cancelStream(Status.CANCELLED);
 
     assertTrue(createFuture.isSuccess());
-    verify(streamListener).closed(eq(Status.CANCELLED), any(Metadata.class));
+    verify(streamListener).closed(eq(Status.CANCELLED), any(Metadata.class),
+        any(MessageProducer.class));
   }
 
   @Test
@@ -328,7 +331,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     // Read a GOAWAY that indicates our stream was never processed by the server.
     channelRead(goAwayFrame(0, 8 /* Cancel */, Unpooled.copiedBuffer("this is a test", UTF_8)));
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(streamListener).closed(captor.capture(), notNull(Metadata.class));
+    verify(streamListener).closed(captor.capture(), notNull(Metadata.class),
+        any(MessageProducer.class));
     assertEquals(Status.CANCELLED.getCode(), captor.getValue().getCode());
     assertEquals("HTTP/2 error code: CANCEL\nReceived Goaway\nthis is a test",
         captor.getValue().getDescription());
@@ -371,7 +375,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
     assertEquals(3, streamTransportState.id());
     cancelStream(Status.CANCELLED);
-    verify(streamListener).closed(eq(Status.CANCELLED), any(Metadata.class));
+    verify(streamListener).closed(eq(Status.CANCELLED), any(Metadata.class),
+        any(MessageProducer.class));
   }
 
   @Test
@@ -393,7 +398,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
 
     handler().channelInactive(ctx());
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(streamListener).closed(captor.capture(), notNull(Metadata.class));
+    verify(streamListener).closed(captor.capture(), notNull(Metadata.class),
+        any(MessageProducer.class));
     assertEquals(Status.UNAVAILABLE.getCode(), captor.getValue().getCode());
   }
 
@@ -418,12 +424,14 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
     assertEquals(3, streamTransportState.id());
 
-    streamTransportState = new TransportStateImpl(handler(), DEFAULT_MAX_MESSAGE_SIZE);
+    streamTransportState = new TransportStateImpl(handler(), channel.eventLoop(),
+        DEFAULT_MAX_MESSAGE_SIZE);
     streamTransportState.setListener(streamListener);
     enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
     assertEquals(5, streamTransportState.id());
 
-    streamTransportState = new TransportStateImpl(handler(), DEFAULT_MAX_MESSAGE_SIZE);
+    streamTransportState = new TransportStateImpl(handler(), channel.eventLoop(),
+        DEFAULT_MAX_MESSAGE_SIZE);
     streamTransportState.setListener(streamListener);
     enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
     assertEquals(7, streamTransportState.id());
@@ -624,8 +632,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   }
 
   private static class TransportStateImpl extends NettyClientStream.TransportState {
-    public TransportStateImpl(NettyClientHandler handler, int maxMessageSize) {
-      super(handler, maxMessageSize, StatsTraceContext.NOOP);
+    public TransportStateImpl(NettyClientHandler handler, EventLoop eventLoop, int maxMessageSize) {
+      super(handler, eventLoop, maxMessageSize, StatsTraceContext.NOOP);
     }
 
     @Override

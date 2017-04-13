@@ -36,7 +36,7 @@ import java.io.InputStream;
 
 /**
  * An observer of {@link Stream} events. It is guaranteed to only have one concurrent callback at a
- * time.
+ * time EXCEPT for messagesAvailable callback.
  */
 public interface StreamListener {
   /**

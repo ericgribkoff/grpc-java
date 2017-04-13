@@ -204,14 +204,14 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
   public void setStatusWithOkShouldCloseStream() {
     stream().transportState().setId(STREAM_ID);
     stream().transportState().transportReportStatus(Status.OK, true, new Metadata());
-    verify(listener).closed(same(Status.OK), any(Metadata.class));
+    verify(listener).closed(same(Status.OK), any(Metadata.class), any(MessageProducer.class));
   }
 
   @Test
   public void setStatusWithErrorShouldCloseStream() {
     Status errorStatus = Status.INTERNAL;
     stream().transportState().transportReportStatus(errorStatus, true, new Metadata());
-    verify(listener).closed(eq(errorStatus), any(Metadata.class));
+    verify(listener).closed(eq(errorStatus), any(Metadata.class), any(MessageProducer.class));
   }
 
   @Test
@@ -219,7 +219,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     Status errorStatus = Status.INTERNAL;
     stream().transportState().transportReportStatus(errorStatus, true, new Metadata());
     stream().transportState().transportReportStatus(Status.OK, true, new Metadata());
-    verify(listener).closed(any(Status.class), any(Metadata.class));
+    verify(listener).closed(any(Status.class), any(Metadata.class), any(MessageProducer.class));
   }
 
   @Test
@@ -228,7 +228,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream().transportState().transportReportStatus(errorStatus, true, new Metadata());
     stream().transportState().transportReportStatus(
         Status.fromThrowable(new RuntimeException("fake")), true, new Metadata());
-    verify(listener).closed(any(Status.class), any(Metadata.class));
+    verify(listener).closed(any(Status.class), any(Metadata.class), any(MessageProducer.class));
   }
 
   @Override
@@ -265,7 +265,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
 
     stream().transportState().transportHeadersReceived(grpcResponseTrailers(Status.INTERNAL), true);
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(listener).closed(captor.capture(), any(Metadata.class));
+    verify(listener).closed(captor.capture(), any(Metadata.class), any(MessageProducer.class));
     assertEquals(Status.INTERNAL.getCode(), captor.getValue().getCode());
   }
 
@@ -278,7 +278,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     // Remove once b/16290036 is fixed.
     headers.status(new AsciiString("500"));
     stream().transportState().transportHeadersReceived(headers, false);
-    verify(listener, never()).closed(any(Status.class), any(Metadata.class));
+    verify(listener, never()).closed(any(Status.class), any(Metadata.class),
+        any(MessageProducer.class));
 
     // We are now waiting for 100 bytes of error context on the stream, cancel has not yet been
     // sent
@@ -291,7 +292,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     verify(writeQueue).enqueue(any(CancelClientStreamCommand.class), eq(true));
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
-    verify(listener).closed(captor.capture(), metadataCaptor.capture());
+    verify(listener).closed(captor.capture(), metadataCaptor.capture(), any(MessageProducer.class));
     assertEquals(Status.UNKNOWN.getCode(), captor.getValue().getCode());
     assertEquals("4", metadataCaptor.getValue()
         .get(Metadata.Key.of("random", Metadata.ASCII_STRING_MARSHALLER)));
@@ -310,7 +311,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream().transportState().transportHeadersReceived(trailers, true);
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
-    verify(listener).closed(captor.capture(), metadataCaptor.capture());
+    verify(listener).closed(captor.capture(), metadataCaptor.capture(), any(MessageProducer.class));
     Status status = captor.getValue();
     assertEquals(Status.Code.UNKNOWN, status.getCode());
     assertTrue(status.getDescription().contains("content-type"));
@@ -322,7 +323,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
   public void nonGrpcResponseShouldSetStatus() throws Exception {
     stream().transportState().transportDataReceived(Unpooled.copiedBuffer(MESSAGE, UTF_8), true);
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(listener).closed(captor.capture(), any(Metadata.class));
+    verify(listener).closed(captor.capture(), any(Metadata.class), any(MessageProducer.class));
     assertEquals(Status.Code.INTERNAL, captor.getValue().getCode());
   }
 
@@ -356,8 +357,10 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream().request(1);
 
     // Verify that the listener was only notified of the first message, not the second.
-    verify(listener).messageRead(any(InputStream.class));
-    verify(listener).closed(eq(Status.CANCELLED), eq(trailers));
+    // Can no longer verify this because this mocks the listener, which is now responsible for
+    // the actual close.c
+    //verify(listener).messageRead(any(InputStream.class));
+    verify(listener).closed(eq(Status.CANCELLED), eq(trailers), any(MessageProducer.class));
   }
 
   @Test
@@ -375,7 +378,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     verify(listener).messageRead(any(InputStream.class));
 
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(listener).closed(captor.capture(), any(Metadata.class));
+    verify(listener).closed(captor.capture(), any(Metadata.class), any(MessageProducer.class));
     assertEquals(Status.Code.INTERNAL, captor.getValue().getCode());
   }
 
@@ -498,9 +501,9 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     return Utils.convertTrailers(trailers, true);
   }
 
-  private static class TransportStateImpl extends NettyClientStream.TransportState {
+  private class TransportStateImpl extends NettyClientStream.TransportState {
     public TransportStateImpl(NettyClientHandler handler, int maxMessageSize) {
-      super(handler, maxMessageSize, StatsTraceContext.NOOP);
+      super(handler, channel.eventLoop(), maxMessageSize, StatsTraceContext.NOOP);
     }
 
     @Override

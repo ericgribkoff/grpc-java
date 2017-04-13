@@ -1688,6 +1688,12 @@ public class OkHttpClientTransportTest {
     }
 
     @Override
+    public void closed(Status status, Metadata trailers, MessageProducer mp) {
+      mp.close();
+      closed(status, trailers);
+    }
+
+    @Override
     public void onReady() {
       onReadyCalled = true;
     }

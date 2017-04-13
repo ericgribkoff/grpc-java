@@ -558,6 +558,12 @@ public class NettyClientTransportTest {
     }
 
     @Override
+    public void closed(Status status, Metadata trailers, MessageProducer mp) {
+      mp.close();
+      closed(status, trailers);
+    }
+
+    @Override
     public void messageRead(InputStream message) {
       responseFuture.set(null);
     }
@@ -616,7 +622,19 @@ public class NettyClientTransportTest {
     }
 
     @Override
+    public void halfClosed(MessageProducer mp) {
+      mp.close();
+      halfClosed();
+    }
+
+    @Override
     public void closed(Status status) {
+    }
+
+    @Override
+    public void closed(Status status, MessageProducer mp) {
+      mp.close();
+      closed(status);
     }
   }
 

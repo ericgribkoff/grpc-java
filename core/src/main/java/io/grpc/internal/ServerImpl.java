@@ -508,7 +508,13 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
     public void halfClosed() {}
 
     @Override
+    public void halfClosed(MessageProducer mp) {}
+
+    @Override
     public void closed(Status status) {}
+
+    @Override
+    public void closed(Status status, MessageProducer mp) {}
 
     @Override
     public void onReady() {}
@@ -602,6 +608,18 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
     }
 
     @Override
+    public void halfClosed(final MessageProducer mp) {
+      //      callExecutor.execute(new ContextRunnable(context) {
+      //        @Override
+      //        public void runInContext() {
+      //          mp.close();
+      //        }
+      //      });
+      mp.close(); // For now, we are deframing on the server in the transport, so close immediately.
+      halfClosed();
+    }
+
+    @Override
     public void closed(final Status status) {
       callExecutor.execute(new ContextRunnable(context) {
         @Override
@@ -615,6 +633,18 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
           }
         }
       });
+    }
+
+    @Override
+    public void closed(Status status, final MessageProducer mp) {
+      //      callExecutor.execute(new ContextRunnable(context) {
+      //        @Override
+      //        public void runInContext() {
+      //          mp.close();
+      //        }
+      //      });
+      mp.close(); // For now, we are deframing on the server in the transport, so close immediately.
+      closed(status);
     }
 
     @Override

@@ -49,6 +49,7 @@ import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.StreamTracer;
 import io.grpc.internal.AbstractClientStream2.TransportState;
+import io.grpc.internal.MessageDeframer.MessageProducer;
 import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
 import java.io.ByteArrayInputStream;
 import org.junit.Before;
@@ -131,7 +132,7 @@ public class AbstractClientStream2Test {
     stream.cancel(Status.DEADLINE_EXCEEDED);
     stream.cancel(Status.DEADLINE_EXCEEDED);
 
-    verify(mockListener).closed(any(Status.class), any(Metadata.class));
+    verify(mockListener).closed(any(Status.class), any(Metadata.class), any(MessageProducer.class));
   }
 
   @Test
@@ -221,7 +222,7 @@ public class AbstractClientStream2Test {
     // Simulate getting a reset
     stream.transportState().transportReportStatus(status, false /*stop delivery*/, new Metadata());
 
-    verify(mockListener).closed(any(Status.class), any(Metadata.class));
+    verify(mockListener).closed(any(Status.class), any(Metadata.class), any(MessageProducer.class));
   }
   
   @Test
@@ -325,9 +326,15 @@ public class AbstractClientStream2Test {
     }
 
     @Override
-    protected void deframeFailed(Throwable cause) {}
+    public void deframeFailed(Throwable cause) {}
 
     @Override
     public void bytesRead(int processedBytes) {}
+
+    @Override
+    public final void deliveryStalled() {}
+
+    @Override
+    public final void endOfStream() {}
   }
 }

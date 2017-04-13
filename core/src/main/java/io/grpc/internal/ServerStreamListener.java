@@ -32,6 +32,7 @@
 package io.grpc.internal;
 
 import io.grpc.Status;
+import io.grpc.internal.MessageDeframer.MessageProducer;
 
 /** An observer of server-side stream events. */
 public interface ServerStreamListener extends StreamListener {
@@ -42,6 +43,8 @@ public interface ServerStreamListener extends StreamListener {
    * <p>This method should return quickly, as the same thread may be used to process other streams.
    */
   void halfClosed();
+
+  void halfClosed(MessageProducer mp);
 
   /**
    * Called when the stream is fully closed. A status code of {@link
@@ -57,4 +60,6 @@ public interface ServerStreamListener extends StreamListener {
    * @param status details about the remote closure
    */
   void closed(Status status);
+
+  void closed(Status status, MessageProducer mp);
 }

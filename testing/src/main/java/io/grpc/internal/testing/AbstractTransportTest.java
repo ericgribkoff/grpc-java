@@ -270,7 +270,7 @@ public abstract class AbstractTransportTest {
     serverStreamCreation.stream.flush();
 
     verify(mockClientStreamListener, timeout(250))
-        .closed(eq(Status.CANCELLED), any(Metadata.class));
+        .closed(eq(Status.CANCELLED), any(Metadata.class), any(MessageProducer.class));
 
     ClientStreamListener mockClientStreamListener2 = mock(ClientStreamListener.class);
 
@@ -398,7 +398,7 @@ public abstract class AbstractTransportTest {
     serverStream.writeHeaders(new Metadata());
     clientStream.halfClose();
     verify(mockClientStreamListener, timeout(TIMEOUT_MS)).headersRead(any(Metadata.class));
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).halfClosed();
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).halfClosed(any(MessageProducer.class));
 
     verify(mockClientTransportListener, never()).transportTerminated();
     verify(mockClientTransportListener, never()).transportInUse(false);
@@ -438,9 +438,9 @@ public abstract class AbstractTransportTest {
     assertTrue(serverTransportListener.isTerminated());
 
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
-        .closed(same(status), any(Metadata.class));
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture());
-    assertFalse(statusCaptor.getValue().isOk());
+        .closed(same(status), any(Metadata.class), any(MessageProducer.class));
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(any(Status.class),
+        any(MessageProducer.class));
     if (metricsExpected()) {
       verify(clientStreamTracer, timeout(TIMEOUT_MS)).streamClosed(same(status));
       verify(serverStreamTracer, timeout(TIMEOUT_MS)).streamClosed(same(statusCaptor.getValue()));
@@ -474,17 +474,16 @@ public abstract class AbstractTransportTest {
     assertTrue(serverTransportListener.isTerminated());
 
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
-        .closed(statusCaptor.capture(), any(Metadata.class));
-    assertFalse(statusCaptor.getValue().isOk());
+        .closed(any(Status.class), any(Metadata.class), any(MessageProducer.class));
     if (metricsExpected()) {
       verify(clientStreamTracer, timeout(TIMEOUT_MS)).streamClosed(same(statusCaptor.getValue()));
       verify(serverStreamTracer, timeout(TIMEOUT_MS)).streamClosed(same(shutdownStatus));
     }
-
     // Generally will be same status provided to shutdownNow, but InProcessTransport can't
     // differentiate between client and server shutdownNow. The status is not really used on
     // server-side, so we don't care much.
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(any(Status.class));
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(any(Status.class),
+        any(MessageProducer.class));
   }
 
   @Test
@@ -566,7 +565,7 @@ public abstract class AbstractTransportTest {
     ClientStreamListener mockClientStreamListener2 = mock(ClientStreamListener.class);
     stream2.start(mockClientStreamListener2);
     verify(mockClientStreamListener2, timeout(TIMEOUT_MS))
-        .closed(statusCaptor.capture(), any(Metadata.class));
+        .closed(statusCaptor.capture(), any(Metadata.class), any(MessageProducer.class));
     assertCodeEquals(Status.UNAVAILABLE, statusCaptor.getValue());
     if (metricsExpected()) {
       inOrder.verify(clientStreamTracer).streamClosed(same(statusCaptor.getValue()));
@@ -582,7 +581,7 @@ public abstract class AbstractTransportTest {
         = serverTransportListener.takeStreamOrFail(20 * TIMEOUT_MS, TimeUnit.MILLISECONDS);
     serverStreamCreation.stream.close(Status.OK, new Metadata());
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
-        .closed(statusCaptor.capture(), any(Metadata.class));
+        .closed(statusCaptor.capture(), any(Metadata.class), any(MessageProducer.class));
     assertCodeEquals(Status.OK, statusCaptor.getValue());
   }
 
@@ -600,7 +599,7 @@ public abstract class AbstractTransportTest {
     ClientStream stream = client.newStream(methodDescriptor, new Metadata(), callOptions);
     stream.start(mockClientStreamListener);
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
-        .closed(statusCaptor.capture(), any(Metadata.class));
+        .closed(statusCaptor.capture(), any(Metadata.class), any(MessageProducer.class));
     verify(mockClientTransportListener, never()).transportInUse(anyBoolean());
     assertCodeEquals(Status.UNAVAILABLE, statusCaptor.getValue());
     if (metricsExpected()) {
@@ -737,7 +736,7 @@ public abstract class AbstractTransportTest {
     assertEquals("Hello!", methodDescriptor.parseRequest(inputStreamCaptor.getValue()));
     inputStreamCaptor.getValue().close();
     clientStream.halfClose();
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).halfClosed();
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).halfClosed(any(MessageProducer.class));
 
     if (metricsExpected()) {
       serverInOrder.verify(serverStreamTracer).inboundWireSize(anyLong());
@@ -790,10 +789,11 @@ public abstract class AbstractTransportTest {
     if (metricsExpected()) {
       serverInOrder.verify(serverStreamTracer).streamClosed(same(status));
     }
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture());
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture(),
+        any(MessageProducer.class));
     assertCodeEquals(Status.OK, statusCaptor.getValue());
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
-        .closed(statusCaptor.capture(), metadataCaptor.capture());
+        .closed(statusCaptor.capture(), metadataCaptor.capture(), any(MessageProducer.class));
     if (metricsExpected()) {
       clientInOrder.verify(clientStreamTracer).streamClosed(same(statusCaptor.getValue()));
     }
@@ -853,17 +853,18 @@ public abstract class AbstractTransportTest {
     }).when(mockServerStreamListener).messagesAvailable(any(MessageProducer.class));
 
     clientStream.halfClose();
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).halfClosed();
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).halfClosed(any(MessageProducer.class));
 
     serverStream.writeHeaders(new Metadata());
     verify(mockClientStreamListener, timeout(TIMEOUT_MS)).headersRead(any(Metadata.class));
 
     Status status = Status.OK.withDescription("Nice talking to you");
     serverStream.close(status, new Metadata());
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture());
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture(),
+        any(MessageProducer.class));
     assertCodeEquals(Status.OK, statusCaptor.getValue());
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
-        .closed(statusCaptor.capture(), any(Metadata.class));
+        .closed(statusCaptor.capture(), any(Metadata.class), any(MessageProducer.class));
     assertEquals(status.getCode(), statusCaptor.getValue().getCode());
     assertEquals(status.getDescription(), statusCaptor.getValue().getDescription());
     if (metricsExpected()) {
@@ -896,10 +897,11 @@ public abstract class AbstractTransportTest {
 
     Status status = Status.OK.withDescription("Hello. Goodbye.").withCause(new Exception());
     serverStream.close(status, new Metadata());
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture());
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture(),
+        any(MessageProducer.class));
     assertCodeEquals(Status.OK, statusCaptor.getValue());
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
-        .closed(statusCaptor.capture(), any(Metadata.class));
+        .closed(statusCaptor.capture(), any(Metadata.class), any(MessageProducer.class));
     assertEquals(status.getCode(), statusCaptor.getValue().getCode());
     assertEquals("Hello. Goodbye.", statusCaptor.getValue().getDescription());
     assertNull(statusCaptor.getValue().getCause());
@@ -935,10 +937,11 @@ public abstract class AbstractTransportTest {
     trailers.put(asciiKey, "dupvalue");
     trailers.put(binaryKey, "äbinarytrailers");
     serverStream.close(status, trailers);
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture());
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture(),
+        any(MessageProducer.class));
     assertCodeEquals(Status.OK, statusCaptor.getValue());
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
-        .closed(statusCaptor.capture(), metadataCaptor.capture());
+        .closed(statusCaptor.capture(), metadataCaptor.capture(), any(MessageProducer.class));
     assertEquals(status.getCode(), statusCaptor.getValue().getCode());
     assertEquals("Hellogoodbye", statusCaptor.getValue().getDescription());
     // Cause should not be transmitted to the client.
@@ -975,10 +978,11 @@ public abstract class AbstractTransportTest {
     Status status =
         Status.INTERNAL.withDescription("I'm not listening").withCause(new Exception());
     serverStream.close(status, new Metadata());
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture());
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture(),
+        any(MessageProducer.class));
     assertCodeEquals(Status.OK, statusCaptor.getValue());
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
-        .closed(statusCaptor.capture(), any(Metadata.class));
+        .closed(statusCaptor.capture(), any(Metadata.class), any(MessageProducer.class));
     assertEquals(status.getCode(), statusCaptor.getValue().getCode());
     assertEquals(status.getDescription(), statusCaptor.getValue().getDescription());
     assertNull(statusCaptor.getValue().getCause());
@@ -1009,8 +1013,9 @@ public abstract class AbstractTransportTest {
     Status status = Status.CANCELLED.withDescription("Nevermind").withCause(new Exception());
     clientStream.cancel(status);
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
-        .closed(Matchers.same(status), any(Metadata.class));
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture());
+        .closed(Matchers.same(status), any(Metadata.class), any(MessageProducer.class));
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture(),
+        any(MessageProducer.class));
     assertNotEquals(Status.Code.OK, statusCaptor.getValue().getCode());
     // Cause should not be transmitted between client and server
     assertNull(statusCaptor.getValue().getCause());
@@ -1018,8 +1023,9 @@ public abstract class AbstractTransportTest {
     reset(mockServerStreamListener);
     reset(mockClientStreamListener);
     clientStream.cancel(status);
-    verify(mockServerStreamListener, never()).closed(any(Status.class));
-    verify(mockClientStreamListener, never()).closed(any(Status.class), any(Metadata.class));
+    verify(mockServerStreamListener, never()).closed(any(Status.class), any(MessageProducer.class));
+    verify(mockClientStreamListener, never()).closed(any(Status.class), any(Metadata.class),
+        any(MessageProducer.class));
     if (metricsExpected()) {
       verify(clientStreamTracer).headersSent();
       verify(clientStreamTracer).streamClosed(same(status));
@@ -1049,6 +1055,13 @@ public abstract class AbstractTransportTest {
 
       @Override
       public void closed(Status status, Metadata trailers) {
+        assertEquals(Status.CANCELLED.getCode(), status.getCode());
+        assertEquals("nevermind", status.getDescription());
+        closedCalled.set(true);
+      }
+
+      @Override
+      public void closed(Status status, Metadata trailers, MessageProducer mp) {
         assertEquals(Status.CANCELLED.getCode(), status.getCode());
         assertEquals("nevermind", status.getDescription());
         closedCalled.set(true);
@@ -1128,9 +1141,10 @@ public abstract class AbstractTransportTest {
     Status status = Status.DEADLINE_EXCEEDED.withDescription("It was bound to happen")
         .withCause(new Exception());
     serverStream.cancel(status);
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(Matchers.same(status));
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(Matchers.same(status),
+        any(MessageProducer.class));
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
-        .closed(statusCaptor.capture(), any(Metadata.class));
+        .closed(statusCaptor.capture(), any(Metadata.class), any(MessageProducer.class));
     // Presently we can't sent much back to the client in this case. Verify that is the current
     // behavior for consistency between transports.
     assertCodeEquals(Status.CANCELLED, statusCaptor.getValue());
@@ -1152,8 +1166,9 @@ public abstract class AbstractTransportTest {
     reset(mockClientStreamListener);
     serverStream.cancel(status);
     doPingPong(serverListener);
-    verify(mockServerStreamListener, never()).closed(any(Status.class));
-    verify(mockClientStreamListener, never()).closed(any(Status.class), any(Metadata.class));
+    verify(mockServerStreamListener, never()).closed(any(Status.class), any(MessageProducer.class));
+    verify(mockClientStreamListener, never()).closed(any(Status.class), any(Metadata.class),
+        any(MessageProducer.class));
   }
 
   @Test
@@ -1302,27 +1317,29 @@ public abstract class AbstractTransportTest {
     clientStream.flush();
     clientStream.halfClose();
     doPingPong(serverListener);
-    verify(mockServerStreamListener, never()).halfClosed();
+    verify(mockServerStreamListener, never()).halfClosed(any(MessageProducer.class));
 
     serverStream.request(1);
     verify(mockServerStreamListener, timeout(TIMEOUT_MS).times(serverSent + 6))
         .messageRead(any(InputStream.class));
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).halfClosed();
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).halfClosed(any(MessageProducer.class));
 
     serverStream.writeMessage(methodDescriptor.streamResponse(largeMessage));
     serverStream.flush();
     Status status = Status.OK.withDescription("... quite a lengthy discussion");
     serverStream.close(status, new Metadata());
     doPingPong(serverListener);
-    verify(mockClientStreamListener, never()).closed(any(Status.class), any(Metadata.class));
+    verify(mockClientStreamListener, never()).closed(any(Status.class), any(Metadata.class),
+        any(MessageProducer.class));
 
     clientStream.request(1);
     verify(mockClientStreamListener, timeout(TIMEOUT_MS).times(clientSent + 6))
         .messageRead(any(InputStream.class));
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture());
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture(),
+        any(MessageProducer.class));
     assertCodeEquals(Status.OK, statusCaptor.getValue());
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
-        .closed(statusCaptor.capture(), any(Metadata.class));
+        .closed(statusCaptor.capture(), any(Metadata.class), any(MessageProducer.class));
     assertEquals(status.getCode(), statusCaptor.getValue().getCode());
     assertEquals(status.getDescription(), statusCaptor.getValue().getDescription());
   }
@@ -1349,8 +1366,9 @@ public abstract class AbstractTransportTest {
 
     serverStream.close(Status.OK, new Metadata());
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
-        .closed(any(Status.class), any(Metadata.class));
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(any(Status.class));
+        .closed(any(Status.class), any(Metadata.class), any(MessageProducer.class));
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(any(Status.class),
+        any(MessageProducer.class));
     client.shutdown();
   }
 

@@ -170,7 +170,7 @@ class NettyServerStream extends AbstractServerStream {
     }
 
     @Override
-    protected void deframeFailed(Throwable cause) {
+    public void deframeFailed(Throwable cause) {
       log.log(Level.WARNING, "Exception processing message", cause);
       Status status = Status.fromThrowable(cause);
       transportReportStatus(status);

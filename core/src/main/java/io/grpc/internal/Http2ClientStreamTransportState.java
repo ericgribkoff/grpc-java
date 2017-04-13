@@ -86,7 +86,8 @@ public abstract class Http2ClientStreamTransportState extends AbstractClientStre
    * Called to process a failure in HTTP/2 processing. It should notify the transport to cancel the
    * stream and call {@code transportReportStatus()}.
    */
-  protected abstract void http2ProcessingFailed(Status status, Metadata trailers);
+  protected abstract void http2ProcessingFailed(Status status, boolean stopDelivery,
+      Metadata trailers);
 
   /**
    * Called by subclasses whenever {@code Headers} are received from the transport.
@@ -144,7 +145,7 @@ public abstract class Http2ClientStreamTransportState extends AbstractClientStre
           + ReadableBuffers.readAsString(frame, errorCharset));
       frame.close();
       if (transportError.getDescription().length() > 1000 || endOfStream) {
-        http2ProcessingFailed(transportError, transportErrorMetadata);
+        http2ProcessingFailed(transportError, false, transportErrorMetadata);
       }
     } else {
       if (!headersReceived) {
@@ -179,7 +180,7 @@ public abstract class Http2ClientStreamTransportState extends AbstractClientStre
     }
     if (transportError != null) {
       transportError = transportError.augmentDescription("trailers: " + trailers);
-      http2ProcessingFailed(transportError, transportErrorMetadata);
+      http2ProcessingFailed(transportError, false, transportErrorMetadata);
     } else {
       Status status = statusFromTrailers(trailers);
       stripTransportDetails(trailers);

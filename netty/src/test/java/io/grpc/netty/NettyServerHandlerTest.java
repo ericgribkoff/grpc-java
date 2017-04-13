@@ -228,7 +228,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     captor.getValue().close();
 
     if (endStream) {
-      verify(streamListener).halfClosed();
+      verify(streamListener).halfClosed(any(MessageProducer.class));
     }
     verify(streamListener, atLeastOnce()).onReady();
     verify(streamListener, atLeastOnce()).messagesAvailable(any(MessageProducer.class));
@@ -244,7 +244,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
     verify(streamListener).messageRead(captor.capture());
     assertArrayEquals(new byte[0], ByteStreams.toByteArray(captor.getValue()));
-    verify(streamListener).halfClosed();
+    verify(streamListener).halfClosed(any(MessageProducer.class));
     verify(streamListener, atLeastOnce()).onReady();
     verify(streamListener, atLeastOnce()).messagesAvailable(any(MessageProducer.class));
     verifyNoMoreInteractions(streamListener);
@@ -256,7 +256,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
     channelRead(rstStreamFrame(STREAM_ID, (int) Http2Error.CANCEL.code()));
     verify(streamListener, never()).messageRead(any(InputStream.class));
-    verify(streamListener).closed(Status.CANCELLED);
+    verify(streamListener).closed(eq(Status.CANCELLED), any(MessageProducer.class));
     verify(streamListener, atLeastOnce()).onReady();
     verifyNoMoreInteractions(streamListener);
   }
@@ -279,7 +279,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
     // Verify the stream was closed.
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(streamListener).closed(captor.capture());
+    verify(streamListener).closed(captor.capture(), any(MessageProducer.class));
     assertEquals(e, captor.getValue().asException().getCause());
     assertEquals(Code.UNKNOWN, captor.getValue().getCode());
   }
@@ -311,7 +311,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     createStream();
     handler().channelInactive(ctx());
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
-    verify(streamListener).closed(captor.capture());
+    verify(streamListener).closed(captor.capture(), any(MessageProducer.class));
     assertFalse(captor.getValue().isOk());
   }
 

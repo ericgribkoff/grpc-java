@@ -214,8 +214,7 @@ public abstract class AbstractServerStream extends AbstractStream2
 
     @Override
     public void endOfStream() {
-      closeDeframer();
-      listener().halfClosed();
+      listener().halfClosed(getDeframerProducer());
     }
 
     @Override
@@ -232,6 +231,10 @@ public abstract class AbstractServerStream extends AbstractStream2
      * @param endOfStream {@code true} if no more data will be received on the stream.
      */
     public void inboundDataReceived(ReadableBuffer frame, boolean endOfStream) {
+      if (listenerClosed) {
+        // Closing the deframer is now done asynchronously from
+        return;
+      }
       // Deframe the message. If a failure occurs, deframeFailed will be called.
       deframe(frame, endOfStream);
     }
@@ -271,8 +274,7 @@ public abstract class AbstractServerStream extends AbstractStream2
         }
         listenerClosed = true;
         onStreamDeallocated();
-        closeDeframer();
-        listener().closed(newStatus);
+        listener().closed(newStatus, getDeframerProducer());
       }
     }
   }

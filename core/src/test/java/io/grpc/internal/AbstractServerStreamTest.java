@@ -91,7 +91,10 @@ public class AbstractServerStreamTest {
     // Frame received after deframer closed, should be ignored and not trigger an exception
     stream.transportState().inboundDataReceived(buffer, true);
 
-    verify(buffer).close();
+    // Can't verify the buffer is closed as this is now handled by a call through the real
+    // ServerStreamListener => test for this separately.
+    //verify(buffer).close();
+    verify(streamListener).closed(eq(Status.OK), any(MessageProducer.class));
     verify(streamListener, times(0)).messageRead(any(InputStream.class));
   }
 
@@ -248,7 +251,13 @@ public class AbstractServerStreamTest {
     public void halfClosed() {}
 
     @Override
+    public void halfClosed(MessageProducer mp) {}
+
+    @Override
     public void closed(Status status) {}
+
+    @Override
+    public void closed(Status status, MessageProducer mp) {}
   }
 
   private static class AbstractServerStreamBase extends AbstractServerStream {
@@ -278,7 +287,7 @@ public class AbstractServerStreamTest {
       }
 
       @Override
-      protected void deframeFailed(Throwable cause) {}
+      public void deframeFailed(Throwable cause) {}
 
       @Override
       public void bytesRead(int processedBytes) {}

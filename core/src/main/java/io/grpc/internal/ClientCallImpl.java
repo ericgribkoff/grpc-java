@@ -506,6 +506,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     @Override
     public void messagesAvailable(final MessageProducer mp) {
       class MessagesAvailable extends ContextRunnable {
+
         MessagesAvailable() {
           super(context);
         }
@@ -513,33 +514,38 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
         @Override
         public final void runInContext() {
           InputStream message;
-          while ((message = mp.next()) != null) {
-            try {
-              if (closed) {
-                return;
-              }
+          try {
+            while ((message = mp.next()) != null) {
               try {
-                observer.onMessage(method.parseResponse(message));
-              } finally {
-                message.close();
+                if (closed) {
+                  return;
+                }
+                try {
+                  observer.onMessage(method.parseResponse(message));
+                } finally {
+                  message.close();
+                }
+              } catch (Throwable t) {
+                Status status =
+                    Status.CANCELLED.withCause(t).withDescription("Failed to read message.");
+                stream.cancel(status);
+                close(status, new Metadata());
               }
-            } catch (Throwable t) {
-              Status status =
-                  Status.CANCELLED.withCause(t).withDescription("Failed to read message.");
-              stream.cancel(status);
-              close(status, new Metadata());
             }
+            mp.checkEndOfStreamOrStalled();
+          } catch (Throwable t) {
+            close(Status.fromThrowable(t), new Metadata());
           }
         }
       }
 
       // TODO(ericgribkoff) Run in callExecutor - requires thread-safety
-      //callExecutor.execute(new MessagesAvailable());
-      InputStream message;
-      while ((message = mp.next()) != null) {
-        messageRead(message);
-      }
-      mp.checkEndOfStreamOrStalled();
+      callExecutor.execute(new MessagesAvailable());
+      //      InputStream message;
+      //      while ((message = mp.next()) != null) {
+      //        messageRead(message);
+      //      }
+      //      mp.checkEndOfStreamOrStalled();
     }
 
     /**
@@ -586,6 +592,23 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       }
 
       callExecutor.execute(new StreamClosed());
+    }
+
+    @Override
+    public void closed(Status status, Metadata trailers, final MessageProducer mp) {
+      class CloseMessageProducer extends ContextRunnable {
+        CloseMessageProducer() {
+          super(context);
+        }
+
+        @Override
+        public final void runInContext() {
+          mp.close();
+        }
+      }
+
+      // This isn't good...
+      closed(status, trailers);
     }
 
     @Override

@@ -46,6 +46,7 @@ import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.LogId;
 import io.grpc.internal.ManagedClientTransport;
+import io.grpc.internal.MessageDeframer.MessageProducer;
 import io.grpc.internal.NoopClientStream;
 import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
@@ -62,6 +63,7 @@ import java.util.concurrent.Executor;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.CheckReturnValue;
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -92,6 +94,21 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
     this.name = name;
     this.authority = authority;
   }
+
+  // Hack to get tests to pass
+  private final MessageProducer mockMessageProducer = new MessageProducer() {
+    @Nullable
+    @Override
+    public InputStream next() {
+      return null;
+    }
+
+    @Override
+    public void checkEndOfStreamOrStalled() {}
+
+    @Override
+    public void close() {}
+  };
 
   @CheckReturnValue
   @Override
@@ -137,7 +154,7 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
       return new NoopClientStream() {
         @Override
         public void start(ClientStreamListener listener) {
-          listener.closed(capturedStatus, new Metadata());
+          listener.closed(capturedStatus, new Metadata(), mockMessageProducer);
         }
       };
     }
@@ -317,7 +334,8 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
         }
         if (clientReceiveQueue.isEmpty() && clientNotifyStatus != null) {
           closed = true;
-          clientStreamListener.closed(clientNotifyStatus, clientNotifyTrailers);
+          clientStreamListener.closed(clientNotifyStatus, clientNotifyTrailers,
+              mockMessageProducer);
         }
         boolean nowReady = clientRequested > 0;
         return !previouslyReady && nowReady;
@@ -368,7 +386,7 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
           }
           if (clientReceiveQueue.isEmpty()) {
             closed = true;
-            clientStreamListener.closed(status, trailers);
+            clientStreamListener.closed(status, trailers, mockMessageProducer);
           } else {
             clientNotifyStatus = status;
             clientNotifyTrailers = trailers;
@@ -401,7 +419,7 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
             log.log(Level.WARNING, "Exception closing stream", t);
           }
         }
-        clientStreamListener.closed(status, new Metadata());
+        clientStreamListener.closed(status, new Metadata(), mockMessageProducer);
         return true;
       }
 
@@ -481,7 +499,7 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
         }
         if (serverReceiveQueue.isEmpty() && serverNotifyHalfClose) {
           serverNotifyHalfClose = false;
-          serverStreamListener.halfClosed();
+          serverStreamListener.halfClosed(mockMessageProducer);
         }
         boolean nowReady = serverRequested > 0;
         return !previouslyReady && nowReady;
@@ -538,7 +556,7 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
             log.log(Level.WARNING, "Exception closing stream", t);
           }
         }
-        serverStreamListener.closed(reason);
+        serverStreamListener.closed(reason, mockMessageProducer);
         return true;
       }
 
@@ -548,7 +566,7 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
           return;
         }
         if (serverReceiveQueue.isEmpty()) {
-          serverStreamListener.halfClosed();
+          serverStreamListener.halfClosed(mockMessageProducer);
         } else {
           serverNotifyHalfClose = true;
         }

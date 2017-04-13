@@ -185,10 +185,10 @@ public abstract class AbstractClientStream2 extends AbstractStream2
   protected abstract static class TransportState extends AbstractStream2.TransportState {
     /** Whether listener.closed() has been called. */
     private final StatsTraceContext statsTraceCtx;
-    private boolean listenerClosed;
+    protected boolean listenerClosed;
     private ClientStreamListener listener;
 
-    private Runnable deliveryStalledTask;
+    protected Runnable deliveryStalledTask;
 
     /**
      * Whether the stream is closed from the transport's perspective. This can differ from {@link
@@ -205,19 +205,6 @@ public abstract class AbstractClientStream2 extends AbstractStream2
     public final void setListener(ClientStreamListener listener) {
       Preconditions.checkState(this.listener == null, "Already called setListener");
       this.listener = Preconditions.checkNotNull(listener, "listener");
-    }
-
-    @Override
-    public final void deliveryStalled() {
-      if (deliveryStalledTask != null) {
-        deliveryStalledTask.run();
-        deliveryStalledTask = null;
-      }
-    }
-
-    @Override
-    public final void endOfStream() {
-      deliveryStalled();
     }
 
     @Override
@@ -300,8 +287,15 @@ public abstract class AbstractClientStream2 extends AbstractStream2
 
       // If not stopping delivery, then we must wait until the deframer is stalled (i.e., it has no
       // complete messages to deliver).
+      // TODO(ericgribkoff) This no longer makes sense - transport thread may have received headers
+      //   while deframing still has messages to process. Need to wait until they have all been
+      //   processed...which is what stalled means.
       if (stopDelivery || isDeframerStalled()) {
         deliveryStalledTask = null;
+        // we can't call closeListener without synchronization with the deframer, as it might still
+        // be in the process of delivering more messages...
+        // actually, this will get queued on the client thread and run after the deframer finishes
+        // any concurrent ops. So this is ok.
         closeListener(status, trailers);
       } else {
         deliveryStalledTask = new Runnable() {
@@ -321,9 +315,8 @@ public abstract class AbstractClientStream2 extends AbstractStream2
     private void closeListener(Status status, Metadata trailers) {
       if (!listenerClosed) {
         listenerClosed = true;
-        closeDeframer();
         statsTraceCtx.streamClosed(status);
-        listener().closed(status, trailers);
+        listener().closed(status, trailers, getDeframerProducer());
       }
     }
   }

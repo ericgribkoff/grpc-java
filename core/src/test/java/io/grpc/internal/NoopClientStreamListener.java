@@ -54,4 +54,7 @@ class NoopClientStreamListener implements ClientStreamListener {
 
   @Override
   public void closed(Status status, Metadata trailers) {}
+
+  @Override
+  public void closed(Status status, Metadata trailers, MessageProducer mp) {}
 }

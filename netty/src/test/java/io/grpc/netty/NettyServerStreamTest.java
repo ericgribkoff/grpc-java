@@ -176,7 +176,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     // Sending complete. Listener gets closed()
     stream().transportState().complete();
 
-    verify(serverListener).closed(Status.OK);
+    verify(serverListener).closed(eq(Status.OK), any(MessageProducer.class));
     verifyZeroInteractions(serverListener);
   }
 
@@ -203,7 +203,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
 
     // Sending complete. Listener gets closed()
     stream().transportState().complete();
-    verify(serverListener).closed(Status.OK);
+    verify(serverListener).closed(eq(Status.OK), any(MessageProducer.class));
     verifyZeroInteractions(serverListener);
   }
 
@@ -220,7 +220,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
         .inboundDataReceived(new EmptyByteBuf(UnpooledByteBufAllocator.DEFAULT), true);
 
     verify(serverListener, atLeastOnce()).messagesAvailable(any(MessageProducer.class));
-    verify(serverListener).halfClosed();
+    verify(serverListener).halfClosed(any(MessageProducer.class));
 
     // Server closes. Status sent
     stream().close(Status.OK, trailers);
@@ -237,7 +237,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
 
     // Sending and receiving complete. Listener gets closed()
     stream().transportState().complete();
-    verify(serverListener).closed(Status.OK);
+    verify(serverListener).closed(eq(Status.OK), any(MessageProducer.class));
     verifyNoMoreInteractions(serverListener);
   }
 
@@ -245,7 +245,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
   public void abortStreamAndNotSendStatus() throws Exception {
     Status status = Status.INTERNAL.withCause(new Throwable());
     stream().transportState().transportReportStatus(status);
-    verify(serverListener).closed(same(status));
+    verify(serverListener).closed(same(status), any(MessageProducer.class));
     verify(channel, never()).writeAndFlush(any(SendResponseHeadersCommand.class));
     verify(channel, never()).writeAndFlush(any(SendGrpcFrameCommand.class));
     verifyNoMoreInteractions(serverListener);
@@ -258,10 +258,10 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     stream().transportState().inboundDataReceived(
         new EmptyByteBuf(UnpooledByteBufAllocator.DEFAULT), true);
     verify(serverListener, atLeastOnce()).messagesAvailable(any(MessageProducer.class));
-    verify(serverListener).halfClosed();
+    verify(serverListener).halfClosed(any(MessageProducer.class));
     // Abort from the transport layer
     stream().transportState().transportReportStatus(status);
-    verify(serverListener).closed(same(status));
+    verify(serverListener).closed(same(status), any(MessageProducer.class));
     verifyNoMoreInteractions(serverListener);
   }
 

@@ -38,10 +38,11 @@ import com.google.common.base.Preconditions;
 import io.grpc.Codec;
 import io.grpc.Decompressor;
 import io.grpc.Status;
-import java.io.Closeable;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -52,7 +53,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  * thread.
  */
 @NotThreadSafe
-public class MessageDeframer implements Closeable {
+public class MessageDeframer {
   private static final int HEADER_LENGTH = 5;
   private static final int COMPRESSED_FLAG_MASK = 1;
   private static final int RESERVED_MASK = 0xFE;
@@ -64,7 +65,9 @@ public class MessageDeframer implements Closeable {
     @Nullable
     InputStream next();
 
-    boolean checkEndOfStreamOrStalled();
+    void checkEndOfStreamOrStalled();
+
+    void close();
   }
 
   /**
@@ -103,6 +106,11 @@ public class MessageDeframer implements Closeable {
      * Called when the stream is complete and all messages have been successfully delivered.
      */
     void endOfStream();
+
+    /**
+     * Called when deframe fails.
+     */
+    void deframeFailed(Throwable t);
   }
 
   private enum State {
@@ -110,19 +118,23 @@ public class MessageDeframer implements Closeable {
   }
 
   private final Listener listener;
-  private int maxInboundMessageSize;
   private final StatsTraceContext statsTraceCtx;
   private final String debugString;
-  private Decompressor decompressor;
-  private State state = State.HEADER;
-  private int requiredLength = HEADER_LENGTH;
-  private boolean compressedFlag;
-  private boolean endOfStream;
-  private CompositeReadableBuffer nextFrame;
-  private CompositeReadableBuffer unprocessed = new CompositeReadableBuffer();
-  private long pendingDeliveries;
-  private boolean deliveryStalled = true;
-  private boolean inDelivery = false;
+  final Producer producer = new Producer();
+
+  // Shared state - can copy this to the message producer rather than updating it here, which would
+  //   maintain a notion of happens-before. Would need to figure out how to share unprocessed across
+  //   multiple Producers, that might have read a header but not the message, etc.
+  private volatile int maxInboundMessageSize; // only written by transport thread.
+  private volatile Decompressor decompressor; // only written by transport thread.
+  private volatile boolean endOfStream; // only written by transport thread
+  private final AtomicInteger pendingDeliveries = new AtomicInteger();
+  private volatile boolean deliveryStalled = true; // only written by client thread
+  private volatile boolean closed; // only written by client thread
+
+  // Audit this
+  private CompositeReadableBuffer unprocessed =
+      new CompositeReadableBuffer(new ConcurrentLinkedQueue<ReadableBuffer>());
 
   /**
    * Create a deframer.
@@ -161,7 +173,7 @@ public class MessageDeframer implements Closeable {
    * Requests up to the given number of messages from the call to be delivered to
    * {@link Listener#messageRead(InputStream)}. No additional messages will be delivered.
    *
-   * <p>If {@link #close()} has been called, this method will have no effect.
+   * <p>If {@link MessageProducer#close()} has been called, this method will have no effect.
    *
    * @param numMessages the requested number of messages to be delivered to the listener.
    */
@@ -170,7 +182,7 @@ public class MessageDeframer implements Closeable {
     if (isClosed()) {
       return;
     }
-    pendingDeliveries += numMessages;
+    pendingDeliveries.getAndAdd(numMessages);
     listener.messagesAvailable(producer);
   }
 
@@ -181,8 +193,8 @@ public class MessageDeframer implements Closeable {
    * @param endOfStream if {@code true}, indicates that {@code data} is the end of the stream from
    *        the remote endpoint.  End of stream should not be used in the event of a transport
    *        error, such as a stream reset.
-   * @throws IllegalStateException if {@link #close()} has been called previously or if
-   *         this method has previously been called with {@code endOfStream=true}.
+   * @throws IllegalStateException if {@link MessageProducer#close()} has been called previously or
+   *         if this method has previously been called with {@code endOfStream=true}.
    */
   public void deframe(ReadableBuffer data, boolean endOfStream) {
     Preconditions.checkNotNull(data, "data");
@@ -213,30 +225,10 @@ public class MessageDeframer implements Closeable {
   }
 
   /**
-   * Closes this deframer and frees any resources. After this method is called, additional
-   * calls will have no effect.
-   */
-  @Override
-  public void close() {
-    // TODO(ericgribkoff) Figure out how close will work with deframing in client application thread
-    try {
-      if (unprocessed != null) {
-        unprocessed.close();
-      }
-      if (nextFrame != null) {
-        nextFrame.close();
-      }
-    } finally {
-      unprocessed = null;
-      nextFrame = null;
-    }
-  }
-
-  /**
    * Indicates whether or not this deframer has been closed.
    */
   public boolean isClosed() {
-    return unprocessed == null;
+    return closed;
   }
 
   /**
@@ -246,14 +238,40 @@ public class MessageDeframer implements Closeable {
     Preconditions.checkState(!isClosed(), "MessageDeframer is already closed");
   }
 
-  final Producer producer = new Producer();
+  public MessageProducer getProducer() {
+    return producer;
+  }
 
   private class Producer implements MessageProducer {
+    private State state = State.HEADER;
+    private int requiredLength = HEADER_LENGTH;
+    private boolean compressedFlag;
+    private boolean inDelivery = false;
+
+    private CompositeReadableBuffer nextFrame;
+
+    @Override
+    public void close() {
+      closed = true;
+      try {
+        if (unprocessed != null) {
+          unprocessed.close();
+        }
+        if (nextFrame != null) {
+          nextFrame.close();
+        }
+      } finally {
+        unprocessed = null;
+        nextFrame = null;
+      }
+    }
+
     /**
      * Reads and delivers as many messages to the listener as possible.
      */
     @Override
     public InputStream next() {
+      Preconditions.checkState(!closed, "closed");
       // We can have reentrancy here when using a direct executor, triggered by calls to
       // request more messages. This is safe as we simply loop until pendingDelivers = 0
       // TODO(ericgribkoff) Make sure this is safe because the loop is no longer in this class
@@ -263,7 +281,7 @@ public class MessageDeframer implements Closeable {
       inDelivery = true;
       try {
         // Process the uncompressed bytes.
-        while (pendingDeliveries > 0 && readRequiredBytes()) {
+        while (pendingDeliveries.get() > 0 && readRequiredBytes()) {
           switch (state) {
             case HEADER:
               processHeader();
@@ -274,10 +292,13 @@ public class MessageDeframer implements Closeable {
 
               // Since we've delivered a message, decrement the number of pending
               // deliveries remaining.
-              pendingDeliveries--;
+              pendingDeliveries.getAndDecrement();
               return toReturn;
             default:
-              throw new AssertionError("Invalid state: " + state);
+              close();
+              AssertionError t = new AssertionError("Invalid state: " + state);
+              listener.deframeFailed(t);
+              throw t;
           }
         }
         return null;
@@ -287,7 +308,11 @@ public class MessageDeframer implements Closeable {
     }
 
     @Override
-    public boolean checkEndOfStreamOrStalled() {
+    public void checkEndOfStreamOrStalled() {
+      Preconditions.checkState(!closed, "closed and no error");
+      if (closed) {
+        return;
+      }
       // TODO(ericgribkoff) Do we actually need a return value for this? No - if we stall or reach
       //   end of stream, call next() won't return anything - this is true in transport thread,
       //   maybe different in client thread?
@@ -313,12 +338,15 @@ public class MessageDeframer implements Closeable {
           //     run before we get the message to the client logic...also not ok
           listener.endOfStream();
           deliveryStalled = false;
-          return true;
+          return;
         } else {
           // We've received the entire stream and have data available but we don't have
           // enough to read the next frame ... this is bad.
-          throw Status.INTERNAL.withDescription(
+          close();
+          RuntimeException t = Status.INTERNAL.withDescription(
               debugString + ": Encountered end-of-stream mid-frame").asRuntimeException();
+          listener.deframeFailed(t);
+          throw t;
         }
       }
 
@@ -327,9 +355,7 @@ public class MessageDeframer implements Closeable {
       deliveryStalled = stalled;
       if (stalled && !previouslyStalled) {
         listener.deliveryStalled();
-        return true;
       }
-      return false;
     }
 
     /**
@@ -373,19 +399,24 @@ public class MessageDeframer implements Closeable {
     private void processHeader() {
       int type = nextFrame.readUnsignedByte();
       if ((type & RESERVED_MASK) != 0) {
-        throw Status.INTERNAL.withDescription(
+        close();
+        RuntimeException t = Status.INTERNAL.withDescription(
             debugString + ": Frame header malformed: reserved bits not zero")
             .asRuntimeException();
+        listener.deframeFailed(t);
+        throw t;
       }
       compressedFlag = (type & COMPRESSED_FLAG_MASK) != 0;
 
       // Update the required length to include the length of the frame.
       requiredLength = nextFrame.readInt();
       if (requiredLength < 0 || requiredLength > maxInboundMessageSize) {
-        // TODO(ericgribkoff) google code format
-        throw Status.INTERNAL.withDescription(
+        close();
+        RuntimeException t = Status.INTERNAL.withDescription(
             String.format("%s: Frame size %d exceeds maximum: %d. ",
                 debugString, requiredLength, maxInboundMessageSize)).asRuntimeException();
+        listener.deframeFailed(t);
+        throw t;
       }
       statsTraceCtx.inboundMessage();
       // Continue reading the frame body.
@@ -413,9 +444,12 @@ public class MessageDeframer implements Closeable {
 
     private InputStream getCompressedBody() {
       if (decompressor == Codec.Identity.NONE) {
-        throw Status.INTERNAL.withDescription(
+        close();
+        RuntimeException t = Status.INTERNAL.withDescription(
             debugString + ": Can't decode compressed frame as compression not configured.")
             .asRuntimeException();
+        listener.deframeFailed(t);
+        throw t;
       }
 
       try {
@@ -425,7 +459,10 @@ public class MessageDeframer implements Closeable {
         return new SizeEnforcingInputStream(
             unlimitedStream, maxInboundMessageSize, statsTraceCtx, debugString);
       } catch (IOException e) {
-        throw new RuntimeException(e);
+        close();
+        RuntimeException t = new RuntimeException(e);
+        listener.deframeFailed(t);
+        throw t;
       }
     }
   }

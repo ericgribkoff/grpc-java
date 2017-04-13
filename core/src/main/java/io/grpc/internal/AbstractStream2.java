@@ -161,6 +161,10 @@ public abstract class AbstractStream2 implements Stream {
      */
     protected abstract StreamListener listener();
 
+    protected MessageProducer getDeframerProducer() {
+      return deframer.getProducer();
+    }
+
     @Override
     public void messageRead(InputStream is) {
       listener().messageRead(is);
@@ -187,15 +191,8 @@ public abstract class AbstractStream2 implements Stream {
      *
      * @param cause the actual failure
      */
-    protected abstract void deframeFailed(Throwable cause);
-
-    /**
-     * Closes this deframer and frees any resources. After this method is called, additional calls
-     * will have no effect.
-     */
-    protected final void closeDeframer() {
-      deframer.close();
-    }
+    @Override
+    public abstract void deframeFailed(Throwable cause);
 
     /**
      * Indicates whether delivery is currently stalled, pending receipt of more data.

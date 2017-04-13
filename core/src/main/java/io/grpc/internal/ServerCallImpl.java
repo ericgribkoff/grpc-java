@@ -319,6 +319,12 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
     }
 
     @Override
+    public void halfClosed(MessageProducer mp) {
+      mp.close(); // For now, we are deframing on the server in the transport, so close immediately.
+      halfClosed();
+    }
+
+    @Override
     public void closed(Status status) {
       try {
         if (status.isOk()) {
@@ -332,6 +338,12 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
         // clean up and update any state based on whether onComplete or onCancel was called.
         context.cancel(null);
       }
+    }
+
+    @Override
+    public void closed(Status status, MessageProducer mp) {
+      mp.close(); // For now, we are deframing on the server in the transport, so close immediately.
+      closed(status);
     }
 
     @Override
