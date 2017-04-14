@@ -532,7 +532,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
                 close(status, new Metadata());
               }
             }
-            mp.checkEndOfStreamOrStalled();
           } catch (Throwable t) {
             close(Status.fromThrowable(t), new Metadata());
           }

@@ -306,7 +306,6 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
       while ((message = mp.next()) != null) {
         messageRead(message);
       }
-      mp.checkEndOfStreamOrStalled();
     }
 
     @Override

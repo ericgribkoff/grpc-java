@@ -132,7 +132,7 @@ public class MessageDeframer {
   private volatile boolean deliveryStalled = true; // only written by client thread
   private volatile boolean closed; // only written by client thread
 
-  // Audit this
+  // Audit this - hah, definitely not thread-safe (length etc)
   private CompositeReadableBuffer unprocessed =
       new CompositeReadableBuffer(new ConcurrentLinkedQueue<ReadableBuffer>());
 
@@ -279,21 +279,22 @@ public class MessageDeframer {
         return null;
       }
       inDelivery = true;
+      InputStream toReturn = null;
       try {
         // Process the uncompressed bytes.
-        while (pendingDeliveries.get() > 0 && readRequiredBytes()) {
+        while (toReturn == null && pendingDeliveries.get() > 0 && readRequiredBytes()) {
           switch (state) {
             case HEADER:
               processHeader();
               break;
             case BODY:
               // Read the body and deliver the message.
-              InputStream toReturn = processBody();
+              toReturn = processBody();
 
               // Since we've delivered a message, decrement the number of pending
               // deliveries remaining.
               pendingDeliveries.getAndDecrement();
-              return toReturn;
+              break;
             default:
               close();
               AssertionError t = new AssertionError("Invalid state: " + state);
@@ -301,7 +302,10 @@ public class MessageDeframer {
               throw t;
           }
         }
-        return null;
+        if (toReturn == null) {
+          checkEndOfStreamOrStalled();
+        }
+        return toReturn;
       } finally {
         inDelivery = false;
       }
@@ -309,6 +313,7 @@ public class MessageDeframer {
 
     @Override
     public void checkEndOfStreamOrStalled() {
+      //TODO(ericgribkoff) If tests can be modified, make this private and not part of interface.
       Preconditions.checkState(!closed, "closed and no error");
       if (closed) {
         return;

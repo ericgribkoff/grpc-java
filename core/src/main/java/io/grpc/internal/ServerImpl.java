@@ -501,7 +501,6 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
       while ((message = mp.next()) != null) {
         messageRead(message);
       }
-      mp.checkEndOfStreamOrStalled();
     }
 
     @Override
@@ -586,7 +585,6 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
       while ((message = mp.next()) != null) {
         messageRead(message);
       }
-      mp.checkEndOfStreamOrStalled();
     }
 
     @Override

@@ -36,6 +36,7 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.Queue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * A {@link ReadableBuffer} that is composed of 0 or more {@link ReadableBuffer}s. This provides a
@@ -47,7 +48,7 @@ import java.util.Queue;
  */
 public class CompositeReadableBuffer extends AbstractReadableBuffer {
 
-  private int readableBytes;
+  private AtomicInteger readableBytes = new AtomicInteger();
   private final Queue<ReadableBuffer> buffers;
 
   public CompositeReadableBuffer() {
@@ -67,7 +68,7 @@ public class CompositeReadableBuffer extends AbstractReadableBuffer {
   public void addBuffer(ReadableBuffer buffer) {
     if (!(buffer instanceof CompositeReadableBuffer)) {
       buffers.add(buffer);
-      readableBytes += buffer.readableBytes();
+      readableBytes.getAndAdd(buffer.readableBytes());
       return;
     }
 
@@ -76,14 +77,14 @@ public class CompositeReadableBuffer extends AbstractReadableBuffer {
       ReadableBuffer subBuffer = compositeBuffer.buffers.remove();
       buffers.add(subBuffer);
     }
-    readableBytes += compositeBuffer.readableBytes;
-    compositeBuffer.readableBytes = 0;
+    readableBytes.getAndAdd(compositeBuffer.readableBytes.get());
+    compositeBuffer.readableBytes.set(0); // Why do this?
     compositeBuffer.close();
   }
 
   @Override
   public int readableBytes() {
-    return readableBytes;
+    return readableBytes.get();
   }
 
   @Override
@@ -159,7 +160,7 @@ public class CompositeReadableBuffer extends AbstractReadableBuffer {
   @Override
   public CompositeReadableBuffer readBytes(int length) {
     checkReadable(length);
-    readableBytes -= length;
+    readableBytes.getAndAdd(-length);
 
     CompositeReadableBuffer newBuffer = new CompositeReadableBuffer();
     while (length > 0) {
@@ -200,7 +201,7 @@ public class CompositeReadableBuffer extends AbstractReadableBuffer {
       }
 
       length -= lengthToCopy;
-      readableBytes -= lengthToCopy;
+      readableBytes.getAndAdd(-lengthToCopy);
     }
 
     if (length > 0) {

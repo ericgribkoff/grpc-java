@@ -1677,7 +1677,6 @@ public class OkHttpClientTransportTest {
       while ((message = mp.next()) != null) {
         messageRead(message);
       }
-      mp.checkEndOfStreamOrStalled();
     }
 
     @Override
