@@ -256,10 +256,18 @@ class NettyClientStream extends AbstractClientStream2 {
           deliveryStalledTask = null;
         }
       } else {
+        if (deframer.getMessagesDelivered() == 1) {
+          System.out.println("break in NettyClientStream");
+        }
         eventLoop.execute(new Runnable() {
           @Override
           public void run() {
+            if (!deframer.isStalled()) {
+              return;
+            }
             if (deliveryStalledTask != null) {
+//              throw new RuntimeException("delivery stalled fired" + deframer.isStalled() + deframer.getMessagesDelivered()
+//                + " - " + deframer.getMessagesRequested());
               deliveryStalledTask.run();
               deliveryStalledTask = null;
             }
@@ -280,6 +288,7 @@ class NettyClientStream extends AbstractClientStream2 {
           }
         });
       }
+//      throw new RuntimeException("end of stream fired");
     }
 
     /**

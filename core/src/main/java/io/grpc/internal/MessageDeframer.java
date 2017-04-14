@@ -44,6 +44,7 @@ import java.io.InputStream;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.annotation.Nullable;
+import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
@@ -133,6 +134,8 @@ public class MessageDeframer {
   private volatile boolean closed; // only written by client thread
 
   // Audit this - hah, definitely not thread-safe (length etc)
+//  private final Object unprocessedLock = new Object();
+//  @GuardedBy("unprocessedLock")
   private CompositeReadableBuffer unprocessed =
       new CompositeReadableBuffer(new ConcurrentLinkedQueue<ReadableBuffer>());
 
@@ -182,6 +185,9 @@ public class MessageDeframer {
     if (isClosed()) {
       return;
     }
+    synchronized (messagesRequestedLock) {
+      messagesRequested += numMessages;
+    }
     pendingDeliveries.getAndAdd(numMessages);
     listener.messagesAvailable(producer);
   }
@@ -203,7 +209,9 @@ public class MessageDeframer {
       checkNotClosed();
       Preconditions.checkState(!this.endOfStream, "Past end of stream");
 
-      unprocessed.addBuffer(data);
+//      synchronized (unprocessedLock) {
+        unprocessed.addBuffer(data);
+//      }
       needToCloseData = false;
 
       // Indicate that all of the data for this stream has been received.
@@ -221,7 +229,31 @@ public class MessageDeframer {
    * that no additional data can be delivered to the application.
    */
   public boolean isStalled() {
-    return deliveryStalled;
+    //return deliveryStalled;
+//    synchronized (unprocessedLock) {
+      return unprocessed.readableBytes() == 0;
+//    }
+  }
+
+  private final Object messagesDeliveredLock = new Object();
+  @GuardedBy("messagesDeliveredLock")
+  private int messagesDelivered = 0;
+
+  public int getMessagesDelivered() {
+    synchronized (messagesDeliveredLock) {
+      return messagesDelivered;
+    }
+  }
+
+
+  private final Object messagesRequestedLock = new Object();
+  @GuardedBy("messagesRequestedLock")
+  private int messagesRequested = 0;
+
+  public int getMessagesRequested() {
+    synchronized (messagesRequestedLock) {
+      return messagesRequested;
+    }
   }
 
   /**
@@ -253,17 +285,19 @@ public class MessageDeframer {
     @Override
     public void close() {
       closed = true;
-      try {
-        if (unprocessed != null) {
-          unprocessed.close();
+//      synchronized (unprocessedLock) {
+        try {
+          if (unprocessed != null) {
+            unprocessed.close();
+          }
+          if (nextFrame != null) {
+            nextFrame.close();
+          }
+        } finally {
+          unprocessed = null;
+          nextFrame = null;
         }
-        if (nextFrame != null) {
-          nextFrame.close();
-        }
-      } finally {
-        unprocessed = null;
-        nextFrame = null;
-      }
+//      }
     }
 
     /**
@@ -279,6 +313,7 @@ public class MessageDeframer {
         return null;
       }
       inDelivery = true;
+
       InputStream toReturn = null;
       try {
         // Process the uncompressed bytes.
@@ -291,6 +326,9 @@ public class MessageDeframer {
               // Read the body and deliver the message.
               toReturn = processBody();
 
+              synchronized (messagesDeliveredLock) {
+                messagesDelivered += 1;
+              }
               // Since we've delivered a message, decrement the number of pending
               // deliveries remaining.
               pendingDeliveries.getAndDecrement();
@@ -330,7 +368,10 @@ public class MessageDeframer {
        * frame and not in unprocessed.  If there is extra data but no pending deliveries, it will
        * be in unprocessed.
        */
-      boolean stalled = unprocessed.readableBytes() == 0;
+      boolean stalled;
+//      synchronized (unprocessedLock) {
+        stalled = unprocessed.readableBytes() == 0;
+//      }
 
       if (endOfStream && stalled) {
         boolean havePartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
@@ -359,6 +400,11 @@ public class MessageDeframer {
       boolean previouslyStalled = deliveryStalled;
       deliveryStalled = stalled;
       if (stalled && !previouslyStalled) {
+//        synchronized (messagesDeliveredLock) {
+//          if (messagesDelivered == 1) {
+//            System.out.println("and here");
+//          }
+//        }
         listener.deliveryStalled();
       }
     }
@@ -378,13 +424,15 @@ public class MessageDeframer {
         // Read until the buffer contains all the required bytes.
         int missingBytes;
         while ((missingBytes = requiredLength - nextFrame.readableBytes()) > 0) {
-          if (unprocessed.readableBytes() == 0) {
-            // No more data is available.
-            return false;
-          }
-          int toRead = Math.min(missingBytes, unprocessed.readableBytes());
-          totalBytesRead += toRead;
-          nextFrame.addBuffer(unprocessed.readBytes(toRead));
+//          synchronized (unprocessedLock) {
+            if (unprocessed.readableBytes() == 0) {
+              // No more data is available.
+              return false;
+            }
+            int toRead = Math.min(missingBytes, unprocessed.readableBytes());
+            totalBytesRead += toRead;
+            nextFrame.addBuffer(unprocessed.readBytes(toRead));
+//          }
         }
         return true;
       } finally {

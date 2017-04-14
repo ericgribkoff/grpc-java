@@ -124,7 +124,7 @@ public abstract class AbstractStream2 implements Stream {
     @VisibleForTesting
     public static final int DEFAULT_ONREADY_THRESHOLD = 32 * 1024;
 
-    private final MessageDeframer deframer;
+    protected final MessageDeframer deframer;
     private final Object onReadyLock = new Object();
     private final StatsTraceContext statsTraceCtx;
     /**

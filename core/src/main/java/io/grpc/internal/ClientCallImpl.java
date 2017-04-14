@@ -430,6 +430,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
   private class ClientStreamListenerImpl implements ClientStreamListener {
     private final Listener<RespT> observer;
     private boolean closed;
+    private int respCount;
 
     public ClientStreamListenerImpl(Listener<RespT> observer) {
       this.observer = Preconditions.checkNotNull(observer, "observer");
@@ -516,6 +517,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
           InputStream message;
           try {
             while ((message = mp.next()) != null) {
+              respCount++;
               try {
                 if (closed) {
                   return;
@@ -606,6 +608,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
         }
       }
 
+      if (respCount == 1) {
+        System.out.println("here we go");
+      }
       // This isn't good...
       closed(status, trailers);
     }
