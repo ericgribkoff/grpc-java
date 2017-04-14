@@ -229,9 +229,9 @@ public class MessageDeframer {
    * that no additional data can be delivered to the application.
    */
   public boolean isStalled() {
-    //return deliveryStalled;
+    return deliveryStalled;
 //    synchronized (unprocessedLock) {
-      return unprocessed.readableBytes() == 0;
+//      return unprocessed.readableBytes() == 0; // doing this check causes interop tests to stall?
 //    }
   }
 
