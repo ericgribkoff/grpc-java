@@ -187,6 +187,8 @@ public abstract class AbstractServerStream extends AbstractStream2
   protected abstract static class TransportState extends AbstractStream2.TransportState {
     /** Whether listener.closed() has been called. */
     private boolean listenerClosed;
+    /** Whether listener.halfClosed() has been called. */
+    private boolean listenerHalfClosed;
     private ServerStreamListener listener;
     private final StatsTraceContext statsTraceCtx;
 
@@ -214,7 +216,10 @@ public abstract class AbstractServerStream extends AbstractStream2
 
     @Override
     public void endOfStream() {
-      listener().halfClosed(getDeframerProducer());
+      if (!listenerHalfClosed) {
+        listenerHalfClosed = true;
+        listener().halfClosed(getDeframerProducer());
+      }
     }
 
     @Override
