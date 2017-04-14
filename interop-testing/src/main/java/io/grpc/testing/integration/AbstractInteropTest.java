@@ -585,9 +585,9 @@ public abstract class AbstractInteropTest {
     }
   }
 
-  @Test(timeout = 10000000)
+  @Test(timeout = 10000)
   public void serverStreamingShouldBeFlowControlled() throws Exception {
-    for (int i = 0; i < 500; i++) {
+    for (int i = 0; i < 1; i++) {
       serverStreamingShouldBeFlowControlledHelper();
     }
   }
@@ -651,7 +651,7 @@ public abstract class AbstractInteropTest {
 //      System.out.println("it happened");
 //    }
 //    assertNull(queue.poll(1, TimeUnit.SECONDS));
-    assertNull(queue.poll(Math.max(firstCallDuration * 40, 1 * 1000 * 1000), TimeUnit.NANOSECONDS));
+    assertNull(queue.poll(Math.max(firstCallDuration * 4, 1 * 1000 * 1000), TimeUnit.NANOSECONDS));
 
     // Make sure that everything still completes.
     call.request(1);
@@ -1394,7 +1394,7 @@ public abstract class AbstractInteropTest {
   }
 
   protected int operationTimeoutMillis() {
-    return 500000;
+    return 5000;
   }
 
   /**

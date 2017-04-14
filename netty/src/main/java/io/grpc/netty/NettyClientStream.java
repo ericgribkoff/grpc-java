@@ -256,9 +256,9 @@ class NettyClientStream extends AbstractClientStream2 {
           deliveryStalledTask = null;
         }
       } else {
-        if (deframer.getMessagesDelivered() == 1) {
-          System.out.println("break in NettyClientStream");
-        }
+//        if (deframer.getMessagesDelivered() == 1) {
+//          System.out.println("break in NettyClientStream");
+//        }
         eventLoop.execute(new Runnable() {
           @Override
           public void run() {

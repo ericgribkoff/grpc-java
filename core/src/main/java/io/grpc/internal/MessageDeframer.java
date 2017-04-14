@@ -185,9 +185,9 @@ public class MessageDeframer {
     if (isClosed()) {
       return;
     }
-    synchronized (messagesRequestedLock) {
-      messagesRequested += numMessages;
-    }
+//    synchronized (messagesRequestedLock) {
+//      messagesRequested += numMessages;
+//    }
     pendingDeliveries.getAndAdd(numMessages);
     listener.messagesAvailable(producer);
   }
@@ -235,26 +235,26 @@ public class MessageDeframer {
 //    }
   }
 
-  private final Object messagesDeliveredLock = new Object();
-  @GuardedBy("messagesDeliveredLock")
-  private int messagesDelivered = 0;
+//  private final Object messagesDeliveredLock = new Object();
+//  @GuardedBy("messagesDeliveredLock")
+//  private int messagesDelivered = 0;
+//
+//  public int getMessagesDelivered() {
+//    synchronized (messagesDeliveredLock) {
+//      return messagesDelivered;
+//    }
+//  }
 
-  public int getMessagesDelivered() {
-    synchronized (messagesDeliveredLock) {
-      return messagesDelivered;
-    }
-  }
 
-
-  private final Object messagesRequestedLock = new Object();
-  @GuardedBy("messagesRequestedLock")
-  private int messagesRequested = 0;
-
-  public int getMessagesRequested() {
-    synchronized (messagesRequestedLock) {
-      return messagesRequested;
-    }
-  }
+//  private final Object messagesRequestedLock = new Object();
+//  @GuardedBy("messagesRequestedLock")
+//  private int messagesRequested = 0;
+//
+//  public int getMessagesRequested() {
+//    synchronized (messagesRequestedLock) {
+//      return messagesRequested;
+//    }
+//  }
 
   /**
    * Indicates whether or not this deframer has been closed.
@@ -326,9 +326,9 @@ public class MessageDeframer {
               // Read the body and deliver the message.
               toReturn = processBody();
 
-              synchronized (messagesDeliveredLock) {
-                messagesDelivered += 1;
-              }
+//              synchronized (messagesDeliveredLock) {
+//                messagesDelivered += 1;
+//              }
               // Since we've delivered a message, decrement the number of pending
               // deliveries remaining.
               pendingDeliveries.getAndDecrement();
