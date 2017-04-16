@@ -119,14 +119,14 @@ import org.mockito.MockitoAnnotations;
  */
 @RunWith(JUnit4.class)
 public class OkHttpClientTransportTest {
-  private static final int TIME_OUT_MS = 2000;
+  private static final int TIME_OUT_MS = 1000000;
   private static final String NETWORK_ISSUE_MESSAGE = "network issue";
   private static final String ERROR_MESSAGE = "simulated error";
   // The gRPC header length, which includes 1 byte compression flag and 4 bytes message length.
   private static final int HEADER_LENGTH = 5;
 
   @Rule
-  public Timeout globalTimeout = new Timeout(10 * 1000);
+  public Timeout globalTimeout = new Timeout(1000 * 1000);
 
   @Mock
   private FrameWriter frameWriter;
@@ -199,7 +199,7 @@ public class OkHttpClientTransportTest {
     assertTrue("Unexpected: " + s, s.contains(address.toString()));
   }
 
-  @Test
+  @Test(timeout = 1000000)
   public void maxMessageSizeShouldBeEnforced() throws Exception {
     // Allow the response payloads of up to 1 byte.
     startTransport(3, null, true, 1, null);

@@ -238,25 +238,54 @@ class OkHttpClientStream extends AbstractClientStream2 {
 
     @GuardedBy("lock")
     @Override
-    protected void http2ProcessingFailed(Status status, Metadata trailers) {
+    protected void http2ProcessingFailed(Status status, boolean stopDelivery, Metadata trailers) {
       cancel(status, trailers);
     }
 
     @GuardedBy("lock")
     @Override
-    protected void deframeFailed(Throwable cause) {
-      http2ProcessingFailed(Status.fromThrowable(cause), new Metadata());
+    public void deframeFailed(Throwable cause) {
+      getDeframerProducer().close();
+      // hack - ensures transportReportStatus won't call close on the listener again
+      listenerClosed = true; // TODO: make sure thread safe
+      listener().closed(Status.fromThrowable(cause), new Metadata());
+      synchronized (lock) {
+        http2ProcessingFailed(Status.fromThrowable(cause), true, new Metadata());
+      }
+    }
+
+
+    @Override
+    public void deliveryStalled() {
+      synchronized (lock) {
+        if (!deframer.isStalled()) {
+          return;
+        }
+        if (deliveryStalledTask != null) {
+          deliveryStalledTask.run();
+          deliveryStalledTask = null;
+        }
+      }
+    }
+
+    @Override
+    public void endOfStream() {
+      synchronized (lock) {
+        deliveryStalled();
+      }
     }
 
     @GuardedBy("lock")
     @Override
     public void bytesRead(int processedBytes) {
-      processedWindow -= processedBytes;
-      if (processedWindow <= WINDOW_UPDATE_THRESHOLD) {
-        int delta = Utils.DEFAULT_WINDOW_SIZE - processedWindow;
-        window += delta;
-        processedWindow += delta;
-        frameWriter.windowUpdate(id(), delta);
+      synchronized (lock) {
+        processedWindow -= processedBytes;
+        if (processedWindow <= WINDOW_UPDATE_THRESHOLD) {
+          int delta = Utils.DEFAULT_WINDOW_SIZE - processedWindow;
+          window += delta;
+          processedWindow += delta;
+          frameWriter.windowUpdate(id(), delta);
+        }
       }
     }
 

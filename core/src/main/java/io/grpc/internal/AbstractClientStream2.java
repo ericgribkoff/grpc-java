@@ -185,7 +185,7 @@ public abstract class AbstractClientStream2 extends AbstractStream2
   protected abstract static class TransportState extends AbstractStream2.TransportState {
     /** Whether listener.closed() has been called. */
     private final StatsTraceContext statsTraceCtx;
-    protected boolean listenerClosed;
+    protected volatile boolean listenerClosed;
     private ClientStreamListener listener;
 
     protected Runnable deliveryStalledTask;

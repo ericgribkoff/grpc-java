@@ -230,7 +230,7 @@ public class MessageDeframer {
    */
   public boolean isStalled() {
 //    return deliveryStalled;
-    return unprocessed.readableBytes() == 0;
+    return unprocessed == null || unprocessed.readableBytes() == 0;
 //    synchronized (unprocessedLock) {
 //      return unprocessed.readableBytes() == 0; // doing this check causes interop tests to stall?
 //    }
@@ -353,7 +353,7 @@ public class MessageDeframer {
     @Override
     public void checkEndOfStreamOrStalled() {
       //TODO(ericgribkoff) If tests can be modified, make this private and not part of interface.
-      Preconditions.checkState(!closed, "closed and no error");
+      Preconditions.checkState(!closed, "closed");
       if (closed) {
         return;
       }
@@ -468,7 +468,7 @@ public class MessageDeframer {
       requiredLength = nextFrame.readInt();
       if (requiredLength < 0 || requiredLength > maxInboundMessageSize) {
         close();
-        RuntimeException t = Status.INTERNAL.withDescription(
+        RuntimeException t = Status.RESOURCE_EXHAUSTED.withDescription(
             String.format("%s: Frame size %d exceeds maximum: %d. ",
                 debugString, requiredLength, maxInboundMessageSize)).asRuntimeException();
         listener.deframeFailed(t);

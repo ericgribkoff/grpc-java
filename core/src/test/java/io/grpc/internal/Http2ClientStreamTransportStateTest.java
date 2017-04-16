@@ -213,7 +213,8 @@ public class Http2ClientStreamTransportStateTest {
     String testString = "This is a test";
     state.transportDataReceived(ReadableBuffers.wrap(testString.getBytes(US_ASCII)), true);
 
-    verify(mockListener).closed(statusCaptor.capture(), any(Metadata.class));
+    verify(mockListener).closed(statusCaptor.capture(), any(Metadata.class),
+        any(MessageProducer.class));
     assertEquals(Code.INTERNAL, statusCaptor.getValue().getCode());
   }
 

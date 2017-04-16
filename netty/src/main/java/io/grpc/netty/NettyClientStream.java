@@ -327,7 +327,7 @@ class NettyClientStream extends AbstractClientStream2 {
     public void deframeFailed(final Throwable cause) {
       getDeframerProducer().close();
       // hack - ensures transportReportStatus won't call close on the listener again
-      listenerClosed = true;
+      listenerClosed = true; // TODO: not thread-safe
       listener().closed(Status.fromThrowable(cause), new Metadata());
       if (eventLoop.inEventLoop()) {
         http2ProcessingFailed(Status.fromThrowable(cause), true, new Metadata());
