@@ -297,13 +297,11 @@ public abstract class AbstractClientStream2 extends AbstractStream2
         // actually, this will get queued on the client thread and run after the deframer finishes
         // any concurrent ops. So this is ok.
         closeListener(status, trailers);
-        //throw new RuntimeException("stopDelivery: " + stopDelivery + " (if not, deframer stalled");
       } else {
         deliveryStalledTask = new Runnable() {
           @Override
           public void run() {
             closeListener(status, trailers);
-            //throw new RuntimeException("deframer stalled task");
           }
         };
       }

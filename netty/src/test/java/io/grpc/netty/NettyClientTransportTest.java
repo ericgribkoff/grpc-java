@@ -86,7 +86,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -151,13 +150,6 @@ public class NettyClientTransportTest {
 
   @Test
   public void addDefaultUserAgent() throws Exception {
-    String loggingConfig = "handlers=java.util.logging.ConsoleHandler\n" +
-        "io.grpc.level=FINE\n" +
-        "java.util.logging.ConsoleHandler.level=FINE\n" +
-        "java.util.logging.ConsoleHandler.formatter=java.util.logging.SimpleFormatter";
-    java.util.logging.LogManager.getLogManager().readConfiguration(
-        new ByteArrayInputStream(loggingConfig.getBytes(StandardCharsets.UTF_8)));
-
     startServer();
     NettyClientTransport transport = newTransport(newNegotiator());
     callMeMaybe(transport.start(clientTransportListener));
@@ -616,7 +608,6 @@ public class NettyClientTransportTest {
       while ((message = mp.next()) != null) {
         messageRead(message);
       }
-//      mp.checkEndOfStreamOrStalled();
     }
 
     @Override

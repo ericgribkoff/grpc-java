@@ -44,7 +44,6 @@ import java.io.InputStream;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.annotation.Nullable;
-import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
@@ -133,23 +132,21 @@ public class MessageDeframer {
   private volatile boolean deliveryStalled = true; // only written by client thread
   private volatile boolean closed; // only written by client thread
 
-  // Audit this - hah, definitely not thread-safe (length etc)
-//  private final Object unprocessedLock = new Object();
-//  @GuardedBy("unprocessedLock")
+  // Audit this
   private CompositeReadableBuffer unprocessed =
       new CompositeReadableBuffer(new ConcurrentLinkedQueue<ReadableBuffer>());
 
   /**
    * Create a deframer.
    *
-   * @param listener listener for deframer events.
-   * @param decompressor the compression used if a compressed frame is encountered, with
-   *  {@code NONE} meaning unsupported
+   * @param listener       listener for deframer events.
+   * @param decompressor   the compression used if a compressed frame is encountered, with {@code
+   *                       NONE} meaning unsupported
    * @param maxMessageSize the maximum allowed size for received messages.
-   * @param debugString a string that will appear on errors statuses
+   * @param debugString    a string that will appear on errors statuses
    */
   public MessageDeframer(Listener listener, Decompressor decompressor, int maxMessageSize,
-      StatsTraceContext statsTraceCtx, String debugString) {
+                         StatsTraceContext statsTraceCtx, String debugString) {
     this.listener = Preconditions.checkNotNull(listener, "sink");
     this.decompressor = Preconditions.checkNotNull(decompressor, "decompressor");
     this.maxInboundMessageSize = maxMessageSize;
@@ -185,9 +182,6 @@ public class MessageDeframer {
     if (isClosed()) {
       return;
     }
-//    synchronized (messagesRequestedLock) {
-//      messagesRequested += numMessages;
-//    }
     pendingDeliveries.getAndAdd(numMessages);
     listener.messagesAvailable(producer);
   }
@@ -195,12 +189,13 @@ public class MessageDeframer {
   /**
    * Adds the given data to this deframer and attempts delivery to the listener.
    *
-   * @param data the raw data read from the remote endpoint. Must be non-null.
+   * @param data        the raw data read from the remote endpoint. Must be non-null.
    * @param endOfStream if {@code true}, indicates that {@code data} is the end of the stream from
-   *        the remote endpoint.  End of stream should not be used in the event of a transport
-   *        error, such as a stream reset.
+   *                    the remote endpoint.  End of stream should not be used in the event of a
+   *                    transport error, such as a stream reset.
    * @throws IllegalStateException if {@link MessageProducer#close()} has been called previously or
-   *         if this method has previously been called with {@code endOfStream=true}.
+   *                               if this method has previously been called with {@code
+   *                               endOfStream=true}.
    */
   public void deframe(ReadableBuffer data, boolean endOfStream) {
     Preconditions.checkNotNull(data, "data");
@@ -209,9 +204,7 @@ public class MessageDeframer {
       checkNotClosed();
       Preconditions.checkState(!this.endOfStream, "Past end of stream");
 
-//      synchronized (unprocessedLock) {
-        unprocessed.addBuffer(data);
-//      }
+      unprocessed.addBuffer(data);
       needToCloseData = false;
 
       // Indicate that all of the data for this stream has been received.
@@ -229,33 +222,9 @@ public class MessageDeframer {
    * that no additional data can be delivered to the application.
    */
   public boolean isStalled() {
-//    return deliveryStalled;
     return unprocessed == null || unprocessed.readableBytes() == 0;
-//    synchronized (unprocessedLock) {
-//      return unprocessed.readableBytes() == 0; // doing this check causes interop tests to stall?
-//    }
   }
 
-//  private final Object messagesDeliveredLock = new Object();
-//  @GuardedBy("messagesDeliveredLock")
-//  private int messagesDelivered = 0;
-//
-//  public int getMessagesDelivered() {
-//    synchronized (messagesDeliveredLock) {
-//      return messagesDelivered;
-//    }
-//  }
-
-
-//  private final Object messagesRequestedLock = new Object();
-//  @GuardedBy("messagesRequestedLock")
-//  private int messagesRequested = 0;
-//
-//  public int getMessagesRequested() {
-//    synchronized (messagesRequestedLock) {
-//      return messagesRequested;
-//    }
-//  }
 
   /**
    * Indicates whether or not this deframer has been closed.
@@ -286,19 +255,17 @@ public class MessageDeframer {
     @Override
     public void close() {
       closed = true;
-//      synchronized (unprocessedLock) {
-        try {
-          if (unprocessed != null) {
-            unprocessed.close();
-          }
-          if (nextFrame != null) {
-            nextFrame.close();
-          }
-        } finally {
-          unprocessed = null;
-          nextFrame = null;
+      try {
+        if (unprocessed != null) {
+          unprocessed.close();
         }
-//      }
+        if (nextFrame != null) {
+          nextFrame.close();
+        }
+      } finally {
+        unprocessed = null;
+        nextFrame = null;
+      }
     }
 
     /**
@@ -326,10 +293,6 @@ public class MessageDeframer {
             case BODY:
               // Read the body and deliver the message.
               toReturn = processBody();
-
-//              synchronized (messagesDeliveredLock) {
-//                messagesDelivered += 1;
-//              }
               // Since we've delivered a message, decrement the number of pending
               // deliveries remaining.
               pendingDeliveries.getAndDecrement();
@@ -370,9 +333,7 @@ public class MessageDeframer {
        * be in unprocessed.
        */
       boolean stalled;
-//      synchronized (unprocessedLock) {
-        stalled = unprocessed.readableBytes() == 0;
-//      }
+      stalled = unprocessed.readableBytes() == 0;
 
       if (endOfStream && stalled) {
         boolean havePartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
@@ -402,12 +363,7 @@ public class MessageDeframer {
       boolean previouslyStalled = deliveryStalled;
       deliveryStalled = stalled;
       if (stalled) {
-//      if (stalled && !previouslyStalled) {
-//        synchronized (messagesDeliveredLock) {
-//          if (messagesDelivered == 1) {
-//            System.out.println("and here");
-//          }
-//        }
+        // Always notify if stalled. Avoids race condition.
         listener.deliveryStalled();
       }
     }
@@ -427,15 +383,13 @@ public class MessageDeframer {
         // Read until the buffer contains all the required bytes.
         int missingBytes;
         while ((missingBytes = requiredLength - nextFrame.readableBytes()) > 0) {
-//          synchronized (unprocessedLock) {
-            if (unprocessed.readableBytes() == 0) {
-              // No more data is available.
-              return false;
-            }
-            int toRead = Math.min(missingBytes, unprocessed.readableBytes());
-            totalBytesRead += toRead;
-            nextFrame.addBuffer(unprocessed.readBytes(toRead));
-//          }
+          if (unprocessed.readableBytes() == 0) {
+            // No more data is available.
+            return false;
+          }
+          int toRead = Math.min(missingBytes, unprocessed.readableBytes());
+          totalBytesRead += toRead;
+          nextFrame.addBuffer(unprocessed.readBytes(toRead));
         }
         return true;
       } finally {
@@ -536,7 +490,7 @@ public class MessageDeframer {
     private long mark = -1;
 
     SizeEnforcingInputStream(InputStream in, int maxMessageSize, StatsTraceContext statsTraceCtx,
-        String debugString) {
+                             String debugString) {
       super(in);
       this.maxMessageSize = maxMessageSize;
       this.statsTraceCtx = statsTraceCtx;
@@ -604,8 +558,8 @@ public class MessageDeframer {
     private void verifySize() {
       if (count > maxMessageSize) {
         throw Status.RESOURCE_EXHAUSTED.withDescription(String.format(
-                "%s: Compressed frame exceeds maximum frame size: %d. Bytes read: %d. ",
-                debugString, maxMessageSize, count)).asRuntimeException();
+            "%s: Compressed frame exceeds maximum frame size: %d. Bytes read: %d. ",
+            debugString, maxMessageSize, count)).asRuntimeException();
       }
     }
   }

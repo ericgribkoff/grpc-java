@@ -113,7 +113,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLSession;
@@ -611,7 +610,6 @@ public abstract class AbstractInteropTest {
     long start = System.nanoTime();
 
     final ArrayBlockingQueue<Object> queue = new ArrayBlockingQueue<Object>(10);
-//    final AtomicInteger respCount = new AtomicInteger();
     ClientCall<StreamingOutputCallRequest, StreamingOutputCallResponse> call =
         channel.newCall(TestServiceGrpc.METHOD_STREAMING_OUTPUT_CALL, CallOptions.DEFAULT);
     call.start(new ClientCall.Listener<StreamingOutputCallResponse>() {
@@ -620,16 +618,11 @@ public abstract class AbstractInteropTest {
 
       @Override
       public void onMessage(final StreamingOutputCallResponse message) {
-//        respCount.incrementAndGet();
         queue.add(message);
       }
 
       @Override
       public void onClose(Status status, Metadata trailers) {
-//        if (respCount.get() == 1) {
-//          System.out.println("it happened here");
-//        }
-//        respCount.incrementAndGet();
         queue.add(status);
       }
     }, new Metadata());
@@ -647,16 +640,10 @@ public abstract class AbstractInteropTest {
     // resolution (like on Windows) or be using a testing, in-process transport where message
     // handling is instantaneous. In both cases, firstCallDuration may be 0, so round up sleep time
     // to at least 1ms.
-//    if (queue.poll(5, TimeUnit.MILLISECONDS) != null) {
-//      System.out.println("it happened");
-//    }
-//    assertNull(queue.poll(1, TimeUnit.SECONDS));
     assertNull(queue.poll(Math.max(firstCallDuration * 4, 1 * 1000 * 1000), TimeUnit.NANOSECONDS));
 
     // Make sure that everything still completes.
     call.request(1);
-//    queue.poll(5, TimeUnit.MILLISECONDS);
-//    queue.poll(5, TimeUnit.MILLISECONDS);
     assertEquals(goldenResponses.get(1),
         queue.poll(operationTimeoutMillis(), TimeUnit.MILLISECONDS));
     assertEquals(Status.OK, queue.poll(operationTimeoutMillis(), TimeUnit.MILLISECONDS));
@@ -916,7 +903,6 @@ public abstract class AbstractInteropTest {
         .addResponseParameters(ResponseParameters.newBuilder().setSize(1))
         .build();
     int size = blockingStub.streamingOutputCall(request).next().getSerializedSize();
-    //int size = 5;
 
     TestServiceGrpc.TestServiceBlockingStub stub =
         blockingStub.withMaxInboundMessageSize(size - 1);
