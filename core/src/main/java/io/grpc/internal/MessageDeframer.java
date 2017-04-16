@@ -229,7 +229,8 @@ public class MessageDeframer {
    * that no additional data can be delivered to the application.
    */
   public boolean isStalled() {
-    return deliveryStalled;
+//    return deliveryStalled;
+    return unprocessed.readableBytes() == 0;
 //    synchronized (unprocessedLock) {
 //      return unprocessed.readableBytes() == 0; // doing this check causes interop tests to stall?
 //    }
@@ -397,9 +398,11 @@ public class MessageDeframer {
       }
 
       // If we're transitioning to the stalled state, notify the listener.
+      // Always notify listener.
       boolean previouslyStalled = deliveryStalled;
       deliveryStalled = stalled;
-      if (stalled && !previouslyStalled) {
+      if (stalled) {
+//      if (stalled && !previouslyStalled) {
 //        synchronized (messagesDeliveredLock) {
 //          if (messagesDelivered == 1) {
 //            System.out.println("and here");

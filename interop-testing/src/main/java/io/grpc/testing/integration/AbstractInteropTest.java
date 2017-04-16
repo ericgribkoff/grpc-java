@@ -915,8 +915,8 @@ public abstract class AbstractInteropTest {
     StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
         .addResponseParameters(ResponseParameters.newBuilder().setSize(1))
         .build();
-    //int size = blockingStub.streamingOutputCall(request).next().getSerializedSize();
-    int size = 5;
+    int size = blockingStub.streamingOutputCall(request).next().getSerializedSize();
+    //int size = 5;
 
     TestServiceGrpc.TestServiceBlockingStub stub =
         blockingStub.withMaxInboundMessageSize(size - 1);
