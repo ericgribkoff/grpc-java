@@ -208,19 +208,6 @@ public abstract class AbstractClientStream2 extends AbstractStream2
     }
 
     @Override
-    public final void deliveryStalled() {
-      if (deliveryStalledTask != null) {
-        deliveryStalledTask.run();
-        deliveryStalledTask = null;
-      }
-    }
-
-    @Override
-    public final void endOfStream() {
-      deliveryStalled();
-    }
-
-    @Override
     protected final ClientStreamListener listener() {
       return listener;
     }
@@ -301,6 +288,8 @@ public abstract class AbstractClientStream2 extends AbstractStream2
 
       // If not stopping delivery, then we must wait until the deframer is stalled (i.e., it has no
       // complete messages to deliver).
+      // TODO(ericgribkoff) Update above comment. Need to handle casee when unprocessed is not empty
+      //   but does not contain a complete message
       if (stopDelivery || isDeframerStalled()) {
         deliveryStalledTask = null;
         closeListener(status, trailers);
@@ -315,6 +304,20 @@ public abstract class AbstractClientStream2 extends AbstractStream2
     }
 
     /**
+     * This is the logic for listening for message producer events, but these may be triggered from
+     * outside the transport-thread. Subclasses must invoke this method in a thread-safe manner.
+     */
+    protected void deliveryStalledNotThreadSafe() {
+      if (isDeframerScheduledToClose() || !isDeframerStalled()) {
+        return;
+      }
+      if (deliveryStalledTask != null) {
+        deliveryStalledTask.run();
+        deliveryStalledTask = null;
+      }
+    }
+
+    /**
      * Closes the listener if not previously closed.
      *
      * @throws IllegalStateException if the call has not yet been started.
@@ -322,7 +325,7 @@ public abstract class AbstractClientStream2 extends AbstractStream2
     private void closeListener(Status status, Metadata trailers) {
       if (!listenerClosed) {
         listenerClosed = true;
-        closeDeframer();
+        scheduleDeframerClose();
         statsTraceCtx.streamClosed(status);
         listener().closed(status, trailers);
       }

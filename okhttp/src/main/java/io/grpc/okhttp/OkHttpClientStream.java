@@ -242,25 +242,43 @@ class OkHttpClientStream extends AbstractClientStream2 {
 
     @GuardedBy("lock")
     @Override
-    protected void http2ProcessingFailed(Status status, Metadata trailers) {
+    protected void http2ProcessingFailed(Status status, boolean stopDelivery, Metadata trailers) {
+      transportReportStatus(status, stopDelivery, trailers);
       cancel(status, trailers);
     }
 
     @GuardedBy("lock")
     @Override
-    protected void deframeFailed(Throwable cause) {
-      http2ProcessingFailed(Status.fromThrowable(cause), new Metadata());
+    public void deframeFailed(Throwable cause) {
+      synchronized (lock) {
+        http2ProcessingFailed(Status.fromThrowable(cause), true, new Metadata());
+      }
     }
 
-    @GuardedBy("lock")
+    @Override
+    public void deliveryStalled() {
+      synchronized (lock) {
+        deliveryStalledNotThreadSafe();
+      }
+    }
+
+    @Override
+    public void endOfStream() {
+      synchronized (lock) {
+        deliveryStalledNotThreadSafe();
+      }
+    }
+
     @Override
     public void bytesRead(int processedBytes) {
-      processedWindow -= processedBytes;
-      if (processedWindow <= WINDOW_UPDATE_THRESHOLD) {
-        int delta = Utils.DEFAULT_WINDOW_SIZE - processedWindow;
-        window += delta;
-        processedWindow += delta;
-        frameWriter.windowUpdate(id(), delta);
+      synchronized (lock) {
+        processedWindow -= processedBytes;
+        if (processedWindow <= WINDOW_UPDATE_THRESHOLD) {
+          int delta = Utils.DEFAULT_WINDOW_SIZE - processedWindow;
+          window += delta;
+          processedWindow += delta;
+          frameWriter.windowUpdate(id(), delta);
+        }
       }
     }
 

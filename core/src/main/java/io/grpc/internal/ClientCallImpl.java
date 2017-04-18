@@ -60,6 +60,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
+import io.grpc.internal.MessageDeframer.MessageProducer;
 import java.io.InputStream;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Executor;
@@ -500,6 +501,46 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       }
 
       callExecutor.execute(new MessageRead());
+    }
+
+    @Override
+    public void messageProducerAvailable(final MessageProducer mp) {
+      class MessagesAvailable extends ContextRunnable {
+
+        MessagesAvailable() {
+          super(context);
+        }
+
+        @Override
+        public final void runInContext() {
+          InputStream message;
+          try {
+            while ((message = mp.next()) != null) {
+              try {
+                if (closed) {
+                  return;
+                }
+                try {
+                  observer.onMessage(method.parseResponse(message));
+                } finally {
+                  message.close();
+                }
+              } catch (Throwable t) {
+                Status status =
+                    Status.CANCELLED.withCause(t).withDescription("Failed to read message.");
+                stream.cancel(status);
+              }
+            }
+          } catch (Throwable t) {
+            Status status =
+                Status.CANCELLED.withCause(t).withDescription("Failed to deframe message.");
+            stream.cancel(status);
+            close(status, new Metadata());
+          }
+        }
+      }
+
+      callExecutor.execute(new MessagesAvailable());
     }
 
     /**

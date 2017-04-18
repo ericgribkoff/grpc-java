@@ -52,6 +52,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.ServerCall;
 import io.grpc.Status;
+import io.grpc.internal.MessageDeframer.MessageProducer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
@@ -255,6 +256,14 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
             throw new RuntimeException(t);
           }
         }
+      }
+    }
+
+    @Override
+    public void messageProducerAvailable(final MessageProducer mp) {
+      InputStream message;
+      while ((message = mp.next()) != null) {
+        messageRead(message);
       }
     }
 

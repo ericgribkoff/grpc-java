@@ -31,6 +31,7 @@
 
 package io.grpc.internal;
 
+import io.grpc.internal.MessageDeframer.MessageProducer;
 import java.io.InputStream;
 
 /**
@@ -48,7 +49,13 @@ public interface StreamListener {
    *
    * @param message the bytes of the message.
    */
+  // TODO(ericgribkoff) Remove this and update the tests that rely on it via mocks
   void messageRead(InputStream message);
+
+  /**
+   * Called to schedule deframing in the application thread.
+   */
+  void messageProducerAvailable(MessageProducer mp);
 
   /**
    * This indicates that the transport is now capable of sending additional messages

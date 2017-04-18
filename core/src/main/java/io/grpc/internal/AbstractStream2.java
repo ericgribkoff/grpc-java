@@ -38,6 +38,7 @@ import com.google.common.annotations.VisibleForTesting;
 import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
+import io.grpc.internal.MessageDeframer.MessageProducer;
 import java.io.InputStream;
 import javax.annotation.concurrent.GuardedBy;
 
@@ -161,23 +162,14 @@ public abstract class AbstractStream2 implements Stream {
     protected abstract StreamListener listener();
 
     @Override
-    public void messageRead(InputStream is) {
-      listener().messageRead(is);
-    }
-
-    /**
-     * Called when a {@link #deframe(ReadableBuffer, boolean)} operation failed.
-     *
-     * @param cause the actual failure
-     */
-    protected abstract void deframeFailed(Throwable cause);
-
-    /**
-     * Closes this deframer and frees any resources. After this method is called, additional calls
-     * will have no effect.
-     */
-    protected final void closeDeframer() {
-      deframer.close();
+    public void messageProducerAvailable(MessageProducer mp) {
+      // TODO(ericgribkoff) listener() can return null here, at least for ServerStream via
+      //   setListener() - this occurs in io.grpc.internal.ServerTransportListener.streamCreated(),
+      //   as the stream listener initialization hits request before it's actually added to the
+      //   stream. This should either be avoided or this null-check must remain.
+      if (listener() != null) {
+        listener().messageProducerAvailable(mp);
+      }
     }
 
     /**
@@ -188,17 +180,36 @@ public abstract class AbstractStream2 implements Stream {
     }
 
     /**
+     * Schedule the deframer to close.
+     */
+    protected final void scheduleDeframerClose() {
+      deframer.scheduleClose();
+    }
+
+    /**
+     * Indicates whether the deframer is scheduled to close.
+     */
+    protected final boolean isDeframerScheduledToClose() {
+      return deframer.isScheduledToClose();
+    }
+
+    /**
      * Called to parse a received frame and attempt delivery of any completed
      * messages. Must be called from the transport thread.
      */
     protected final void deframe(ReadableBuffer frame, boolean endOfStream) {
-      if (deframer.isClosed()) {
+      if (isDeframerScheduledToClose()) {
         frame.close();
         return;
       }
       try {
         deframer.deframe(frame, endOfStream);
       } catch (Throwable t) {
+        // The deframer will not intentionally throw an exception but instead call deframeFailed
+        // directly. This captures other exceptions (such as failed preconditions) that may be
+        // thrown.
+        // TODO(ericgribkoff) Decide if we still want this. Impacts tests like
+        //   io.grpc.netty.NettyServerHandlerTest.streamErrorShouldNotCloseChannel()
         deframeFailed(t);
       }
     }
@@ -208,12 +219,17 @@ public abstract class AbstractStream2 implements Stream {
      * from the transport thread.
      */
     public final void requestMessagesFromDeframer(int numMessages) {
-      if (deframer.isClosed()) {
+      if (isDeframerScheduledToClose()) {
         return;
       }
       try {
         deframer.request(numMessages);
       } catch (Throwable t) {
+        // The deframer will not intentionally throw an exception but instead call deframeFailed
+        // directly. This captures other exceptions (such as failed preconditions) that may be
+        // thrown.
+        // TODO(ericgribkoff) Decide if we still want this try/catch block. Impacts tests like
+        //   io.grpc.netty.NettyServerHandlerTest.streamErrorShouldNotCloseChannel()
         deframeFailed(t);
       }
     }
@@ -223,7 +239,7 @@ public abstract class AbstractStream2 implements Stream {
     }
 
     private void setDecompressor(Decompressor decompressor) {
-      if (deframer.isClosed()) {
+      if (isDeframerScheduledToClose()) {
         return;
       }
       deframer.setDecompressor(decompressor);

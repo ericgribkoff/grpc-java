@@ -214,7 +214,7 @@ public abstract class AbstractServerStream extends AbstractStream2
 
     @Override
     public void endOfStream() {
-      closeDeframer();
+      scheduleDeframerClose();
       listener().halfClosed();
     }
 
@@ -271,7 +271,7 @@ public abstract class AbstractServerStream extends AbstractStream2
         }
         listenerClosed = true;
         onStreamDeallocated();
-        closeDeframer();
+        scheduleDeframerClose();
         listener().closed(newStatus);
       }
     }
