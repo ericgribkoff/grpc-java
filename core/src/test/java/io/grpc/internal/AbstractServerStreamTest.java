@@ -34,7 +34,6 @@ package io.grpc.internal;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -45,6 +44,7 @@ import static org.mockito.Mockito.verify;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.AbstractServerStream.TransportState;
+import io.grpc.internal.MessageDeframer.MessageProducer;
 import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -90,7 +90,10 @@ public class AbstractServerStreamTest {
     // Frame received after deframer closed, should be ignored and not trigger an exception
     stream.transportState().inboundDataReceived(buffer, true);
 
-    verify(buffer).close();
+    // Can't verify the buffer is closed as this is now handled by a call through the real
+    // ServerStreamListener => test for this separately.
+    //verify(buffer).close();
+    verify(streamListener).closed(eq(Status.OK));
     verify(streamListener, times(0)).messageRead(any(InputStream.class));
   }
 
@@ -142,16 +145,17 @@ public class AbstractServerStreamTest {
     state.setListener(null);
   }
 
-  @Test
-  public void messageRead_listenerCalled() {
-    final ServerStreamListener streamListener = mock(ServerStreamListener.class);
-    stream.transportState().setListener(streamListener);
-
-    // Normally called by a deframe event.
-    stream.transportState().messageRead(new ByteArrayInputStream(new byte[]{}));
-
-    verify(streamListener).messageRead(isA(InputStream.class));
-  }
+  // TODO(ericgribkoff) Recreate this for the message producer model
+  //  @Test
+  //  public void messageRead_listenerCalled() {
+  //    final ServerStreamListener streamListener = mock(ServerStreamListener.class);
+  //    stream.transportState().setListener(streamListener);
+  //
+  //    // Normally called by a deframe event.
+  //    stream.transportState().messageRead(new ByteArrayInputStream(new byte[]{}));
+  //
+  //    verify(streamListener).messageRead(isA(InputStream.class));
+  //  }
 
   @Test
   public void writeHeaders_failsOnNullHeaders() {
@@ -238,6 +242,9 @@ public class AbstractServerStreamTest {
     public void messageRead(InputStream message) {}
 
     @Override
+    public void messageProducerAvailable(MessageProducer mp) {}
+
+    @Override
     public void onReady() {}
 
     @Override
@@ -274,7 +281,7 @@ public class AbstractServerStreamTest {
       }
 
       @Override
-      protected void deframeFailed(Throwable cause) {}
+      public void deframeFailed(Throwable cause) {}
 
       @Override
       public void bytesRead(int processedBytes) {}

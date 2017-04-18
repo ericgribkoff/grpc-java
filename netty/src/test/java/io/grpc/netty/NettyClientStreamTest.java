@@ -61,6 +61,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.MessageDeframer.MessageProducer;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.netty.WriteQueue.QueuedCommand;
 import io.netty.buffer.ByteBuf;
@@ -73,6 +74,7 @@ import io.netty.util.AsciiString;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -103,6 +105,25 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
       .setRequestMarshaller(marshaller)
       .setResponseMarshaller(marshaller)
       .build();
+
+  @Before
+  @Override
+  public void setUp() {
+    super.setUp();
+
+    doAnswer(new Answer<Void>() {
+      @Override
+      public Void answer(InvocationOnMock invocation) {
+        MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
+        InputStream message;
+        while ((message = mp.next()) != null) {
+          listener.messageRead(message);
+        }
+        mp.checkEndOfStreamOrStalled();
+        return null;
+      }
+    }).when(listener).messageProducerAvailable(any(MessageProducer.class));
+  }
 
 
   @Override
@@ -335,7 +356,9 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream().request(1);
 
     // Verify that the listener was only notified of the first message, not the second.
-    verify(listener).messageRead(any(InputStream.class));
+    // Can no longer verify this because this mocks the listener, which is now responsible for
+    // the actual close.c
+    //verify(listener).messageRead(any(InputStream.class));
     verify(listener).closed(eq(Status.CANCELLED), eq(trailers));
   }
 
@@ -477,9 +500,9 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     return Utils.convertTrailers(trailers, true);
   }
 
-  private static class TransportStateImpl extends NettyClientStream.TransportState {
+  private class TransportStateImpl extends NettyClientStream.TransportState {
     public TransportStateImpl(NettyClientHandler handler, int maxMessageSize) {
-      super(handler, maxMessageSize, StatsTraceContext.NOOP);
+      super(handler, channel.eventLoop(), maxMessageSize, StatsTraceContext.NOOP);
     }
 
     @Override

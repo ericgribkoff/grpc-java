@@ -342,14 +342,20 @@ public class Http2ClientStreamTransportStateTest {
     }
 
     @Override
-    protected void http2ProcessingFailed(Status status, Metadata trailers) {
-      transportReportStatus(status, false, trailers);
+    protected void http2ProcessingFailed(Status status, boolean stopDelivery, Metadata trailers) {
+      transportReportStatus(status, stopDelivery, trailers);
     }
 
     @Override
-    protected void deframeFailed(Throwable cause) {}
+    public void deframeFailed(Throwable cause) {}
 
     @Override
     public void bytesRead(int processedBytes) {}
+
+    @Override
+    public void deliveryStalled() {}
+
+    @Override
+    public void endOfStream() {}
   }
 }

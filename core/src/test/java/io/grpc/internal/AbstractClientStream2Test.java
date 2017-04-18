@@ -35,6 +35,7 @@ import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -49,8 +50,11 @@ import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.StreamTracer;
 import io.grpc.internal.AbstractClientStream2.TransportState;
+import io.grpc.internal.MessageDeframer.MessageProducer;
 import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -61,6 +65,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 /**
  * Test for {@link AbstractClientStream2}.  This class tries to test functionality in
@@ -78,6 +84,19 @@ public class AbstractClientStream2Test {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
+
+    doAnswer(new Answer<Void>() {
+      @Override
+      public Void answer(InvocationOnMock invocation) {
+        MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
+        InputStream message;
+        while ((message = mp.next()) != null) {
+          mockListener.messageRead(message);
+        }
+        mp.checkEndOfStreamOrStalled();
+        return null;
+      }
+    }).when(mockListener).messageProducerAvailable(any(MessageProducer.class));
   }
 
   private final WritableBufferAllocator allocator = new WritableBufferAllocator() {
@@ -325,9 +344,15 @@ public class AbstractClientStream2Test {
     }
 
     @Override
-    protected void deframeFailed(Throwable cause) {}
+    public void deframeFailed(Throwable cause) {}
 
     @Override
     public void bytesRead(int processedBytes) {}
+
+    @Override
+    public final void deliveryStalled() {}
+
+    @Override
+    public final void endOfStream() {}
   }
 }
