@@ -288,9 +288,8 @@ public abstract class AbstractClientStream2 extends AbstractStream2
 
       // If not stopping delivery, then we must wait until the deframer is stalled (i.e., it has no
       // complete messages to deliver).
-      // TODO(ericgribkoff) Update above comment. Need to handle casee when unprocessed is not empty
-      //   but does not contain a complete message
       if (stopDelivery || isDeframerStalled()) {
+        // Broken: cannot interrupt deframer in app thread this easily.
         deliveryStalledTask = null;
         closeListener(status, trailers);
       } else {
@@ -305,7 +304,7 @@ public abstract class AbstractClientStream2 extends AbstractStream2
 
     /**
      * This is the logic for listening for message producer events, but these may be triggered from
-     * outside the transport-thread. Subclasses must invoke this method in a thread-safe manner.
+     * outside the transport-thread. Subclasses must invoke this message from the transport thread.
      */
     protected void deliveryStalledNotThreadSafe() {
       if (isDeframerScheduledToClose() || !isDeframerStalled()) {

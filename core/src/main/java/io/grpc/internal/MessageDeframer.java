@@ -114,13 +114,34 @@ public class MessageDeframer {
   private final String debugString;
   private final Producer producer = new Producer();
 
+  // TODO(ericgribkoff) Stronger documentation/checks that this is only safe to call before the
+  // stream starts.
+  private int maxInboundMessageSize;
+  // TODO(ericgribkoff) Stronger documentation/checks that this is only called once and before
+  // messages are processed.
+  private Decompressor decompressor;
+
+  // unprocessed and pendingDeliveries both track pending work for the message producer, but
+  // at different levels of granularity - unprocessed is made up of http2 data frames and
+  // pendingDeliveries tracks the number of gRPC messages requested by the application and not yet
+  // delivered.
   private CompositeReadableBuffer unprocessed = new CompositeReadableBuffer();
   private final AtomicInteger pendingDeliveries = new AtomicInteger();
-  private volatile int maxInboundMessageSize; // only written by transport thread.
-  private volatile Decompressor decompressor; // only written by transport thread.
-  private volatile boolean endOfStream; // only written by transport thread
-  private volatile boolean closed; // only written by client thread
+
+  // Only changed by servers when remote endpoint half-closes. Must handle synchronization if server
+  // moves deframing to app thread.
+  private boolean endOfStream;
+
+  // This serves as an interrupt bit for the transport thread to schedule a close on the message
+  // producer thread. This will only ever change from false to true.
+  // From the point of view of the transport thread, the deframer is closed as soon as
+  // closeScheduled is called. TODO: dangerous...can only schedule when stalled?
   private volatile boolean closeScheduled; // only written by transport thread
+
+  // TODO(ericgribkoff) API goal:
+  // scheduleClose() tells the message deframer to close when ready. (Possible additional volatile
+  // "interrupt" bit to correspond to transportReportStatus's stopDelivery flag.) The producer then
+  // sends a callback once close has actually occurred.
 
   /**
    * Create a deframer.
@@ -208,6 +229,9 @@ public class MessageDeframer {
    */
   // TODO(ericgribkoff) Handle when unprocessed contains data but not enough to process a complete
   // message.
+  // TODO(ericgribkoff) Remove this method? Also, validate that unprocessed should not contain data
+  // but not enough to process a complete message (this should all be in nextFrame), although this
+  // could happen while producer.next() is running.
   public boolean isStalled() {
     // Needs to be checked dynamically, since stalled will only be updated once we start processing
     // the data. This won't happen right away if the client has not request()ed any additional
@@ -221,17 +245,16 @@ public class MessageDeframer {
    */
   public void scheduleClose() {
     closeScheduled = true;
-    if (!closed) {
-      // make sure that the message producer will see the schedule close.
-      listener.messageProducerAvailable(producer);
-    }
+    // make sure that the message producer will see the scheduled close.
+    // TODO(ericgribkoff) Switch to lighter-weight method?
+    listener.messageProducerAvailable(producer);
   }
 
   /**
    * Indicates whether or not this deframer has been closed.
    */
   public boolean isScheduledToClose() {
-    return closed || closeScheduled;
+    return closeScheduled;
   }
 
   /**
@@ -246,6 +269,7 @@ public class MessageDeframer {
     private int requiredLength = HEADER_LENGTH;
     private boolean compressedFlag;
     private boolean inDelivery = false;
+    private boolean closed;
 
     private CompositeReadableBuffer nextFrame;
 
@@ -355,6 +379,8 @@ public class MessageDeframer {
         return;
       }
 
+      // TODO(ericgribkoff) This should be if (stalled && closeScheduled) - essentially
+      // closeScheduled tells the producer that the transport is waiting for a closure.
       if (stalled) {
         // Always notify if stalled. Otherwise, the transport may schedule a message on a stalled
         // deframer, then receive the trailers and set their delivery to the client as the
