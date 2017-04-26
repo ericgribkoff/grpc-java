@@ -285,14 +285,6 @@ public abstract class AbstractClientStream2 extends AbstractStream2
       Preconditions.checkNotNull(status, "status");
       Preconditions.checkNotNull(trailers, "trailers");
       // If stopDelivery, we continue in case previous invocation is waiting for stall
-//      System.out.println("transportReportStatus invoked with statusReported: " + statusReported
-//          + " and " +  "stopDelivery: " + stopDelivery);
-//      System.out.println("isDeframerScheduledToClose(): " + isDeframerScheduledToClose());
-//      System.out.println("deliveryStalledTask = " + deliveryStalledTask);
-//      System.out.println(this.hashCode());
-//      for (StackTraceElement ste : Thread.currentThread().getStackTrace()) {
-//        System.out.println(ste);
-//      }
       if (statusReported && !stopDelivery) {
         return;
       }
@@ -313,14 +305,12 @@ public abstract class AbstractClientStream2 extends AbstractStream2
         closeListener(status, trailers);
 
       } else {
-//        System.out.println("SETTING deliveryStalledTask");
         deliveryStalledTask = new Runnable() {
           @Override
           public void run() {
             closeListener(status, trailers);
           }
         };
-//        System.out.println("deliveryStalledTask = " + deliveryStalledTask);
         scheduleDeframerClose();
       }
     }
@@ -330,12 +320,6 @@ public abstract class AbstractClientStream2 extends AbstractStream2
      * outside the transport-thread. Subclasses must invoke this message from the transport thread.
      */
     protected void deliveryStalledNotThreadSafe() {
-//      System.out.println("deliveryStalledNotThreadSafe invoked");
-//      System.out.println(deliveryStalledTask);
-//      System.out.println(this);
-//      for (StackTraceElement ste : Thread.currentThread().getStackTrace()) {
-//        System.out.println(ste);
-//      }
       // TODO(ericgribkoff) Make sure this can never be null
       // TODO(ericgribkoff) With a direct executor or OkHttp, stopDelivery=true in
       // transportReportStatus will lead to a direct call to producer.next()

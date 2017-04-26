@@ -104,9 +104,6 @@ public class MessageDeframer {
   public interface MessageProducer {
     @Nullable
     InputStream next();
-
-    @VisibleForTesting
-    void checkEndOfStreamOrStalled();
   }
 
 
@@ -125,11 +122,9 @@ public class MessageDeframer {
   // TODO(ericgribkoff) Stronger documentation/checks that this is only called once and before
   // messages are processed.
   private Decompressor decompressor;
-
   // Set to true when request() is called. Used to trigger error when attempting to set
   // maxInboundMessageSize too late.
   private boolean requestCalled;
-
   // Set to true when deframe() is called. Used to trigger error when attempting to set decompressor
   // too late.
   private boolean deframeCalled;
@@ -263,12 +258,6 @@ public class MessageDeframer {
   public void scheduleClose() {
     Preconditions.checkState(!closeScheduled, "close already scheduled");
     closeScheduled = true;
-//    if (client) {
-//      System.out.println("scheduleClose() called");
-//      for (StackTraceElement ste : Thread.currentThread().getStackTrace()) {
-//        System.out.println(ste);
-//      }
-//    }
     // make sure that the message producer will see the scheduled close.
     // TODO(ericgribkoff) Switch to lighter-weight method?
     listener.messageProducerAvailable(producer);
@@ -287,6 +276,9 @@ public class MessageDeframer {
     private boolean compressedFlag;
     private boolean inDelivery = false;
     private boolean closed;
+    // Indicates a deframing error occurred. When this is set, deframeFailed() must be called
+    // on the listener and no further callbacks should be issued by the producer, as it is likely
+    // in an unrecoverable state.
     private boolean error;
 
     private CompositeReadableBuffer nextFrame;
@@ -313,13 +305,6 @@ public class MessageDeframer {
      */
     @Override
     public InputStream next() {
-//      if (client) {
-//        System.out.println("next() called");
-//        for (StackTraceElement ste : Thread.currentThread().getStackTrace()) {
-//          System.out.println(ste);
-//        }
-//      }
-
       if (error) {
         return null;
       }
@@ -335,18 +320,17 @@ public class MessageDeframer {
         // Process the uncompressed bytes.
         while (pendingDeliveries.get() > 0 && readRequiredBytes()) {
           switch (state) {
-            // TODO(ericgribkoff) Rather than return boolean to indicate error from processHeader()
-            //   and processBody(), set an error member variable?
             case HEADER:
-              if (!processHeader()) {
+              processHeader();
+              if (error) {
                 // Error occurred
                 return null;
               }
               break;
             case BODY:
-              InputStream toReturn;
               // Read the body and deliver the message.
-              if ((toReturn = processBody()) == null) {
+              InputStream toReturn = processBody();
+              if (error) {
                 // Error occurred
                 return null;
               }
@@ -368,9 +352,7 @@ public class MessageDeframer {
       }
     }
 
-    @Override
-    public void checkEndOfStreamOrStalled() {
-      //TODO(ericgribkoff) If tests can be modified, make this private and not part of interface.
+    private void checkEndOfStreamOrStalled() {
       if (closed) {
         return;
       }
@@ -392,7 +374,6 @@ public class MessageDeframer {
       stalled = unprocessed.readableBytes() == 0;
 
       if (stalled && closeNow) {
-//        System.out.println("reached this block with endOfStream " + endOfStream);
         // The transport already scheduled a close, so we do not need to notify it.
         close();
 
@@ -460,10 +441,8 @@ public class MessageDeframer {
     /**
      * Processes the GRPC compression header which is composed of the compression flag and the outer
      * frame length.
-     *
-     * @return false if error occurred
      */
-    private boolean processHeader() {
+    private void processHeader() {
       int type = nextFrame.readUnsignedByte();
       if ((type & RESERVED_MASK) != 0) {
         error = true;
@@ -471,7 +450,7 @@ public class MessageDeframer {
             debugString + ": Frame header malformed: reserved bits not zero")
             .asRuntimeException();
         listener.deframeFailed(t);
-        return false;
+        return;
       }
       compressedFlag = (type & COMPRESSED_FLAG_MASK) != 0;
 
@@ -483,12 +462,11 @@ public class MessageDeframer {
             String.format("%s: Frame size %d exceeds maximum: %d. ",
                 debugString, requiredLength, maxInboundMessageSize)).asRuntimeException();
         listener.deframeFailed(t);
-        return false;
+        return;
       }
       statsTraceCtx.inboundMessage();
       // Continue reading the frame body.
       state = State.BODY;
-      return true;
     }
 
     /**

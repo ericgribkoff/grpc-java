@@ -578,7 +578,6 @@ public class NettyClientTransportTest {
       while ((message = mp.next()) != null) {
         messageRead(message);
       }
-      mp.checkEndOfStreamOrStalled();
     }
 
     @Override

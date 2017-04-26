@@ -119,7 +119,6 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
         while ((message = mp.next()) != null) {
           listener.messageRead(message);
         }
-        mp.checkEndOfStreamOrStalled();
         return null;
       }
     }).when(listener).messageProducerAvailable(any(MessageProducer.class));

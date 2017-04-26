@@ -174,7 +174,6 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
         while ((message = mp.next()) != null) {
           streamListener.messageRead(message);
         }
-        mp.checkEndOfStreamOrStalled();
         return null;
       }
     }).when(streamListener).messageProducerAvailable(any(MessageProducer.class));

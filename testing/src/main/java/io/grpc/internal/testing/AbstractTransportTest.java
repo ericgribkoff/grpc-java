@@ -203,8 +203,6 @@ public abstract class AbstractTransportTest {
           while ((message = mp.next()) != null) {
             mockClientStreamListener.messageRead(message);
           }
-          // TODO(ericgribkoff) Don't need to call checkEndOfStreamOrStalled, remove
-//          mp.checkEndOfStreamOrStalled();
           return null;
         } catch (Exception e) {
           System.out.println(e);
@@ -378,7 +376,6 @@ public abstract class AbstractTransportTest {
         while ((message = mp.next()) != null) {
           mockServerStreamListener.messageRead(message);
         }
-        mp.checkEndOfStreamOrStalled();
         return null;
       }
     }).when(mockServerStreamListener).messageProducerAvailable(any(MessageProducer.class));
@@ -709,7 +706,6 @@ public abstract class AbstractTransportTest {
         while ((message = mp.next()) != null) {
           mockServerStreamListener.messageRead(message);
         }
-        mp.checkEndOfStreamOrStalled();
         return null;
       }
     }).when(mockServerStreamListener).messageProducerAvailable(any(MessageProducer.class));
@@ -853,7 +849,6 @@ public abstract class AbstractTransportTest {
         while ((message = mp.next()) != null) {
           mockServerStreamListener.messageRead(message);
         }
-        mp.checkEndOfStreamOrStalled();
         return null;
       }
     }).when(mockServerStreamListener).messageProducerAvailable(any(MessageProducer.class));
@@ -1074,7 +1069,6 @@ public abstract class AbstractTransportTest {
         while ((message = mp.next()) != null) {
           messageRead(message);
         }
-        mp.checkEndOfStreamOrStalled();
       }
 
       @Override

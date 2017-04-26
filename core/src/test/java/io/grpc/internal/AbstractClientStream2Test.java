@@ -93,7 +93,6 @@ public class AbstractClientStream2Test {
         while ((message = mp.next()) != null) {
           mockListener.messageRead(message);
         }
-        mp.checkEndOfStreamOrStalled();
         return null;
       }
     }).when(mockListener).messageProducerAvailable(any(MessageProducer.class));

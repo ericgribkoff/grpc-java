@@ -75,7 +75,6 @@ public class Http2ClientStreamTransportStateTest {
         while ((message = mp.next()) != null) {
           mockListener.messageRead(message);
         }
-        mp.checkEndOfStreamOrStalled();
         return null;
       }
     }).when(mockListener).messageProducerAvailable(any(MessageProducer.class));
