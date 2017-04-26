@@ -247,7 +247,6 @@ class OkHttpClientStream extends AbstractClientStream2 {
       cancel(status, trailers);
     }
 
-    @GuardedBy("lock")
     @Override
     public void deframeFailed(Throwable cause) {
       synchronized (lock) {

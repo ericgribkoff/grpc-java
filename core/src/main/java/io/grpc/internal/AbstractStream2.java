@@ -113,10 +113,12 @@ public abstract class AbstractStream2 implements Stream {
   }
 
   /**
-   * Stream state as used by the transport. This should only called from the transport thread
+   * Stream state as used by the transport. {@code MessageProducer.Listener} methods will be called
+   * from the deframing thread. Other methods this should only be called from the transport thread
    * (except for private interactions with {@code AbstractStream2}).
    */
-  public abstract static class TransportState implements MessageDeframer.Listener {
+  public abstract static class TransportState implements MessageDeframer.Listener,
+      MessageProducer.Listener {
     /**
      * The default number of queued bytes for a given stream, below which
      * {@link StreamListener#onReady()} will be called.
@@ -154,8 +156,8 @@ public abstract class AbstractStream2 implements Stream {
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
       this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
       deframer = new MessageDeframer(
-          this, Codec.Identity.NONE, maxMessageSize, statsTraceCtx, getClass().getName(),
-          isClient());
+          this, this, Codec.Identity.NONE, maxMessageSize, statsTraceCtx,
+          getClass().getName(), isClient());
     }
 
     final void setMaxInboundMessageSize(int maxSize) {

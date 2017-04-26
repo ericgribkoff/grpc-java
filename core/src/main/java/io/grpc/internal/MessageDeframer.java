@@ -65,37 +65,6 @@ public class MessageDeframer {
      * Called to schedule deframing in the application thread. Invoked from transport thread.
      */
     void messageProducerAvailable(MessageProducer mp);
-
-    /**
-     * Called when the given number of bytes has been read from the input source of the deframer.
-     * This is typically used to indicate to the underlying transport that more data can be
-     * accepted. Invoked from the message producer thread.
-     *
-     * @param numBytes the number of bytes read from the deframer's input source.
-     */
-    void bytesRead(int numBytes);
-
-    /**
-     * Called when end-of-stream has not yet been reached but there are no complete messages
-     * remaining to be delivered. Invoked from the message producer thread.
-     */
-    // TODO(ericgribkoff) No-op on server
-    void deliveryStalled();
-
-    /**
-     * Called when the stream is complete and all messages have been successfully delivered.
-     * Invoked from the message producer thread.
-     */
-    // TODO(ericgribkoff) Same effect as calling deliveryStalled for clients, but never invoked
-    // (since endOfStream is always false)
-    void endOfStream();
-
-    /**
-     * Called when deframe fails. Invoked from the message producer thread. If invoked, this will be
-     * the last call made to the listener (other than messageProducerAvailable(), which should be
-     * a separate interface), as the deframing is in an unrecoverable state.
-     */
-    void deframeFailed(Throwable t);
   }
 
   /**
@@ -104,6 +73,38 @@ public class MessageDeframer {
   public interface MessageProducer {
     @Nullable
     InputStream next();
+
+    interface Listener {
+      /**
+       * Called when the given number of bytes has been read from the input source of the deframer.
+       * This is typically used to indicate to the underlying transport that more data can be
+       * accepted.
+       *
+       * @param numBytes the number of bytes read from the deframer's input source.
+       */
+      void bytesRead(int numBytes);
+
+      /**
+       * Called when end-of-stream has not yet been reached but there are no complete messages
+       * remaining to be delivered.
+       */
+      // TODO(ericgribkoff) No-op on server
+      void deliveryStalled();
+
+      /**
+       * Called when the stream is complete and all messages have been successfully delivered.
+       */
+      // TODO(ericgribkoff) Same effect as calling deliveryStalled for clients, but never invoked
+      // (since endOfStream is always false)
+      void endOfStream();
+
+      /**
+       * Called when deframe fails. If invoked, this will be
+       * the last call made to the listener (other than messageProducerAvailable(), which should be
+       * a separate interface), as the deframing is in an unrecoverable state.
+       */
+      void deframeFailed(Throwable t);
+    }
   }
 
 
@@ -114,7 +115,7 @@ public class MessageDeframer {
   private final Listener listener;
   private final StatsTraceContext statsTraceCtx;
   private final String debugString;
-  private final Producer producer = new Producer();
+  private final Producer producer;
 
   // TODO(ericgribkoff) Stronger documentation/checks that this is only safe to call before the
   // stream starts.
@@ -163,13 +164,15 @@ public class MessageDeframer {
    * @param maxMessageSize the maximum allowed size for received messages.
    * @param debugString a string that will appear on errors statuses
    */
-  public MessageDeframer(Listener listener, Decompressor decompressor, int maxMessageSize,
-      StatsTraceContext statsTraceCtx, String debugString, boolean client) {
+  public MessageDeframer(Listener listener, MessageProducer.Listener producerListener,
+      Decompressor decompressor, int maxMessageSize, StatsTraceContext statsTraceCtx,
+      String debugString, boolean client) {
     this.listener = Preconditions.checkNotNull(listener, "sink");
     this.decompressor = Preconditions.checkNotNull(decompressor, "decompressor");
     this.maxInboundMessageSize = maxMessageSize;
     this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
     this.debugString = debugString;
+    this.producer = new Producer(checkNotNull(producerListener, "producerListener"));
     // TODO(ericgribkoff) Remove
     this.client = client;
   }
@@ -273,6 +276,7 @@ public class MessageDeframer {
   }
 
   private class Producer implements MessageProducer {
+    private final MessageProducer.Listener producerListener;
     private State state = State.HEADER;
     private int requiredLength = HEADER_LENGTH;
     private boolean compressedFlag;
@@ -284,6 +288,10 @@ public class MessageDeframer {
     private boolean error;
 
     private CompositeReadableBuffer nextFrame;
+
+    private Producer(MessageProducer.Listener producerListener) {
+      this.producerListener = producerListener;
+    }
 
     // Preconditions: closed = false
     private void close() {
@@ -344,7 +352,7 @@ public class MessageDeframer {
             default:
               error = true;
               AssertionError t = new AssertionError("Invalid state: " + state);
-              listener.deframeFailed(t);
+              producerListener.deframeFailed(t);
               return null;
           }
         }
@@ -380,7 +388,7 @@ public class MessageDeframer {
 
         // TODO(ericgribkoff) Actually, this is the only time the client listener will actually care
         // about stalled, so notify it:
-        listener.deliveryStalled();
+        producerListener.deliveryStalled();
         return;
       }
 
@@ -392,14 +400,14 @@ public class MessageDeframer {
           // deframe() is not atomic. Ok for clients, as endOfStream() just calls deliveryStalled().
           // Further, since endOfStream() ends up calling onCompleted() on the local stream
           // observer, it must only be called once or a guard added to AbstractServerStream.
-          listener.endOfStream();
+          producerListener.endOfStream();
         } else {
           error = true;
           // We've received the entire stream and have data available but we don't have
           // enough to read the next frame ... this is bad.
           RuntimeException t = Status.INTERNAL.withDescription(
               debugString + ": Encountered end-of-stream mid-frame").asRuntimeException();
-          listener.deframeFailed(t);
+          producerListener.deframeFailed(t);
         }
         return;
       }
@@ -431,7 +439,7 @@ public class MessageDeframer {
         return true;
       } finally {
         if (totalBytesRead > 0) {
-          listener.bytesRead(totalBytesRead);
+          producerListener.bytesRead(totalBytesRead);
           if (state == State.BODY) {
             statsTraceCtx.inboundWireSize(totalBytesRead);
           }
@@ -450,7 +458,7 @@ public class MessageDeframer {
         RuntimeException t = Status.INTERNAL.withDescription(
             debugString + ": Frame header malformed: reserved bits not zero")
             .asRuntimeException();
-        listener.deframeFailed(t);
+        producerListener.deframeFailed(t);
         return;
       }
       compressedFlag = (type & COMPRESSED_FLAG_MASK) != 0;
@@ -462,7 +470,7 @@ public class MessageDeframer {
         RuntimeException t = Status.RESOURCE_EXHAUSTED.withDescription(
             String.format("%s: Frame size %d exceeds maximum: %d. ",
                 debugString, requiredLength, maxInboundMessageSize)).asRuntimeException();
-        listener.deframeFailed(t);
+        producerListener.deframeFailed(t);
         return;
       }
       statsTraceCtx.inboundMessage();
@@ -504,7 +512,7 @@ public class MessageDeframer {
         RuntimeException t = Status.INTERNAL.withDescription(
             debugString + ": Can't decode compressed frame as compression not configured.")
             .asRuntimeException();
-        listener.deframeFailed(t);
+        producerListener.deframeFailed(t);
         return null;
       }
 
@@ -517,7 +525,7 @@ public class MessageDeframer {
       } catch (IOException e) {
         error = true;
         RuntimeException t = new RuntimeException(e);
-        listener.deframeFailed(t);
+        producerListener.deframeFailed(t);
         return null;
       }
     }

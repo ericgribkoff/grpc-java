@@ -202,7 +202,10 @@ class NettyClientStream extends AbstractClientStream2 {
     }
   }
 
-  /** This should only called from the transport thread or via the message producer. */
+  /**
+   * {@code MessageProducer.Listener} methods will be called from the deframing thread. Other
+   * methods should only be called from the transport thread.
+   */
   public abstract static class TransportState extends Http2ClientStreamTransportState
       implements StreamIdHolder {
     private final NettyClientHandler handler;
@@ -263,7 +266,6 @@ class NettyClientStream extends AbstractClientStream2 {
 
     @Override
     public final void deliveryStalled() {
-      System.out.println("delivery stalled called");
       if (eventLoop.inEventLoop()) {
         deliveryStalledNotThreadSafe();
       } else {
@@ -276,6 +278,7 @@ class NettyClientStream extends AbstractClientStream2 {
       }
     }
 
+    // TODO(ericgribkoff) Never called
     @Override
     public final void endOfStream() {
       if (eventLoop.inEventLoop()) {

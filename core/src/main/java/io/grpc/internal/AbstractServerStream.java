@@ -183,7 +183,10 @@ public abstract class AbstractServerStream extends AbstractStream2
     return statsTraceCtx;
   }
 
-  /** This should only called from the transport thread. */
+  /**
+   * {@code MessageProducer.Listener} methods will be called from the deframing thread. Other
+   * methods should only be called from the transport thread.
+   */
   protected abstract static class TransportState extends AbstractStream2.TransportState {
     /** Whether listener.closed() has been called. */
     private boolean listenerClosed;
