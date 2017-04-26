@@ -255,6 +255,8 @@ public class MessageDeframer {
    * transport thread.
    */
   // Preconditions: not already scheduled to close
+  // Postconditions: closeScheduled = true
+  //   triggers call to listener.messageProducerAvailable
   public void scheduleClose() {
     Preconditions.checkState(!closeScheduled, "close already scheduled");
     closeScheduled = true;
@@ -309,6 +311,7 @@ public class MessageDeframer {
         return null;
       }
       if (closed) {
+        // May be called after close by previously scheduled messageProducerAvailable() calls
         return null;
       }
       if (inDelivery) {
@@ -353,9 +356,7 @@ public class MessageDeframer {
     }
 
     private void checkEndOfStreamOrStalled() {
-      if (closed) {
-        return;
-      }
+      Preconditions.checkState(!closed, "closed");
 
       // TODO(ericgribkoff) Remove this check
       if (error) {
