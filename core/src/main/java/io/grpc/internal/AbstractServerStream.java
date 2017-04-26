@@ -271,7 +271,9 @@ public abstract class AbstractServerStream extends AbstractStream2
         }
         listenerClosed = true;
         onStreamDeallocated();
-        scheduleDeframerClose();
+        if (!isDeframerScheduledToClose()) {
+          scheduleDeframerClose();
+        }
         listener().closed(newStatus);
       }
     }

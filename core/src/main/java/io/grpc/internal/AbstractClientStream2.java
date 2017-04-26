@@ -201,6 +201,11 @@ public abstract class AbstractClientStream2 extends AbstractStream2
       this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
     }
 
+    @Override
+    protected boolean isClient() {
+      return true;
+    }
+
     @VisibleForTesting
     public final void setListener(ClientStreamListener listener) {
       Preconditions.checkState(this.listener == null, "Already called setListener");
@@ -280,6 +285,14 @@ public abstract class AbstractClientStream2 extends AbstractStream2
       Preconditions.checkNotNull(status, "status");
       Preconditions.checkNotNull(trailers, "trailers");
       // If stopDelivery, we continue in case previous invocation is waiting for stall
+//      System.out.println("transportReportStatus invoked with statusReported: " + statusReported
+//          + " and " +  "stopDelivery: " + stopDelivery);
+//      System.out.println("isDeframerScheduledToClose(): " + isDeframerScheduledToClose());
+//      System.out.println("deliveryStalledTask = " + deliveryStalledTask);
+//      System.out.println(this.hashCode());
+//      for (StackTraceElement ste : Thread.currentThread().getStackTrace()) {
+//        System.out.println(ste);
+//      }
       if (statusReported && !stopDelivery) {
         return;
       }
@@ -288,17 +301,27 @@ public abstract class AbstractClientStream2 extends AbstractStream2
 
       // If not stopping delivery, then we must wait until the deframer is stalled (i.e., it has no
       // complete messages to deliver).
-      if (stopDelivery || isDeframerStalled()) {
-        // Broken: cannot interrupt deframer in app thread this easily.
-        deliveryStalledTask = null;
+      if (stopDelivery) {
+        // TODO(ericgribkoff) Ensure this is only the case when deframeFailed is true, or the
+        // messageDeframer is otherwise in a end state and will not be producing additional
+        // messages.
+        if (!isDeframerScheduledToClose()) {
+          // A previous call (such as inbound trailers) may have scheduled a close, but if there was
+          // a deframing error this method will be reinvoked with stopDelivery=true.
+          scheduleDeframerClose();
+        }
         closeListener(status, trailers);
+
       } else {
+//        System.out.println("SETTING deliveryStalledTask");
         deliveryStalledTask = new Runnable() {
           @Override
           public void run() {
             closeListener(status, trailers);
           }
         };
+//        System.out.println("deliveryStalledTask = " + deliveryStalledTask);
+        scheduleDeframerClose();
       }
     }
 
@@ -307,9 +330,18 @@ public abstract class AbstractClientStream2 extends AbstractStream2
      * outside the transport-thread. Subclasses must invoke this message from the transport thread.
      */
     protected void deliveryStalledNotThreadSafe() {
-      if (isDeframerScheduledToClose() || !isDeframerStalled()) {
-        return;
-      }
+//      System.out.println("deliveryStalledNotThreadSafe invoked");
+//      System.out.println(deliveryStalledTask);
+//      System.out.println(this);
+//      for (StackTraceElement ste : Thread.currentThread().getStackTrace()) {
+//        System.out.println(ste);
+//      }
+      // TODO(ericgribkoff) Make sure this can never be null
+      // TODO(ericgribkoff) With a direct executor or OkHttp, stopDelivery=true in
+      // transportReportStatus will lead to a direct call to producer.next()
+      // which will trigger delivery stalled without a delivery stalled task set...
+      // don't like this design.
+      //Preconditions.checkState(deliveryStalledTask != null, "deliveryStalledTask is null");
       if (deliveryStalledTask != null) {
         deliveryStalledTask.run();
         deliveryStalledTask = null;
@@ -322,9 +354,9 @@ public abstract class AbstractClientStream2 extends AbstractStream2
      * @throws IllegalStateException if the call has not yet been started.
      */
     private void closeListener(Status status, Metadata trailers) {
+      Preconditions.checkState(isDeframerScheduledToClose(), "deframe not scheduled to close");
       if (!listenerClosed) {
         listenerClosed = true;
-        scheduleDeframerClose();
         statsTraceCtx.streamClosed(status);
         listener().closed(status, trailers);
       }

@@ -197,13 +197,19 @@ public abstract class AbstractTransportTest {
     doAnswer(new Answer<Void>() {
       @Override
       public Void answer(InvocationOnMock invocation) {
-        MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
-        InputStream message;
-        while ((message = mp.next()) != null) {
-          mockClientStreamListener.messageRead(message);
+        try {
+          MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
+          InputStream message;
+          while ((message = mp.next()) != null) {
+            mockClientStreamListener.messageRead(message);
+          }
+          // TODO(ericgribkoff) Don't need to call checkEndOfStreamOrStalled, remove
+//          mp.checkEndOfStreamOrStalled();
+          return null;
+        } catch (Exception e) {
+          System.out.println(e);
+          return null;
         }
-        mp.checkEndOfStreamOrStalled();
-        return null;
       }
     }).when(mockClientStreamListener).messageProducerAvailable(any(MessageProducer.class));
   }
@@ -1178,13 +1184,17 @@ public abstract class AbstractTransportTest {
     doAnswer(new Answer<Void>() {
       @Override
       public Void answer(InvocationOnMock invocation) {
-        MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
-        InputStream message;
-        while ((message = mp.next()) != null) {
-          mockServerStreamListener.messageRead(message);
+        try {
+          MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
+          InputStream message;
+          while ((message = mp.next()) != null) {
+            mockServerStreamListener.messageRead(message);
+          }
+          return null;
+        } catch (Exception e) {
+          System.out.println(e);
+          return null;
         }
-        mp.checkEndOfStreamOrStalled();
-        return null;
       }
     }).when(mockServerStreamListener).messageProducerAvailable(any(MessageProducer.class));
     serverStream.writeHeaders(new Metadata());
@@ -1340,7 +1350,24 @@ public abstract class AbstractTransportTest {
     ManagedClientTransport client = newClientTransport(server);
     runIfNotNull(client.start(mock(ManagedClientTransport.Listener.class)));
     ClientStream clientStream = client.newStream(methodDescriptor, new Metadata(), callOptions);
-    ClientStreamListener mockClientStreamListener = mock(ClientStreamListener.class);
+    final ClientStreamListener mockClientStreamListener = mock(ClientStreamListener.class);
+
+    doAnswer(new Answer<Void>() {
+      @Override
+      public Void answer(InvocationOnMock invocation) {
+        try {
+          MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
+          InputStream message;
+          while ((message = mp.next()) != null) {
+            mockClientStreamListener.messageRead(message);
+          }
+          return null;
+        } catch (Exception e) {
+          System.out.println(e);
+          return null;
+        }
+      }
+    }).when(mockClientStreamListener).messageProducerAvailable(any(MessageProducer.class));
     clientStream.start(mockClientStreamListener);
 
     MockServerTransportListener serverTransportListener

@@ -263,6 +263,7 @@ class NettyClientStream extends AbstractClientStream2 {
 
     @Override
     public final void deliveryStalled() {
+      System.out.println("delivery stalled called");
       if (eventLoop.inEventLoop()) {
         deliveryStalledNotThreadSafe();
       } else {

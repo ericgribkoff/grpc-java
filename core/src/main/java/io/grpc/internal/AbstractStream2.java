@@ -146,10 +146,16 @@ public abstract class AbstractStream2 implements Stream {
     @GuardedBy("onReadyLock")
     private boolean deallocated;
 
+    // TODO(ericgribkoff) Remove
+    protected boolean isClient() {
+      return false;
+    }
+
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
       this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
       deframer = new MessageDeframer(
-          this, Codec.Identity.NONE, maxMessageSize, statsTraceCtx, getClass().getName());
+          this, Codec.Identity.NONE, maxMessageSize, statsTraceCtx, getClass().getName(),
+          isClient());
     }
 
     final void setMaxInboundMessageSize(int maxSize) {
@@ -163,6 +169,10 @@ public abstract class AbstractStream2 implements Stream {
 
     @Override
     public void messageProducerAvailable(MessageProducer mp) {
+//      if (isClient()) {
+//        System.out.println("AbstractStream2.messageProducerAvailable() called");
+//        System.out.println("listener()=" + listener());
+//      }
       // TODO(ericgribkoff) listener() can return null here, at least for ServerStream via
       //   setListener() - this occurs in io.grpc.internal.ServerTransportListener.streamCreated(),
       //   as the stream listener initialization hits request before it's actually added to the
@@ -170,13 +180,6 @@ public abstract class AbstractStream2 implements Stream {
       if (listener() != null) {
         listener().messageProducerAvailable(mp);
       }
-    }
-
-    /**
-     * Indicates whether delivery is currently stalled, pending receipt of more data.
-     */
-    protected final boolean isDeframerStalled() {
-      return deframer.isStalled();
     }
 
     /**
@@ -199,6 +202,7 @@ public abstract class AbstractStream2 implements Stream {
      */
     protected final void deframe(ReadableBuffer frame, boolean endOfStream) {
       if (isDeframerScheduledToClose()) {
+//        System.out.println("not deframing since deframer scheduled to close");
         frame.close();
         return;
       }
@@ -219,9 +223,6 @@ public abstract class AbstractStream2 implements Stream {
      * from the transport thread.
      */
     public final void requestMessagesFromDeframer(int numMessages) {
-      if (isDeframerScheduledToClose()) {
-        return;
-      }
       try {
         deframer.request(numMessages);
       } catch (Throwable t) {
@@ -240,6 +241,7 @@ public abstract class AbstractStream2 implements Stream {
 
     private void setDecompressor(Decompressor decompressor) {
       if (isDeframerScheduledToClose()) {
+//        System.out.println("not setting decompressor since deframer scheduled to close");
         return;
       }
       deframer.setDecompressor(decompressor);

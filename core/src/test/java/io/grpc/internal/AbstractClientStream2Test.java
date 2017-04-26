@@ -350,7 +350,9 @@ public class AbstractClientStream2Test {
     public void bytesRead(int processedBytes) {}
 
     @Override
-    public final void deliveryStalled() {}
+    public final void deliveryStalled() {
+      deliveryStalledNotThreadSafe();
+    }
 
     @Override
     public final void endOfStream() {}
