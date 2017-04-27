@@ -254,8 +254,7 @@ public class MessageDeframer {
   }
 
   /**
-   * Schedule close in the client thread once any buffered messages are processed. Called from
-   * transport thread.
+   * Schedule close in the client thread once any buffered messages are processed.
    */
   // Preconditions: not already scheduled to close
   // Postconditions: closeScheduled = true
@@ -366,10 +365,6 @@ public class MessageDeframer {
     private void checkEndOfStreamOrStalled() {
       Preconditions.checkState(!closed, "closed");
 
-      // TODO(ericgribkoff) Remove this check
-      if (error) {
-        return;
-      }
       /*
        * We are stalled when there are no more bytes to process. This allows delivering errors as
        * soon as the buffered input has been consumed, independent of whether the application
