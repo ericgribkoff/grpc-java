@@ -370,11 +370,8 @@ public class Http2ClientStreamTransportStateTest {
     public void bytesRead(int processedBytes) {}
 
     @Override
-    public void deliveryStalled() {
-      deliveryStalledNotThreadSafe();
+    public void messageProducerClosed(boolean hasPartialMessageIgnored) {
+      messageProducerClosedNotThreadSafe();
     }
-
-    @Override
-    public void endOfStream() {}
   }
 }

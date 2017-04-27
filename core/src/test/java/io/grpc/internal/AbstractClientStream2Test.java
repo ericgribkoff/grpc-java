@@ -349,11 +349,8 @@ public class AbstractClientStream2Test {
     public void bytesRead(int processedBytes) {}
 
     @Override
-    public final void deliveryStalled() {
-      deliveryStalledNotThreadSafe();
+    public final void messageProducerClosed(boolean hasPartialMessageIgnored) {
+      messageProducerClosedNotThreadSafe();
     }
-
-    @Override
-    public final void endOfStream() {}
   }
 }

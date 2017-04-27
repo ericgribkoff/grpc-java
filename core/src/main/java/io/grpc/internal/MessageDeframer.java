@@ -87,16 +87,9 @@ public class MessageDeframer {
       /**
        * Called when end-of-stream has not yet been reached but there are no complete messages
        * remaining to be delivered.
+       * @param hasPartialMessage whether there is an incomplete message queued
        */
-      // TODO(ericgribkoff) No-op on server
-      void deliveryStalled();
-
-      /**
-       * Called when the stream is complete and all messages have been successfully delivered.
-       */
-      // TODO(ericgribkoff) Same effect as calling deliveryStalled for clients, but never invoked
-      // (since endOfStream is always false)
-      void endOfStream();
+      void messageProducerClosed(boolean hasPartialMessage);
 
       /**
        * Called when deframe fails. If invoked, this will be
@@ -106,7 +99,6 @@ public class MessageDeframer {
       void deframeFailed(Throwable t);
     }
   }
-
 
   private enum State {
     HEADER, BODY
@@ -136,10 +128,6 @@ public class MessageDeframer {
   // delivered.
   private CompositeReadableBuffer unprocessed = new CompositeReadableBuffer();
   private final AtomicInteger pendingDeliveries = new AtomicInteger();
-
-  // Only changed by servers when remote endpoint half-closes. Must handle synchronization if server
-  // moves deframing to app thread.
-  private boolean endOfStream;
 
   // This serves as an interrupt bit for the transport thread to schedule a close on the message
   // producer thread. This will only ever change from false to true.
@@ -223,13 +211,10 @@ public class MessageDeframer {
    * Adds the given data to this deframer and attempts delivery to the listener.
    *
    * @param data the raw data read from the remote endpoint. Must be non-null.
-   * @param endOfStream if {@code true}, indicates that {@code data} is the end of the stream from
-   *     the remote endpoint. End of stream should not be used in the event of a transport error,
-   *     such as a stream reset.
    * @throws IllegalStateException if already scheduled to close or if this method has previously
    *     been called with {@code endOfStream=true}.
    */
-  // Preconditions: not scheduled to close, not already past end of stream
+  // Preconditions: not scheduled to close
   // Postconditions: data will be added to unprocessed
   //   triggers call to listener.messageProducerAvailable
   public void deframe(ReadableBuffer data, boolean endOfStream) {
@@ -238,13 +223,11 @@ public class MessageDeframer {
     boolean needToCloseData = true;
     try {
       Preconditions.checkState(!isScheduledToClose(), "MessageDeframer already scheduled to close");
-      Preconditions.checkState(!this.endOfStream, "Past end of stream");
 
       unprocessed.addBuffer(data);
       needToCloseData = false;
 
       // Indicate that all of the data for this stream has been received.
-      this.endOfStream = endOfStream;
       listener.messageProducerAvailable(producer);
     } finally {
       if (needToCloseData) {
@@ -281,9 +264,8 @@ public class MessageDeframer {
     private boolean compressedFlag;
     private boolean inDelivery = false;
     private boolean closed;
-    // Indicates a deframing error occurred. When this is set, deframeFailed() must be called
-    // on the listener and no further callbacks should be issued by the producer, as it is likely
-    // in an unrecoverable state.
+    // Indicates a deframing error occurred. When this is set to true, deframeFailed() must be
+    // called on the listener and no further callbacks will be issued by the producer.
     private boolean error;
 
     private CompositeReadableBuffer nextFrame;
@@ -378,33 +360,17 @@ public class MessageDeframer {
       stalled = unprocessed.readableBytes() == 0;
 
       if (stalled && closeNow) {
-        // The transport already scheduled a close, so we do not need to notify it.
         close();
 
-        // TODO(ericgribkoff) Actually, this is the only time the client listener will actually care
-        // about stalled, so notify it:
-        producerListener.deliveryStalled();
-        return;
-      }
+        // TODO(ericgribkoff) Resolve comment below
+        // Have to be careful with this on the server if we move deframing to the app thread:
+        // we could end up seeing endOfStream=stalled=true but have data in unprocessed since
+        // deframe() is not atomic. Ok for clients, as endOfStream() just calls deliveryStalled().
+        // Further, since endOfStream() ends up calling onCompleted() on the local stream
+        // observer, it must only be called once or a guard added to AbstractServerStream.
 
-      if (endOfStream && stalled) {
-        boolean havePartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
-        if (!havePartialMessage) {
-          // Have to be careful with this on the server if we move deframing to the app thread:
-          // we could end up seeing endOfStream=stalled=true but have data in unprocessed since
-          // deframe() is not atomic. Ok for clients, as endOfStream() just calls deliveryStalled().
-          // Further, since endOfStream() ends up calling onCompleted() on the local stream
-          // observer, it must only be called once or a guard added to AbstractServerStream.
-          producerListener.endOfStream();
-        } else {
-          error = true;
-          // We've received the entire stream and have data available but we don't have
-          // enough to read the next frame ... this is bad.
-          RuntimeException t = Status.INTERNAL.withDescription(
-              debugString + ": Encountered end-of-stream mid-frame").asRuntimeException();
-          producerListener.deframeFailed(t);
-        }
-        return;
+        boolean hasPartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
+        producerListener.messageProducerClosed(hasPartialMessage);
       }
     }
 

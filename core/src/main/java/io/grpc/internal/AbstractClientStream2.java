@@ -322,8 +322,9 @@ public abstract class AbstractClientStream2 extends AbstractStream2
      * This is the logic for listening for message producer events, but these may be triggered from
      * outside the transport-thread. Subclasses must invoke this message from the transport thread.
      */
-    protected void deliveryStalledNotThreadSafe() {
+    protected void messageProducerClosedNotThreadSafe() {
       // TODO(ericgribkoff) Make sure this can never be null
+      // TODO(ericgribkoff) Resolve comment below
       // TODO(ericgribkoff) With a direct executor or OkHttp, stopDelivery=true in
       // transportReportStatus will lead to a direct call to producer.next()
       // which will trigger delivery stalled without a delivery stalled task set...

@@ -255,16 +255,9 @@ class OkHttpClientStream extends AbstractClientStream2 {
     }
 
     @Override
-    public void deliveryStalled() {
+    public void messageProducerClosed(boolean hasPartialMessageIgnored) {
       synchronized (lock) {
-        deliveryStalledNotThreadSafe();
-      }
-    }
-
-    @Override
-    public void endOfStream() {
-      synchronized (lock) {
-        deliveryStalledNotThreadSafe();
+        messageProducerClosedNotThreadSafe();
       }
     }
 

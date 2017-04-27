@@ -209,7 +209,7 @@ public abstract class AbstractStream2 implements Stream {
         // The deframer will not intentionally throw an exception but instead call deframeFailed
         // directly. This captures other exceptions (such as failed preconditions) that may be
         // thrown.
-        // TODO(ericgribkoff) Decide if we still want this. Impacts tests like
+        // TODO(ericgribkoff) Decide if we still want this catch block. Impacts tests like
         //   io.grpc.netty.NettyServerHandlerTest.streamErrorShouldNotCloseChannel()
         deframeFailed(t);
       }

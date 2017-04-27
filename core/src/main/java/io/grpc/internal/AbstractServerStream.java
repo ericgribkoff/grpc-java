@@ -213,12 +213,17 @@ public abstract class AbstractServerStream extends AbstractStream2
     }
 
     @Override
-    public void deliveryStalled() {}
-
-    @Override
-    public void endOfStream() {
-      scheduleDeframerClose();
-      listener().halfClosed();
+    public void messageProducerClosed(boolean hasPartialMessage) {
+      if (hasPartialMessage) {
+        // TODO(ericgribkoff) Exercise this code path in a test
+        // We've received the entire stream and have data available but we don't have
+        // enough to read the next frame ... this is bad.
+        RuntimeException t = Status.INTERNAL.withDescription(
+            ": Encountered end-of-stream mid-frame").asRuntimeException();
+        deframeFailed(t);
+      } else {
+        listener().halfClosed();
+      }
     }
 
     @Override
@@ -236,7 +241,10 @@ public abstract class AbstractServerStream extends AbstractStream2
      */
     public void inboundDataReceived(ReadableBuffer frame, boolean endOfStream) {
       // Deframe the message. If a failure occurs, deframeFailed will be called.
-      deframe(frame, endOfStream);
+      deframe(frame, false /*endOfStream*/);
+      if (endOfStream && !isDeframerScheduledToClose()) {
+        scheduleDeframerClose();
+      }
     }
 
     /**
