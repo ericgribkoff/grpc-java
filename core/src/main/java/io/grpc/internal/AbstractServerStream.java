@@ -241,7 +241,7 @@ public abstract class AbstractServerStream extends AbstractStream2
      */
     public void inboundDataReceived(ReadableBuffer frame, boolean endOfStream) {
       // Deframe the message. If a failure occurs, deframeFailed will be called.
-      deframe(frame, false /*endOfStream*/);
+      deframe(frame);
       if (endOfStream && !isDeframerScheduledToClose()) {
         scheduleDeframerClose();
       }

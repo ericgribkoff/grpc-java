@@ -148,16 +148,11 @@ public abstract class AbstractStream2 implements Stream {
     @GuardedBy("onReadyLock")
     private boolean deallocated;
 
-    // TODO(ericgribkoff) Remove
-    protected boolean isClient() {
-      return false;
-    }
-
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
       this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
       deframer = new MessageDeframer(
           this, this, Codec.Identity.NONE, maxMessageSize, statsTraceCtx,
-          getClass().getName(), isClient());
+          getClass().getName());
     }
 
     final void setMaxInboundMessageSize(int maxSize) {
@@ -198,13 +193,13 @@ public abstract class AbstractStream2 implements Stream {
      * Called to parse a received frame and attempt delivery of any completed
      * messages. Must be called from the transport thread.
      */
-    protected final void deframe(ReadableBuffer frame, boolean endOfStream) {
+    protected final void deframe(ReadableBuffer frame) {
       if (isDeframerScheduledToClose()) {
         frame.close();
         return;
       }
       try {
-        deframer.deframe(frame, endOfStream);
+        deframer.deframe(frame);
       } catch (Throwable t) {
         // The deframer will not intentionally throw an exception but instead call deframeFailed
         // directly. This captures other exceptions (such as failed preconditions) that may be

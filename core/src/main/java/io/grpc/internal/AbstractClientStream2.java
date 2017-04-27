@@ -204,11 +204,6 @@ public abstract class AbstractClientStream2 extends AbstractStream2
       this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
     }
 
-    @Override
-    protected boolean isClient() {
-      return true;
-    }
-
     @VisibleForTesting
     public final void setListener(ClientStreamListener listener) {
       Preconditions.checkState(this.listener == null, "Already called setListener");
@@ -246,7 +241,7 @@ public abstract class AbstractClientStream2 extends AbstractStream2
         }
 
         needToCloseFrame = false;
-        deframe(frame, false);
+        deframe(frame);
       } finally {
         if (needToCloseFrame) {
           frame.close();

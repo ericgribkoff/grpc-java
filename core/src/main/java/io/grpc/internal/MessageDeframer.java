@@ -85,8 +85,9 @@ public class MessageDeframer {
       void bytesRead(int numBytes);
 
       /**
-       * Called when end-of-stream has not yet been reached but there are no complete messages
-       * remaining to be delivered.
+       * Called when there are no complete messages remaining to be delivered and the transport has
+       * called scheduleClose().
+       *
        * @param hasPartialMessage whether there is an incomplete message queued
        */
       void messageProducerClosed(boolean hasPartialMessage);
@@ -135,14 +136,6 @@ public class MessageDeframer {
   // closeScheduled is called. TODO: dangerous...can only schedule when stalled?
   private volatile boolean closeScheduled; // only written by transport thread
 
-  //  TODO(ericgribkoff) Remove
-  private boolean client;
-
-  // TODO(ericgribkoff) API goal:
-  // scheduleClose() tells the message deframer to close when ready. (Possible additional volatile
-  // "interrupt" bit to correspond to transportReportStatus's stopDelivery flag.) The producer then
-  // sends a callback once close has actually occurred.
-
   /**
    * Create a deframer.
    *
@@ -154,15 +147,13 @@ public class MessageDeframer {
    */
   public MessageDeframer(Listener listener, MessageProducer.Listener producerListener,
       Decompressor decompressor, int maxMessageSize, StatsTraceContext statsTraceCtx,
-      String debugString, boolean client) {
+      String debugString) {
     this.listener = Preconditions.checkNotNull(listener, "sink");
     this.decompressor = Preconditions.checkNotNull(decompressor, "decompressor");
     this.maxInboundMessageSize = maxMessageSize;
     this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
     this.debugString = debugString;
     this.producer = new Producer(checkNotNull(producerListener, "producerListener"));
-    // TODO(ericgribkoff) Remove
-    this.client = client;
   }
 
   // Preconditions: request() has not yet been called (=> the stream has not yet started)
@@ -190,7 +181,7 @@ public class MessageDeframer {
    * Requests up to the given number of messages from the call to be delivered via {@link
    * Listener#messageProducerAvailable(MessageProducer)}. No additional messages will be delivered.
    *
-   * <p>If already closed, this method will have no effect.
+   * <p>If {@code scheduleClose()} has already been called, this method will have no effect.
    *
    * @param numMessages the requested number of messages to be delivered to the listener.
    */
@@ -200,9 +191,6 @@ public class MessageDeframer {
   public void request(int numMessages) {
     Preconditions.checkArgument(numMessages > 0, "numMessages must be > 0");
     requestCalled = true;
-    // TODO: Close must mean that no more calls to deframe() are allowed, but already pending
-    // messages can still be delivered
-    // TODO: this could interact with stopDelivery boolean in transportReportStatus()
     pendingDeliveries.getAndAdd(numMessages);
     listener.messageProducerAvailable(producer);
   }
@@ -217,7 +205,7 @@ public class MessageDeframer {
   // Preconditions: not scheduled to close
   // Postconditions: data will be added to unprocessed
   //   triggers call to listener.messageProducerAvailable
-  public void deframe(ReadableBuffer data, boolean endOfStream) {
+  public void deframe(ReadableBuffer data) {
     Preconditions.checkNotNull(data, "data");
     deframeCalled = true;
     boolean needToCloseData = true;
@@ -245,8 +233,7 @@ public class MessageDeframer {
   public void scheduleClose() {
     Preconditions.checkState(!closeScheduled, "close already scheduled");
     closeScheduled = true;
-    // make sure that the message producer will see the scheduled close.
-    // TODO(ericgribkoff) Switch to lighter-weight method?
+    // Make sure that the message producer will see the scheduled close.
     listener.messageProducerAvailable(producer);
   }
 
@@ -265,8 +252,8 @@ public class MessageDeframer {
     private boolean inDelivery = false;
     private boolean closed;
     // Indicates a deframing error occurred. When this is set to true, deframeFailed() must be
-    // called on the listener and no further callbacks will be issued by the producer.
-    private boolean error;
+    // called on the listener and no further callbacks may be issued by the producer.
+    private boolean deframeFailed;
 
     private CompositeReadableBuffer nextFrame;
 
@@ -296,7 +283,7 @@ public class MessageDeframer {
      */
     @Override
     public InputStream next() {
-      if (error) {
+      if (deframeFailed) {
         return null;
       }
       if (closed) {
@@ -314,7 +301,7 @@ public class MessageDeframer {
           switch (state) {
             case HEADER:
               processHeader();
-              if (error) {
+              if (deframeFailed) {
                 // Error occurred
                 return null;
               }
@@ -322,7 +309,7 @@ public class MessageDeframer {
             case BODY:
               // Read the body and deliver the message.
               InputStream toReturn = processBody();
-              if (error) {
+              if (deframeFailed) {
                 // Error occurred
                 return null;
               }
@@ -331,21 +318,22 @@ public class MessageDeframer {
               pendingDeliveries.getAndDecrement();
               return toReturn;
             default:
-              error = true;
+              deframeFailed = true;
               AssertionError t = new AssertionError("Invalid state: " + state);
               producerListener.deframeFailed(t);
               return null;
           }
         }
-        checkEndOfStreamOrStalled();
+        closeIfScheduledAndStalled();
         return null;
       } finally {
         inDelivery = false;
       }
     }
 
-    private void checkEndOfStreamOrStalled() {
+    private void closeIfScheduledAndStalled() {
       Preconditions.checkState(!closed, "closed");
+      Preconditions.checkState(!deframeFailed, "error");
 
       /*
        * We are stalled when there are no more bytes to process. This allows delivering errors as
@@ -355,19 +343,11 @@ public class MessageDeframer {
        * frame and not in unprocessed.  If there is extra data but no pending deliveries, it will
        * be in unprocessed.
        */
-      boolean stalled;
       boolean closeNow = closeScheduled;
-      stalled = unprocessed.readableBytes() == 0;
+      boolean stalled = unprocessed.readableBytes() == 0;
 
       if (stalled && closeNow) {
         close();
-
-        // TODO(ericgribkoff) Resolve comment below
-        // Have to be careful with this on the server if we move deframing to the app thread:
-        // we could end up seeing endOfStream=stalled=true but have data in unprocessed since
-        // deframe() is not atomic. Ok for clients, as endOfStream() just calls deliveryStalled().
-        // Further, since endOfStream() ends up calling onCompleted() on the local stream
-        // observer, it must only be called once or a guard added to AbstractServerStream.
 
         boolean hasPartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
         producerListener.messageProducerClosed(hasPartialMessage);
@@ -415,7 +395,7 @@ public class MessageDeframer {
     private void processHeader() {
       int type = nextFrame.readUnsignedByte();
       if ((type & RESERVED_MASK) != 0) {
-        error = true;
+        deframeFailed = true;
         RuntimeException t = Status.INTERNAL.withDescription(
             debugString + ": Frame header malformed: reserved bits not zero")
             .asRuntimeException();
@@ -427,7 +407,7 @@ public class MessageDeframer {
       // Update the required length to include the length of the frame.
       requiredLength = nextFrame.readInt();
       if (requiredLength < 0 || requiredLength > maxInboundMessageSize) {
-        error = true;
+        deframeFailed = true;
         RuntimeException t = Status.RESOURCE_EXHAUSTED.withDescription(
             String.format("%s: Frame size %d exceeds maximum: %d. ",
                 debugString, requiredLength, maxInboundMessageSize)).asRuntimeException();
@@ -469,7 +449,7 @@ public class MessageDeframer {
     @Nullable
     private InputStream getCompressedBody() {
       if (decompressor == Codec.Identity.NONE) {
-        error = true;
+        deframeFailed = true;
         RuntimeException t = Status.INTERNAL.withDescription(
             debugString + ": Can't decode compressed frame as compression not configured.")
             .asRuntimeException();
@@ -484,7 +464,7 @@ public class MessageDeframer {
         return new SizeEnforcingInputStream(
             unlimitedStream, maxInboundMessageSize, statsTraceCtx, debugString);
       } catch (IOException e) {
-        error = true;
+        deframeFailed = true;
         RuntimeException t = new RuntimeException(e);
         producerListener.deframeFailed(t);
         return null;
