@@ -565,7 +565,24 @@ public abstract class AbstractTransportTest {
     if (metricsExpected()) {
       inOrder.verify(clientStreamTracerFactory).newClientStreamTracer(any(Metadata.class));
     }
-    ClientStreamListener mockClientStreamListener2 = mock(ClientStreamListener.class);
+    final ClientStreamListener mockClientStreamListener2 = mock(ClientStreamListener.class);
+    doAnswer(new Answer<Void>() {
+      @Override
+      public Void answer(InvocationOnMock invocation) {
+        try {
+          MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
+          InputStream message;
+          while ((message = mp.next()) != null) {
+            mockClientStreamListener2.messageRead(message);
+          }
+          return null;
+        } catch (Exception e) {
+          System.out.println(e);
+          return null;
+        }
+      }
+    }).when(mockClientStreamListener2).messageProducerAvailable(any(MessageProducer.class));
+
     stream2.start(mockClientStreamListener2);
     verify(mockClientStreamListener2, timeout(TIMEOUT_MS))
         .closed(statusCaptor.capture(), any(Metadata.class));

@@ -243,7 +243,7 @@ public abstract class AbstractServerStream extends AbstractStream2
       // Deframe the message. If a failure occurs, deframeFailed will be called.
       deframe(frame);
       if (endOfStream && !isDeframerScheduledToClose()) {
-        scheduleDeframerClose();
+        scheduleDeframerClose(false);
       }
     }
 
@@ -283,7 +283,7 @@ public abstract class AbstractServerStream extends AbstractStream2
         listenerClosed = true;
         onStreamDeallocated();
         if (!isDeframerScheduledToClose()) {
-          scheduleDeframerClose();
+          scheduleDeframerClose(true);
         }
         listener().closed(newStatus);
       }

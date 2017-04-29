@@ -359,8 +359,9 @@ public class Http2ClientStreamTransportStateTest {
     }
 
     @Override
-    protected void http2ProcessingFailed(Status status, boolean stopDelivery, Metadata trailers) {
-      transportReportStatus(status, stopDelivery, trailers);
+    protected void http2ProcessingFailed(Status status, boolean replacePreviousStatus,
+        Metadata trailers) {
+      transportReportStatus(status, replacePreviousStatus, trailers);
     }
 
     @Override

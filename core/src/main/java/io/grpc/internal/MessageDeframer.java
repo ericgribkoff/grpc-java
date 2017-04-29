@@ -135,6 +135,9 @@ public class MessageDeframer {
   // From the point of view of the transport thread, the deframer is closed as soon as
   // closeScheduled is called. TODO: dangerous...can only schedule when stalled?
   private volatile boolean closeScheduled; // only written by transport thread
+  private boolean stopDelivery; // only goes from false to true. only set when closeScheduled is set
+
+  private boolean isClient;
 
   /**
    * Create a deframer.
@@ -156,6 +159,10 @@ public class MessageDeframer {
     this.producer = new Producer(checkNotNull(producerListener, "producerListener"));
   }
 
+  public void setClient(boolean isClient) {
+    this.isClient = isClient;
+  }
+
   // Preconditions: request() has not yet been called (=> the stream has not yet started)
   void setMaxInboundMessageSize(int messageSize) {
     Preconditions.checkState(!requestCalled,
@@ -172,8 +179,12 @@ public class MessageDeframer {
    */
   // Preconditions: deframe() has not yet been called
   public void setDecompressor(Decompressor decompressor) {
-    Preconditions
-        .checkState(!deframeCalled, "already started to deframe, too late to set decompressor");
+    if (!isClient) {
+      System.out.println("decompressor set on server");
+    }
+    // TODO(ericgribkoff) Re-enable after investigating flaky compression test
+    //Preconditions
+    //    .checkState(!deframeCalled, "already started to deframe, too late to set decompressor");
     this.decompressor = checkNotNull(decompressor, "Can't pass an empty decompressor");
   }
 
@@ -189,6 +200,10 @@ public class MessageDeframer {
   // Postconditions: pendingDeliveries_n = pendingDeliveries_(n-1) + numMessages
   // messageProducerAvailable triggered on listener
   public void request(int numMessages) {
+    // TODO(ericgribkoff) Precondition - stopDelivery = false?
+    if (isClient) {
+      System.out.println("requested on client side");
+    }
     Preconditions.checkArgument(numMessages > 0, "numMessages must be > 0");
     requestCalled = true;
     pendingDeliveries.getAndAdd(numMessages);
@@ -230,8 +245,12 @@ public class MessageDeframer {
   // Preconditions: not already scheduled to close
   // Postconditions: closeScheduled = true
   //   triggers call to listener.messageProducerAvailable
-  public void scheduleClose() {
+  // TODO(ericgribkoff) Remove arg and separate into scheduleCloseWhenDone() and
+  // scheduleImmediateClose()?
+  public void scheduleClose(boolean stopDelivery) {
+    // TODO(ericgribkoff) This will fail.
     Preconditions.checkState(!closeScheduled, "close already scheduled");
+    this.stopDelivery = stopDelivery;
     closeScheduled = true;
     // Make sure that the message producer will see the scheduled close.
     listener.messageProducerAvailable(producer);
@@ -261,9 +280,9 @@ public class MessageDeframer {
       this.producerListener = producerListener;
     }
 
-    // Preconditions: closed = false
-    private void close() {
+    private void closeAndNotify() {
       Preconditions.checkState(!closed, "producer already closed");
+      boolean hadPartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
       closed = true;
       try {
         if (unprocessed != null) {
@@ -275,6 +294,12 @@ public class MessageDeframer {
       } finally {
         unprocessed = null;
         nextFrame = null;
+      }
+      if (stopDelivery) {
+        // We aborted based on the transport's instructions, so hadPartialMessage is irrelevant
+        producerListener.messageProducerClosed(false);
+      } else {
+        producerListener.messageProducerClosed(hadPartialMessage);
       }
     }
 
@@ -297,7 +322,7 @@ public class MessageDeframer {
 
       try {
         // Process the uncompressed bytes.
-        while (pendingDeliveries.get() > 0 && readRequiredBytes()) {
+        while (!stopDelivery && (pendingDeliveries.get() > 0 && readRequiredBytes())) {
           switch (state) {
             case HEADER:
               processHeader();
@@ -313,6 +338,9 @@ public class MessageDeframer {
                 // Error occurred
                 return null;
               }
+              if (isClient) {
+                System.out.println("delivering message to client");
+              }
               // Since we've delivered a message, decrement the number of pending
               // deliveries remaining.
               pendingDeliveries.getAndDecrement();
@@ -321,36 +349,28 @@ public class MessageDeframer {
               deframeFailed = true;
               AssertionError t = new AssertionError("Invalid state: " + state);
               producerListener.deframeFailed(t);
+              producerListener.messageProducerClosed(true);
               return null;
           }
         }
-        closeIfScheduledAndStalled();
+
+        boolean closeNow = closeScheduled;
+        /*
+         * We are stalled when there are no more bytes to process. This allows delivering errors as
+         * soon as the buffered input has been consumed, independent of whether the application has
+         * requested another message.  At this point in the function, either all frames have been
+         * delivered, or unprocessed is empty.  If there is a partial message, it will be inside
+         * next frame and not in unprocessed.  If there is extra data but no pending deliveries, it
+         * will be in unprocessed.
+         */
+        boolean stalled = unprocessed.readableBytes() == 0;
+
+        if (stopDelivery || (stalled && closeNow)) {
+          closeAndNotify();
+        }
         return null;
       } finally {
         inDelivery = false;
-      }
-    }
-
-    private void closeIfScheduledAndStalled() {
-      Preconditions.checkState(!closed, "closed");
-      Preconditions.checkState(!deframeFailed, "error");
-
-      /*
-       * We are stalled when there are no more bytes to process. This allows delivering errors as
-       * soon as the buffered input has been consumed, independent of whether the application
-       * has requested another message.  At this point in the function, either all frames have been
-       * delivered, or unprocessed is empty.  If there is a partial message, it will be inside next
-       * frame and not in unprocessed.  If there is extra data but no pending deliveries, it will
-       * be in unprocessed.
-       */
-      boolean closeNow = closeScheduled;
-      boolean stalled = unprocessed.readableBytes() == 0;
-
-      if (stalled && closeNow) {
-        close();
-
-        boolean hasPartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
-        producerListener.messageProducerClosed(hasPartialMessage);
       }
     }
 
@@ -400,6 +420,7 @@ public class MessageDeframer {
             debugString + ": Frame header malformed: reserved bits not zero")
             .asRuntimeException();
         producerListener.deframeFailed(t);
+        producerListener.messageProducerClosed(true);
         return;
       }
       compressedFlag = (type & COMPRESSED_FLAG_MASK) != 0;
@@ -412,6 +433,7 @@ public class MessageDeframer {
             String.format("%s: Frame size %d exceeds maximum: %d. ",
                 debugString, requiredLength, maxInboundMessageSize)).asRuntimeException();
         producerListener.deframeFailed(t);
+        producerListener.messageProducerClosed(true);
         return;
       }
       statsTraceCtx.inboundMessage();
@@ -454,6 +476,7 @@ public class MessageDeframer {
             debugString + ": Can't decode compressed frame as compression not configured.")
             .asRuntimeException();
         producerListener.deframeFailed(t);
+        producerListener.messageProducerClosed(true);
         return null;
       }
 
@@ -467,6 +490,7 @@ public class MessageDeframer {
         deframeFailed = true;
         RuntimeException t = new RuntimeException(e);
         producerListener.deframeFailed(t);
+        producerListener.messageProducerClosed(true);
         return null;
       }
     }

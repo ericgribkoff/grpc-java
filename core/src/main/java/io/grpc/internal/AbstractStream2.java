@@ -148,11 +148,20 @@ public abstract class AbstractStream2 implements Stream {
     @GuardedBy("onReadyLock")
     private boolean deallocated;
 
+    private boolean isClient;
+
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
       this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
       deframer = new MessageDeframer(
           this, this, Codec.Identity.NONE, maxMessageSize, statsTraceCtx,
           getClass().getName());
+    }
+
+    protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx,
+        boolean isClient) {
+      this(maxMessageSize, statsTraceCtx);
+      this.isClient = isClient;
+      deframer.setClient(isClient);
     }
 
     final void setMaxInboundMessageSize(int maxSize) {
@@ -178,8 +187,8 @@ public abstract class AbstractStream2 implements Stream {
     /**
      * Schedule the deframer to close.
      */
-    protected final void scheduleDeframerClose() {
-      deframer.scheduleClose();
+    protected final void scheduleDeframerClose(boolean stopDelivery) {
+      deframer.scheduleClose(stopDelivery);
     }
 
     /**

@@ -224,7 +224,10 @@ public class OkHttpClientStreamTest {
     public void messageRead(InputStream message) {}
 
     @Override
-    public void messageProducerAvailable(MessageProducer mp) {}
+    public void messageProducerAvailable(MessageProducer mp) {
+      while (mp.next() != null) {
+      }
+    }
 
     @Override
     public void headersRead(Metadata headers) {}

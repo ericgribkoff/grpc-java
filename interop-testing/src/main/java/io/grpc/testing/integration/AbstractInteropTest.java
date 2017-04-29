@@ -56,6 +56,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.instrumentation.stats.RpcConstants;
 import com.google.instrumentation.stats.StatsContextFactory;
 import com.google.instrumentation.stats.TagValue;
@@ -88,6 +89,8 @@ import io.grpc.internal.testing.StatsTestUtils.FakeStatsContextFactory;
 import io.grpc.internal.testing.StatsTestUtils.MetricsRecord;
 import io.grpc.protobuf.ProtoUtils;
 import io.grpc.stub.ClientCalls;
+import io.grpc.stub.ClientCallStreamObserver;
+import io.grpc.stub.ClientResponseObserver;
 import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.StreamRecorder;
@@ -112,6 +115,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
@@ -342,6 +346,7 @@ public abstract class AbstractInteropTest {
     }
   }
 
+  // TODO(ericgribkoff) Remove
   private void serverStreamingHelper() throws Exception {
     final StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
         .setResponseType(PayloadType.COMPRESSABLE)
@@ -550,6 +555,71 @@ public abstract class AbstractInteropTest {
     assertEquals(1, responseObserver.getValues().size());
     assertEquals(Status.Code.CANCELLED,
                  Status.fromThrowable(responseObserver.getError()).getCode());
+
+    if (metricsExpected()) {
+      assertMetrics("grpc.testing.TestService/FullDuplexCall", Status.Code.CANCELLED);
+    }
+  }
+
+  @Test(timeout = 10000)
+  public void cancelAfterFirstResponseWithoutAutoInboundFlowControl() throws Exception {
+    List<Integer> responseSizes = Arrays.asList(50, 100, 150, 200);
+    StreamingOutputCallRequest.Builder streamingOutputBuilder =
+        StreamingOutputCallRequest.newBuilder();
+    streamingOutputBuilder.setResponseType(COMPRESSABLE);
+    for (Integer size : responseSizes) {
+      streamingOutputBuilder.addResponseParametersBuilder().setSize(size).setIntervalUs(0);
+    }
+    final StreamingOutputCallRequest request = streamingOutputBuilder.build();
+    final StreamingOutputCallResponse goldenResponse = StreamingOutputCallResponse.newBuilder()
+        .setPayload(Payload.newBuilder()
+            .setType(PayloadType.COMPRESSABLE)
+            .setBody(ByteString.copyFrom(new byte[responseSizes.get(0)])))
+        .build();
+
+    final List<StreamingOutputCallResponse> responses =
+        new ArrayList<StreamingOutputCallResponse>();
+    final ErrorResponse errorResponse = new ErrorResponse();
+    final CountDownLatch latch = new CountDownLatch(1);
+    final SettableFuture<StreamingOutputCallResponse> firstValue = SettableFuture.create();
+    StreamObserver<StreamingOutputCallResponse> responseObserver =
+        new ClientResponseObserver<StreamingOutputCallRequest, StreamingOutputCallResponse>() {
+          @Override
+          public void beforeStart(
+              ClientCallStreamObserver<StreamingOutputCallRequest> requestStream) {
+            requestStream.disableAutoInboundFlowControl();
+          }
+
+          @Override
+          public void onNext(StreamingOutputCallResponse value) {
+            if (!firstValue.isDone()) {
+              firstValue.set(value);
+            }
+            responses.add(value);
+          }
+
+          @Override
+          public void onError(Throwable t) {
+            errorResponse.setStatus(Status.fromThrowable(t));
+            latch.countDown();
+          }
+
+          @Override
+          public void onCompleted() {
+            latch.countDown();
+          }
+        };
+    StreamObserver<StreamingOutputCallRequest> requestObserver
+        = asyncStub.fullDuplexCall(responseObserver);
+    requestObserver.onNext(request);
+    assertEquals(goldenResponse, firstValue.get());
+    requestObserver.onError(new RuntimeException());
+
+    if (!latch.await(operationTimeoutMillis(), TimeUnit.MILLISECONDS)) {
+      fail("operation timed out");
+    }
+    assertEquals(1, responses.size());
+    assertEquals(Status.Code.CANCELLED, errorResponse.getStatus().getCode());
 
     if (metricsExpected()) {
       assertMetrics("grpc.testing.TestService/FullDuplexCall", Status.Code.CANCELLED);
@@ -1177,6 +1247,18 @@ public abstract class AbstractInteropTest {
     verifyNoMoreInteractions(responseObserver);
     if (metricsExpected()) {
       assertMetrics("grpc.testing.TestService/FullDuplexCall", Status.Code.UNKNOWN);
+    }
+  }
+
+  private static class ErrorResponse {
+    private Status status;
+
+    private void setStatus(Status status) {
+      this.status = status;
+    }
+
+    private Status getStatus() {
+      return status;
     }
   }
 

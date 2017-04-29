@@ -152,6 +152,25 @@ public class AbstractClientStream2Test {
     verify(mockListener).closed(any(Status.class), any(Metadata.class));
   }
 
+  // TODO(ericgribkoff) Passes when added to master, fails here.
+  @Test
+  public void cancel_notifiesWithUnprocessedBytes() {
+    final BaseTransportState state = new BaseTransportState(statsTraceCtx);
+    AbstractClientStream2 stream = new BaseAbstractClientStream(allocator, state, new BaseSink() {
+      @Override
+      public void cancel(Status errorStatus) {
+        // Cancel should eventually result in a transportReportStatus on the transport thread
+        state.transportReportStatus(errorStatus, true/*stop delivery*/, new Metadata());
+      }
+    }, statsTraceCtx);
+    stream.start(mockListener);
+    stream.transportState().deframe(ReadableBuffers.wrap(new byte[] {0, 0, 0, 0, 2, 1}));
+
+    stream.cancel(Status.DEADLINE_EXCEEDED);
+
+    verify(mockListener).closed(any(Status.class), any(Metadata.class));
+  }
+
   @Test
   public void startFailsOnNullListener() {
     AbstractClientStream2 stream = new BaseAbstractClientStream(allocator, statsTraceCtx);
@@ -241,6 +260,23 @@ public class AbstractClientStream2Test {
 
     verify(mockListener).closed(any(Status.class), any(Metadata.class));
   }
+
+  // TODO(ericgribkoff) This should be removed, or modified to assert that the close is not received
+  // until the message is request()ed.
+  // TODO(ericgribkoff) Actually a test with the unprocessed bytes in nextFrame would be useful, to
+  // compare against behavior on master
+  //@Test
+  //public void rstStreamClosesStreamWithoutRequest() {
+  //  AbstractClientStream2 stream = new BaseAbstractClientStream(allocator, statsTraceCtx);
+  //  stream.start(mockListener);
+  //  // Send first byte of 2 byte message
+  //  stream.transportState().deframe(ReadableBuffers.wrap(new byte[] {0, 0, 0, 0, 2, 1}));
+  //  Status status = Status.INTERNAL;
+  //  // Simulate getting a reset while the deframer still has unprocessed bytes
+  // stream.transportState().transportReportStatus(status, false /*stop delivery*/, new Metadata());
+  //
+  //  verify(mockListener).closed(any(Status.class), any(Metadata.class));
+  //}
   
   @Test
   public void getRequest() {
