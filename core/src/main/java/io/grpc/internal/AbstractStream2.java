@@ -38,7 +38,6 @@ import com.google.common.annotations.VisibleForTesting;
 import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
-import io.grpc.internal.MessageDeframer.MessageProducer;
 import java.io.InputStream;
 import javax.annotation.concurrent.GuardedBy;
 
@@ -117,14 +116,13 @@ public abstract class AbstractStream2 implements Stream {
    * from the deframing thread. Other methods this should only be called from the transport thread
    * (except for private interactions with {@code AbstractStream2}).
    */
-  public abstract static class TransportState implements MessageDeframer.Listener,
-      MessageProducer.Listener {
+  public abstract static class TransportState
+      implements MessageDeframer.Sink.Listener, MessageDeframer.Source.Listener {
     /**
-     * The default number of queued bytes for a given stream, below which
-     * {@link StreamListener#onReady()} will be called.
+     * The default number of queued bytes for a given stream, below which {@link
+     * StreamListener#onReady()} will be called.
      */
-    @VisibleForTesting
-    public static final int DEFAULT_ONREADY_THRESHOLD = 32 * 1024;
+    @VisibleForTesting public static final int DEFAULT_ONREADY_THRESHOLD = 32 * 1024;
 
     private final MessageDeframer deframer;
     private final Object onReadyLock = new Object();
@@ -148,59 +146,48 @@ public abstract class AbstractStream2 implements Stream {
     @GuardedBy("onReadyLock")
     private boolean deallocated;
 
-    private boolean isClient;
-
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
       this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
-      deframer = new MessageDeframer(
-          this, this, Codec.Identity.NONE, maxMessageSize, statsTraceCtx,
-          getClass().getName());
-    }
-
-    protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx,
-        boolean isClient) {
-      this(maxMessageSize, statsTraceCtx);
-      this.isClient = isClient;
-      deframer.setClient(isClient);
+      deframer =
+          new MessageDeframer(
+              this, this, Codec.Identity.NONE, maxMessageSize, statsTraceCtx, getClass().getName());
     }
 
     final void setMaxInboundMessageSize(int maxSize) {
-      deframer.setMaxInboundMessageSize(maxSize);
+      deframer.sink().setMaxInboundMessageSize(maxSize);
     }
 
-    /**
-     * Override this method to provide a stream listener.
-     */
+    /** Override this method to provide a stream listener. */
     protected abstract StreamListener listener();
 
     @Override
-    public void messageProducerAvailable(MessageProducer mp) {
+    public void scheduleDeframerSource(MessageDeframer.Source source) {
       // TODO(ericgribkoff) listener() can return null here, at least for ServerStream via
       //   setListener() - this occurs in io.grpc.internal.ServerTransportListener.streamCreated(),
       //   as the stream listener initialization hits request before it's actually added to the
       //   stream. This should either be avoided or this null-check must remain.
       if (listener() != null) {
-        listener().messageProducerAvailable(mp);
+        listener().scheduleDeframerSource(source);
       }
     }
 
     /**
-     * Schedule the deframer to close.
+     * Schedule the deframer to close. {@link
+     * MessageDeframer.Source.Listener#deframerClosed(boolean)} will be invoked when the deframer
+     * closes.
      */
     protected final void scheduleDeframerClose(boolean stopDelivery) {
-      deframer.scheduleClose(stopDelivery);
+      deframer.sink().scheduleClose(stopDelivery);
     }
 
-    /**
-     * Indicates whether the deframer is scheduled to close.
-     */
+    /** Indicates whether the deframer is scheduled to close. */
     protected final boolean isDeframerScheduledToClose() {
-      return deframer.isScheduledToClose();
+      return deframer.sink().isScheduledToClose();
     }
 
     /**
-     * Called to parse a received frame and attempt delivery of any completed
-     * messages. Must be called from the transport thread.
+     * Called to parse a received frame and attempt delivery of any completed messages. Must be
+     * called from the transport thread.
      */
     protected final void deframe(ReadableBuffer frame) {
       if (isDeframerScheduledToClose()) {
@@ -208,7 +195,7 @@ public abstract class AbstractStream2 implements Stream {
         return;
       }
       try {
-        deframer.deframe(frame);
+        deframer.sink().deframe(frame);
       } catch (Throwable t) {
         // The deframer will not intentionally throw an exception but instead call deframeFailed
         // directly. This captures other exceptions (such as failed preconditions) that may be
@@ -220,12 +207,12 @@ public abstract class AbstractStream2 implements Stream {
     }
 
     /**
-     * Called to request the given number of messages from the deframer. Must be called
-     * from the transport thread.
+     * Called to request the given number of messages from the deframer. Must be called from the
+     * transport thread.
      */
     public final void requestMessagesFromDeframer(int numMessages) {
       try {
-        deframer.request(numMessages);
+        deframer.sink().request(numMessages);
       } catch (Throwable t) {
         // The deframer will not intentionally throw an exception but instead call deframeFailed
         // directly. This captures other exceptions (such as failed preconditions) that may be
@@ -244,7 +231,7 @@ public abstract class AbstractStream2 implements Stream {
       if (isDeframerScheduledToClose()) {
         return;
       }
-      deframer.setDecompressor(decompressor);
+      deframer.sink().setDecompressor(decompressor);
     }
 
     private boolean isReady() {
@@ -296,7 +283,7 @@ public abstract class AbstractStream2 implements Stream {
     /**
      * Event handler to be called by the subclass when a number of bytes has been sent to the remote
      * endpoint. May call back the listener's {@link StreamListener#onReady()} handler if
-     * appropriate.  This must be called from the transport thread, since the listener may be called
+     * appropriate. This must be called from the transport thread, since the listener may be called
      * back directly.
      *
      * @param numBytes the number of bytes that were sent.
@@ -304,8 +291,8 @@ public abstract class AbstractStream2 implements Stream {
     public final void onSentBytes(int numBytes) {
       boolean doNotify;
       synchronized (onReadyLock) {
-        checkState(allocated,
-            "onStreamAllocated was not called, but it seems the stream is active");
+        checkState(
+            allocated, "onStreamAllocated was not called, but it seems the stream is active");
         boolean belowThresholdBefore = numSentBytesQueued < DEFAULT_ONREADY_THRESHOLD;
         numSentBytesQueued -= numBytes;
         boolean belowThresholdAfter = numSentBytesQueued < DEFAULT_ONREADY_THRESHOLD;

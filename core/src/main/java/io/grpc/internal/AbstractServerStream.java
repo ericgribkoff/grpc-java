@@ -213,7 +213,7 @@ public abstract class AbstractServerStream extends AbstractStream2
     }
 
     @Override
-    public void messageProducerClosed(boolean hasPartialMessage) {
+    public void deframerClosed(boolean hasPartialMessage) {
       if (hasPartialMessage) {
         // TODO(ericgribkoff) Exercise this code path in a test
         // We've received the entire stream and have data available but we don't have

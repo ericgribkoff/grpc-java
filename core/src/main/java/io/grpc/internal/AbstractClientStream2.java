@@ -56,7 +56,7 @@ public abstract class AbstractClientStream2 extends AbstractStream2
    * collisions/confusion. Only called from application thread.
    */
   protected interface Sink {
-    /** 
+    /**
      * Sends the request headers to the remote end point.
      *
      * @param metadata the metadata to be sent
@@ -87,8 +87,8 @@ public abstract class AbstractClientStream2 extends AbstractStream2
      * Tears down the stream, typically in the event of a timeout. This method may be called
      * multiple times and from any thread.
      *
-     * <p>This is a clone of {@link ClientStream#cancel(Status)};
-     * {@link AbstractClientStream2#cancel} delegates to this method.
+     * <p>This is a clone of {@link ClientStream#cancel(Status)}; {@link
+     * AbstractClientStream2#cancel} delegates to this method.
      */
     void cancel(Status status);
   }
@@ -104,8 +104,11 @@ public abstract class AbstractClientStream2 extends AbstractStream2
    */
   private volatile boolean cancelled;
 
-  protected AbstractClientStream2(WritableBufferAllocator bufferAllocator,
-      StatsTraceContext statsTraceCtx, Metadata headers, boolean useGet) {
+  protected AbstractClientStream2(
+      WritableBufferAllocator bufferAllocator,
+      StatsTraceContext statsTraceCtx,
+      Metadata headers,
+      boolean useGet) {
     Preconditions.checkNotNull(headers, "headers");
     this.useGet = useGet;
     if (!useGet) {
@@ -188,10 +191,11 @@ public abstract class AbstractClientStream2 extends AbstractStream2
   protected abstract static class TransportState extends AbstractStream2.TransportState {
     /** Whether listener.closed() has been called. */
     private final StatsTraceContext statsTraceCtx;
+
     private boolean listenerClosed;
     private ClientStreamListener listener;
 
-    private Runnable messageProducerClosedTask;
+    private Runnable deframerClosedTask;
 
     /**
      * Whether the stream is closed from the transport's perspective. This can differ from {@link
@@ -200,7 +204,7 @@ public abstract class AbstractClientStream2 extends AbstractStream2
     private boolean statusReported;
 
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
-      super(maxMessageSize, statsTraceCtx, true);
+      super(maxMessageSize, statsTraceCtx);
       this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
     }
 
@@ -259,8 +263,10 @@ public abstract class AbstractClientStream2 extends AbstractStream2
       Preconditions.checkNotNull(status, "status");
       Preconditions.checkNotNull(trailers, "trailers");
       if (statusReported) {
-        log.log(Level.INFO, "Received trailers on closed stream:\n {1}\n {2}",
-            new Object[]{status, trailers});
+        log.log(
+            Level.INFO,
+            "Received trailers on closed stream:\n {1}\n {2}",
+            new Object[] {status, trailers});
         return;
       }
       transportReportStatus(status, false, trailers);
@@ -271,21 +277,18 @@ public abstract class AbstractClientStream2 extends AbstractStream2
      * method must be called from the transport thread.
      *
      * <p>No further data may be sent to the deframer after this method is called. However, if
-     * {@link MessageDeframer.MessageProducer} is running in another thread, the client will receive
-     * any already queued messages before
+     * {@link MessageDeframer.Source} is running in another thread, the client will receive any
+     * already queued messages before the deframer closes, unless {@code stopDelivery} is true.
      *
      * @param status the new status to set
-     * @param stopDelivery if {@code true}, the new status will replace any previously
-     *     queued status
+     * @param stopDelivery if {@code true}, interrupt {@link MessageDeframer.Source} even if it has
+     *     additional queued messages
      * @param trailers new instance of {@code Trailers}, either empty or those returned by the
      *     server
      */
     // Post-conditions: No additional data frames will be sent to the deframer.
-    // TODO(ericgribkoff) replacePreviousStatus needs to be reverted to stopDelivery, because we
-    // can have a non-stalled deframer (bytes in unprocessed, no calls to request() yet) and a
-    // cancel() from the client that will just hang forever.
-    public final void transportReportStatus(final Status status, boolean stopDelivery,
-        final Metadata trailers) {
+    public final void transportReportStatus(
+        final Status status, boolean stopDelivery, final Metadata trailers) {
       Preconditions.checkNotNull(status, "status");
       Preconditions.checkNotNull(trailers, "trailers");
       if (statusReported && !stopDelivery) {
@@ -294,31 +297,28 @@ public abstract class AbstractClientStream2 extends AbstractStream2
       statusReported = true;
       onStreamDeallocated();
 
-      // TODO(ericgribkoff) Dropping stopDelivery should be problematic in the case when an error
-      // is reported before the client request()s additional messages. No tests fail however. Is
-      // this possible?
-
-      messageProducerClosedTask = new Runnable() {
-        @Override
-        public void run() {
-          closeListener(status, trailers);
-        }
-      };
+      deframerClosedTask =
+          new Runnable() {
+            @Override
+            public void run() {
+              closeListener(status, trailers);
+            }
+          };
       if (!isDeframerScheduledToClose()) {
         scheduleDeframerClose(stopDelivery);
       }
     }
 
     /**
-     * This is the logic for listening for messageProducerClosed(), but this call may be triggered
-     * from outside the transport-thread. Subclasses must invoke this message from the transport
-     * thread.
+     * This is the logic for listening for deframerClosedNotThreadSafe(), but this call may be
+     * triggered from outside the transport-thread. Subclasses must invoke this message from the
+     * transport thread.
      */
-    protected void messageProducerClosedNotThreadSafe() {
-      Preconditions.checkState(messageProducerClosedTask != null, "deliveryStalledTask is null");
-      if (messageProducerClosedTask != null) {
-        messageProducerClosedTask.run();
-        messageProducerClosedTask = null;
+    protected void deframerClosedNotThreadSafe() {
+      Preconditions.checkState(deframerClosedTask != null, "deframerClosedTask is null");
+      if (deframerClosedTask != null) {
+        deframerClosedTask.run();
+        deframerClosedTask = null;
       }
     }
 
@@ -382,7 +382,8 @@ public abstract class AbstractClientStream2 extends AbstractStream2
     @Override
     public void close() {
       closed = true;
-      Preconditions.checkState(payload != null,
+      Preconditions.checkState(
+          payload != null,
           "Lack of request message. GET request is only supported for unary requests");
       abstractClientStreamSink().writeHeaders(headers, payload);
       payload = null;

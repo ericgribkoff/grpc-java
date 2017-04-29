@@ -50,7 +50,6 @@ import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.StreamTracer;
 import io.grpc.internal.AbstractClientStream2.TransportState;
-import io.grpc.internal.MessageDeframer.MessageProducer;
 import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -85,17 +84,17 @@ public class AbstractClientStream2Test {
   public void setUp() {
     MockitoAnnotations.initMocks(this);
 
-    doAnswer(new Answer<Void>() {
-      @Override
-      public Void answer(InvocationOnMock invocation) {
-        MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
-        InputStream message;
-        while ((message = mp.next()) != null) {
-          mockListener.messageRead(message);
-        }
-        return null;
-      }
-    }).when(mockListener).messageProducerAvailable(any(MessageProducer.class));
+//    doAnswer(new Answer<Void>() {
+//      @Override
+//      public Void answer(InvocationOnMock invocation) {
+//        MessageDeframer.Source mp = (MessageDeframer.Source) invocation.getArguments()[0];
+//        InputStream message;
+//        while ((message = mp.next()) != null) {
+//          mockListener.messageRead(message);
+//        }
+//        return null;
+//      }
+//    }).when(mockListener).messageProducerAvailable(any(MessageProducer.class));
   }
 
   private final WritableBufferAllocator allocator = new WritableBufferAllocator() {
@@ -385,8 +384,8 @@ public class AbstractClientStream2Test {
     public void bytesRead(int processedBytes) {}
 
     @Override
-    public final void messageProducerClosed(boolean hasPartialMessageIgnored) {
-      messageProducerClosedNotThreadSafe();
+    public final void deframerClosed(boolean hasPartialMessageIgnored) {
+      deframerClosedNotThreadSafe();
     }
   }
 }

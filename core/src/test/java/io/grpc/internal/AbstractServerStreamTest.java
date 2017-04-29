@@ -44,7 +44,6 @@ import static org.mockito.Mockito.verify;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.AbstractServerStream.TransportState;
-import io.grpc.internal.MessageDeframer.MessageProducer;
 import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -242,7 +241,7 @@ public class AbstractServerStreamTest {
     public void messageRead(InputStream message) {}
 
     @Override
-    public void messageProducerAvailable(MessageProducer mp) {}
+    public void scheduleDeframerSource(MessageDeframer.Source source) {}
 
     @Override
     public void onReady() {}

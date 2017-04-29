@@ -60,7 +60,6 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
-import io.grpc.internal.MessageDeframer.MessageProducer;
 import java.io.InputStream;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Executor;
@@ -504,7 +503,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     }
 
     @Override
-    public void messageProducerAvailable(final MessageProducer mp) {
+    public void scheduleDeframerSource(final MessageDeframer.Source source) {
       class MessagesAvailable extends ContextRunnable {
 
         MessagesAvailable() {
@@ -515,7 +514,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
         public final void runInContext() {
           InputStream message;
           try {
-            while ((message = mp.next()) != null) {
+            while ((message = source.next()) != null) {
               try {
                 if (closed) {
                   return;

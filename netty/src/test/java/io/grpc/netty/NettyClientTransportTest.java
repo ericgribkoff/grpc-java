@@ -60,18 +60,8 @@ import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.StatusException;
-import io.grpc.internal.ClientStream;
-import io.grpc.internal.ClientStreamListener;
-import io.grpc.internal.ClientTransport;
-import io.grpc.internal.FakeClock;
-import io.grpc.internal.GrpcUtil;
-import io.grpc.internal.ManagedClientTransport;
+import io.grpc.internal.*;
 import io.grpc.internal.MessageDeframer.MessageProducer;
-import io.grpc.internal.ServerListener;
-import io.grpc.internal.ServerStream;
-import io.grpc.internal.ServerStreamListener;
-import io.grpc.internal.ServerTransport;
-import io.grpc.internal.ServerTransportListener;
 import io.grpc.testing.TestUtils;
 import io.netty.channel.ChannelConfig;
 import io.netty.channel.ChannelOption;
@@ -573,7 +563,7 @@ public class NettyClientTransportTest {
     }
 
     @Override
-    public void messageProducerAvailable(MessageProducer mp) {
+    public void messageProducerAvailable(MessageDeframer.Source mp) {
       InputStream message;
       while ((message = mp.next()) != null) {
         messageRead(message);
@@ -606,7 +596,7 @@ public class NettyClientTransportTest {
     }
 
     @Override
-    public void messageProducerAvailable(MessageProducer mp) {
+    public void messageProducerAvailable(MessageDeframer.Source mp) {
       InputStream message;
       while ((message = mp.next()) != null) {
         messageRead(message);

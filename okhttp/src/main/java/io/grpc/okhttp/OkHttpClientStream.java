@@ -256,9 +256,9 @@ class OkHttpClientStream extends AbstractClientStream2 {
     }
 
     @Override
-    public void messageProducerClosed(boolean hasPartialMessageIgnored) {
+    public void deframerClosed(boolean hasPartialMessageIgnored) {
       synchronized (lock) {
-        messageProducerClosedNotThreadSafe();
+        deframerClosedNotThreadSafe();
       }
     }
 

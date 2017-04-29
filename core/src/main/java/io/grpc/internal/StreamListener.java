@@ -31,7 +31,6 @@
 
 package io.grpc.internal;
 
-import io.grpc.internal.MessageDeframer.MessageProducer;
 import java.io.InputStream;
 
 /**
@@ -54,8 +53,9 @@ public interface StreamListener {
 
   /**
    * Called to schedule deframing in the application thread.
+   * @param source the message deframer source
    */
-  void messageProducerAvailable(MessageProducer mp);
+  void scheduleDeframerSource(MessageDeframer.Source source);
 
   /**
    * This indicates that the transport is now capable of sending additional messages

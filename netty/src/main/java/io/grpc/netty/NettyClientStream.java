@@ -266,14 +266,14 @@ class NettyClientStream extends AbstractClientStream2 {
     }
 
     @Override
-    public final void messageProducerClosed(boolean hasPartialMessageIgnored) {
+    public final void deframerClosed(boolean hasPartialMessageIgnored) {
       if (eventLoop.inEventLoop()) {
-        messageProducerClosedNotThreadSafe();
+        deframerClosedNotThreadSafe();
       } else {
         eventLoop.execute(new Runnable() {
           @Override
           public void run() {
-            messageProducerClosedNotThreadSafe();
+            deframerClosedNotThreadSafe();
           }
         });
       }

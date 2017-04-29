@@ -47,6 +47,7 @@ import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.MessageDeframer;
 import io.grpc.internal.MessageDeframer.MessageProducer;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.okhttp.internal.framed.ErrorCode;
@@ -224,7 +225,7 @@ public class OkHttpClientStreamTest {
     public void messageRead(InputStream message) {}
 
     @Override
-    public void messageProducerAvailable(MessageProducer mp) {
+    public void messageProducerAvailable(MessageDeframer.Source mp) {
       while (mp.next() != null) {
       }
     }

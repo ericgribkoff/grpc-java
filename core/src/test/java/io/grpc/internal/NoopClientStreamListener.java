@@ -33,7 +33,6 @@ package io.grpc.internal;
 
 import io.grpc.Metadata;
 import io.grpc.Status;
-import io.grpc.internal.MessageDeframer.MessageProducer;
 import java.io.InputStream;
 
 /**
@@ -44,7 +43,7 @@ class NoopClientStreamListener implements ClientStreamListener {
   public void messageRead(InputStream message) {}
 
   @Override
-  public void messageProducerAvailable(MessageProducer mp) {}
+  public void scheduleDeframerSource(MessageDeframer.Source source) {}
 
   @Override
   public void onReady() {}
