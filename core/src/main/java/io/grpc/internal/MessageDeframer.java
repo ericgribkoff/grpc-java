@@ -57,19 +57,13 @@ public class MessageDeframer {
   private static final int COMPRESSED_FLAG_MASK = 1;
   private static final int RESERVED_MASK = 0xFE;
 
-  /**
-   * A listener of deframing events.
-   */
+  /** A listener of deframing events. */
   public interface Listener {
-    /**
-     * Called to schedule deframing in the application thread. Invoked from transport thread.
-     */
+    /** Called to schedule deframing in the application thread. Invoked from transport thread. */
     void messageProducerAvailable(MessageProducer mp);
   }
 
-  /**
-   * A message producing object.
-   */
+  /** A message producing object. */
   public interface MessageProducer {
     @Nullable
     InputStream next();
@@ -93,16 +87,23 @@ public class MessageDeframer {
       void messageProducerClosed(boolean hasPartialMessage);
 
       /**
-       * Called when deframe fails. If invoked, this will be
-       * the last call made to the listener (other than messageProducerAvailable(), which should be
-       * a separate interface), as the deframing is in an unrecoverable state.
+       * Called when deframe fails. If invoked, this will be the last call made to the listener
+       * (other than messageProducerAvailable(), which should be a separate interface), as the
+       * deframing is in an unrecoverable state.
        */
       void deframeFailed(Throwable t);
     }
   }
 
   private enum State {
-    HEADER, BODY
+    HEADER,
+    BODY
+  }
+
+  private enum CloseRequested {
+    NONE,
+    WHEN_COMPLETE,
+    IMMEDIATELY
   }
 
   private final Listener listener;
@@ -130,12 +131,32 @@ public class MessageDeframer {
   private CompositeReadableBuffer unprocessed = new CompositeReadableBuffer();
   private final AtomicInteger pendingDeliveries = new AtomicInteger();
 
-  // This serves as an interrupt bit for the transport thread to schedule a close on the message
-  // producer thread. This will only ever change from false to true.
-  // From the point of view of the transport thread, the deframer is closed as soon as
-  // closeScheduled is called. TODO: dangerous...can only schedule when stalled?
-  private volatile boolean closeScheduled; // only written by transport thread
-  private boolean stopDelivery; // only goes from false to true. only set when closeScheduled is set
+  /**
+   * This enum allows the transport thread to schedule a close on the message producer thread.
+   *
+   * <p>CloseRequested.WHEN_COMPLETE indicates that any messages already queued by the deframer
+   * should still be delivered before closing. This means, for example, that the deframer will not
+   * close when there are queued messages that the client has not yet requested.
+   * CloseRequested.WHEN_COMPLETE is appropriate when the stream has closed due to a network event,
+   * such as trailers received or a RST_STREAM, and the client should first receive any earlier
+   * messages before receiving notice of the closure.
+   *
+   * <p>CloseRequested.IMMEDIATELY will close the deframer without delivering all queued messages.
+   * This is appropriate when the stream is closing due to an event such as a local cancellation,
+   * where the client is purposefully discarding any messages that may have already been received
+   * over the wire but not deframed.
+   *
+   * <p>{@code closeRequested} can only change from CloseRequested.NONE to
+   * CloseRequested.WHEN_COMPLETE, from CloseRequested.NONE to CloseRequested.IMMEDIATELY, and from
+   * CloseRequested.WHEN_COMPLETE to CloseRequested.IMMEDIATELY.
+   *
+   * <p>When set to CloseRequested.WHEN_COMPLETE, the transport thread is allowed to call {@code
+   * request()} but further calls to {@code deframe()} will throw an exception.
+   *
+   * <p>When set to CloseRequested.IMMEDIATELY, the transport thread must not invoke either {@code
+   * request()} or {@code deframe()}.
+   */
+  private volatile CloseRequested closeRequested = CloseRequested.NONE;
 
   private boolean isClient;
 
@@ -144,12 +165,16 @@ public class MessageDeframer {
    *
    * @param listener listener for deframer events.
    * @param decompressor the compression used if a compressed frame is encountered, with {@code
-   *   NONE} meaning unsupported
+   *     NONE} meaning unsupported
    * @param maxMessageSize the maximum allowed size for received messages.
    * @param debugString a string that will appear on errors statuses
    */
-  public MessageDeframer(Listener listener, MessageProducer.Listener producerListener,
-      Decompressor decompressor, int maxMessageSize, StatsTraceContext statsTraceCtx,
+  public MessageDeframer(
+      Listener listener,
+      MessageProducer.Listener producerListener,
+      Decompressor decompressor,
+      int maxMessageSize,
+      StatsTraceContext statsTraceCtx,
       String debugString) {
     this.listener = Preconditions.checkNotNull(listener, "sink");
     this.decompressor = Preconditions.checkNotNull(decompressor, "decompressor");
@@ -165,15 +190,15 @@ public class MessageDeframer {
 
   // Preconditions: request() has not yet been called (=> the stream has not yet started)
   void setMaxInboundMessageSize(int messageSize) {
-    Preconditions.checkState(!requestCalled,
-        "already requested messages, too late to set max inbound message size");
+    Preconditions.checkState(
+        !requestCalled, "already requested messages, too late to set max inbound message size");
     maxInboundMessageSize = messageSize;
   }
 
   /**
-   * Sets the decompressor available to use.  The message encoding for the stream comes later in
-   * time, and thus will not be available at the time of construction.  This should only be set
-   * once, since the compression codec cannot change after the headers have been sent.
+   * Sets the decompressor available to use. The message encoding for the stream comes later in
+   * time, and thus will not be available at the time of construction. This should only be set once,
+   * since the compression codec cannot change after the headers have been sent.
    *
    * @param decompressor the decompressing wrapper.
    */
@@ -182,9 +207,8 @@ public class MessageDeframer {
     if (!isClient) {
       System.out.println("decompressor set on server");
     }
-    // TODO(ericgribkoff) Re-enable after investigating flaky compression test
-    //Preconditions
-    //    .checkState(!deframeCalled, "already started to deframe, too late to set decompressor");
+    Preconditions.checkState(
+        !deframeCalled, "already started to deframe, too late to set decompressor");
     this.decompressor = checkNotNull(decompressor, "Can't pass an empty decompressor");
   }
 
@@ -196,11 +220,12 @@ public class MessageDeframer {
    *
    * @param numMessages the requested number of messages to be delivered to the listener.
    */
-  // Preconditions: None
+  // Preconditions: closeRequested != CloseRequested.IMMEDIATELY
   // Postconditions: pendingDeliveries_n = pendingDeliveries_(n-1) + numMessages
   // messageProducerAvailable triggered on listener
   public void request(int numMessages) {
-    // TODO(ericgribkoff) Precondition - stopDelivery = false?
+    Preconditions.checkState(
+        closeRequested != CloseRequested.IMMEDIATELY, "immediate close requested");
     if (isClient) {
       System.out.println("requested on client side");
     }
@@ -225,7 +250,7 @@ public class MessageDeframer {
     deframeCalled = true;
     boolean needToCloseData = true;
     try {
-      Preconditions.checkState(!isScheduledToClose(), "MessageDeframer already scheduled to close");
+      Preconditions.checkState(!isScheduledToClose(), "close already scheduled");
 
       unprocessed.addBuffer(data);
       needToCloseData = false;
@@ -239,28 +264,24 @@ public class MessageDeframer {
     }
   }
 
-  /**
-   * Schedule close in the client thread once any buffered messages are processed.
-   */
+  /** Schedule close in the client thread. */
   // Preconditions: not already scheduled to close
   // Postconditions: closeScheduled = true
   //   triggers call to listener.messageProducerAvailable
-  // TODO(ericgribkoff) Remove arg and separate into scheduleCloseWhenDone() and
-  // scheduleImmediateClose()?
   public void scheduleClose(boolean stopDelivery) {
-    // TODO(ericgribkoff) This will fail.
-    Preconditions.checkState(!closeScheduled, "close already scheduled");
-    this.stopDelivery = stopDelivery;
-    closeScheduled = true;
+    Preconditions.checkState(!isScheduledToClose(), "close already scheduled");
+    if (stopDelivery) {
+      closeRequested = CloseRequested.IMMEDIATELY;
+    } else {
+      closeRequested = CloseRequested.WHEN_COMPLETE;
+    }
     // Make sure that the message producer will see the scheduled close.
     listener.messageProducerAvailable(producer);
   }
 
-  /**
-   * Indicates whether or not this deframer has been closed.
-   */
+  /** Indicates whether or not this deframer received a request to close. */
   public boolean isScheduledToClose() {
-    return closeScheduled;
+    return closeRequested != CloseRequested.NONE;
   }
 
   private class Producer implements MessageProducer {
@@ -282,7 +303,13 @@ public class MessageDeframer {
 
     private void closeAndNotify() {
       Preconditions.checkState(!closed, "producer already closed");
-      boolean hadPartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
+      boolean hasPartialMessage;
+      if (closeRequested == CloseRequested.IMMEDIATELY) {
+        // We aborted based on the transport's instructions, so hasPartialMessage is irrelevant
+        hasPartialMessage = false;
+      } else {
+        hasPartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
+      }
       closed = true;
       try {
         if (unprocessed != null) {
@@ -295,17 +322,10 @@ public class MessageDeframer {
         unprocessed = null;
         nextFrame = null;
       }
-      if (stopDelivery) {
-        // We aborted based on the transport's instructions, so hadPartialMessage is irrelevant
-        producerListener.messageProducerClosed(false);
-      } else {
-        producerListener.messageProducerClosed(hadPartialMessage);
-      }
+      producerListener.messageProducerClosed(hasPartialMessage);
     }
 
-    /**
-     * Reads and delivers as many messages to the listener as possible.
-     */
+    /** Reads and delivers a messages to the listener, if possible. */
     @Override
     public InputStream next() {
       if (deframeFailed) {
@@ -322,7 +342,8 @@ public class MessageDeframer {
 
       try {
         // Process the uncompressed bytes.
-        while (!stopDelivery && (pendingDeliveries.get() > 0 && readRequiredBytes())) {
+        while (closeRequested != CloseRequested.IMMEDIATELY
+            && (pendingDeliveries.get() > 0 && readRequiredBytes())) {
           switch (state) {
             case HEADER:
               processHeader();
@@ -354,7 +375,7 @@ public class MessageDeframer {
           }
         }
 
-        boolean closeNow = closeScheduled;
+        CloseRequested closeRequestedSaved = closeRequested;
         /*
          * We are stalled when there are no more bytes to process. This allows delivering errors as
          * soon as the buffered input has been consumed, independent of whether the application has
@@ -365,7 +386,8 @@ public class MessageDeframer {
          */
         boolean stalled = unprocessed.readableBytes() == 0;
 
-        if (stopDelivery || (stalled && closeNow)) {
+        if (closeRequestedSaved == CloseRequested.IMMEDIATELY
+            || (stalled && closeRequestedSaved == CloseRequested.WHEN_COMPLETE)) {
           closeAndNotify();
         }
         return null;
@@ -416,9 +438,10 @@ public class MessageDeframer {
       int type = nextFrame.readUnsignedByte();
       if ((type & RESERVED_MASK) != 0) {
         deframeFailed = true;
-        RuntimeException t = Status.INTERNAL.withDescription(
-            debugString + ": Frame header malformed: reserved bits not zero")
-            .asRuntimeException();
+        RuntimeException t =
+            Status.INTERNAL
+                .withDescription(debugString + ": Frame header malformed: reserved bits not zero")
+                .asRuntimeException();
         producerListener.deframeFailed(t);
         producerListener.messageProducerClosed(true);
         return;
@@ -429,9 +452,13 @@ public class MessageDeframer {
       requiredLength = nextFrame.readInt();
       if (requiredLength < 0 || requiredLength > maxInboundMessageSize) {
         deframeFailed = true;
-        RuntimeException t = Status.RESOURCE_EXHAUSTED.withDescription(
-            String.format("%s: Frame size %d exceeds maximum: %d. ",
-                debugString, requiredLength, maxInboundMessageSize)).asRuntimeException();
+        RuntimeException t =
+            Status.RESOURCE_EXHAUSTED
+                .withDescription(
+                    String.format(
+                        "%s: Frame size %d exceeds maximum: %d. ",
+                        debugString, requiredLength, maxInboundMessageSize))
+                .asRuntimeException();
         producerListener.deframeFailed(t);
         producerListener.messageProducerClosed(true);
         return;
@@ -472,9 +499,11 @@ public class MessageDeframer {
     private InputStream getCompressedBody() {
       if (decompressor == Codec.Identity.NONE) {
         deframeFailed = true;
-        RuntimeException t = Status.INTERNAL.withDescription(
-            debugString + ": Can't decode compressed frame as compression not configured.")
-            .asRuntimeException();
+        RuntimeException t =
+            Status.INTERNAL
+                .withDescription(
+                    debugString + ": Can't decode compressed frame as compression not configured.")
+                .asRuntimeException();
         producerListener.deframeFailed(t);
         producerListener.messageProducerClosed(true);
         return null;
@@ -508,8 +537,8 @@ public class MessageDeframer {
     private long count;
     private long mark = -1;
 
-    SizeEnforcingInputStream(InputStream in, int maxMessageSize, StatsTraceContext statsTraceCtx,
-        String debugString) {
+    SizeEnforcingInputStream(
+        InputStream in, int maxMessageSize, StatsTraceContext statsTraceCtx, String debugString) {
       super(in);
       this.maxMessageSize = maxMessageSize;
       this.statsTraceCtx = statsTraceCtx;
@@ -576,9 +605,12 @@ public class MessageDeframer {
 
     private void verifySize() {
       if (count > maxMessageSize) {
-        throw Status.RESOURCE_EXHAUSTED.withDescription(String.format(
-                "%s: Compressed frame exceeds maximum frame size: %d. Bytes read: %d. ",
-                debugString, maxMessageSize, count)).asRuntimeException();
+        throw Status.RESOURCE_EXHAUSTED
+            .withDescription(
+                String.format(
+                    "%s: Compressed frame exceeds maximum frame size: %d. Bytes read: %d. ",
+                    debugString, maxMessageSize, count))
+            .asRuntimeException();
       }
     }
   }
