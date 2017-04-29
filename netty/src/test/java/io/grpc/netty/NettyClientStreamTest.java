@@ -111,6 +111,9 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
   public void setUp() {
     super.setUp();
 
+    // TODO(ericgribkoff) Create test object that implements this method wrapped
+    // around a mockable ClientStreamListener for testing, so this doAnswer() block
+    // is not necessary in this and the other tests.
     doAnswer(new Answer<Void>() {
       @Override
       public Void answer(InvocationOnMock invocation) {

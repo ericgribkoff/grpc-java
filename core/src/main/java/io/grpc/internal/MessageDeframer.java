@@ -48,6 +48,8 @@ import javax.annotation.concurrent.NotThreadSafe;
 /**
  * Deframer for GRPC frames.
  *
+ * <p>Todoo
+ *
  * <p>This class is not thread-safe. All calls to public methods should be made in the transport
  * thread.
  */
@@ -63,11 +65,14 @@ public class MessageDeframer {
     void messageProducerAvailable(MessageProducer mp);
   }
 
-  /** A message producing object. */
+  /**
+   * A message producing object. This class is not thread-safe. All calls to its public methods
+   * should be made in */
   public interface MessageProducer {
     @Nullable
     InputStream next();
 
+    /** A listener of message producer events. */
     interface Listener {
       /**
        * Called when the given number of bytes has been read from the input source of the deframer.
@@ -111,17 +116,12 @@ public class MessageDeframer {
   private final String debugString;
   private final Producer producer;
 
-  // TODO(ericgribkoff) Stronger documentation/checks that this is only safe to call before the
-  // stream starts.
   private int maxInboundMessageSize;
-  // TODO(ericgribkoff) Stronger documentation/checks that this is only called once and before
-  // messages are processed.
   private Decompressor decompressor;
-  // Set to true when request() is called. Used to trigger error when attempting to set
-  // maxInboundMessageSize too late.
+
+  /** Set to true when {@link #request(int)} is called. */
   private boolean requestCalled;
-  // Set to true when deframe() is called. Used to trigger error when attempting to set decompressor
-  // too late.
+  /** Set to true when {@link #deframe(ReadableBuffer)} is called. */
   private boolean deframeCalled;
 
   // unprocessed and pendingDeliveries both track pending work for the message producer, but
@@ -150,11 +150,11 @@ public class MessageDeframer {
    * CloseRequested.WHEN_COMPLETE, from CloseRequested.NONE to CloseRequested.IMMEDIATELY, and from
    * CloseRequested.WHEN_COMPLETE to CloseRequested.IMMEDIATELY.
    *
-   * <p>When set to CloseRequested.WHEN_COMPLETE, the transport thread is allowed to call {@code
-   * request()} but further calls to {@code deframe()} will throw an exception.
+   * <p>When set to CloseRequested.WHEN_COMPLETE, the transport thread is allowed to call {@link
+   * #request(int)} but further calls to {@link #deframe(ReadableBuffer)} will throw an exception.
    *
-   * <p>When set to CloseRequested.IMMEDIATELY, the transport thread must not invoke either {@code
-   * request()} or {@code deframe()}.
+   * <p>When set to CloseRequested.IMMEDIATELY, the transport thread must not invoke either {@link
+   * #request(int)} or {@link #deframe(ReadableBuffer)}.
    */
   private volatile CloseRequested closeRequested = CloseRequested.NONE;
 
