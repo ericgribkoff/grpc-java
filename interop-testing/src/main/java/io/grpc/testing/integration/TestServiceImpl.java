@@ -204,7 +204,6 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
     return new StreamObserver<StreamingOutputCallRequest>() {
       @Override
       public void onNext(StreamingOutputCallRequest request) {
-        System.out.println("sending");
         if (request.hasResponseStatus()) {
           dispatcher.cancel();
           responseObserver.onError(Status.fromCodeValue(request.getResponseStatus().getCode())
@@ -212,12 +211,7 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
               .asRuntimeException());
           return;
         }
-        // TODO(ericgribkoff) Restore this test
-        //dispatcher.enqueue(toChunkQueue(request));
-        for (Chunk chunk : toChunkQueue(request)) {
-          System.out.println("sending");
-          responseObserver.onNext(chunk.toResponse());
-        }
+        dispatcher.enqueue(toChunkQueue(request));
       }
 
       @Override

@@ -340,14 +340,6 @@ public abstract class AbstractInteropTest {
 
   @Test(timeout = 10000)
   public void serverStreaming() throws Exception {
-    for (int i = 0; i < 100; i++) {
-      System.out.println("Starting test");
-      serverStreamingHelper();
-    }
-  }
-
-  // TODO(ericgribkoff) Remove
-  private void serverStreamingHelper() throws Exception {
     final StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
         .setResponseType(PayloadType.COMPRESSABLE)
         .addResponseParameters(ResponseParameters.newBuilder()
@@ -667,7 +659,7 @@ public abstract class AbstractInteropTest {
     }
   }
 
-  @Test(timeout = 1000000)
+  @Test(timeout = 10000)
   public void halfDuplexCallShouldSucceed() throws Exception {
     // Build the request.
     List<Integer> responseSizes = Arrays.asList(50, 100, 150, 200);

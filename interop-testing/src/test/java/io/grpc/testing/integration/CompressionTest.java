@@ -183,19 +183,6 @@ public class CompressionTest {
 
   @Test
   public void compression() throws Exception {
-    for (int i = 0; i < 10; i++) {
-      compressionHelper();
-    }
-  }
-
-  private void compressionHelper() throws Exception {
-    System.out.println(enableClientMessageCompression);
-    System.out.println(clientAcceptEncoding);
-    System.out.println(clientEncoding);
-    System.out.println(enableServerMessageCompression);
-    System.out.println(serverAcceptEncoding);
-    System.out.println(serverEncoding);
-
     if (clientAcceptEncoding) {
       clientDecompressors = clientDecompressors.with(clientCodec, true);
     }
@@ -225,7 +212,6 @@ public class CompressionTest {
         .build();
     stub = TestServiceGrpc.newBlockingStub(channel);
 
-    // Failing?
     stub.unaryCall(REQUEST);
 
     if (clientAcceptEncoding && serverEncoding) {
