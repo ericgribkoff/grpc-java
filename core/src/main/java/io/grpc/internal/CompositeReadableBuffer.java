@@ -48,11 +48,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * <p>This class is safe for one thread to add data and one thread to consume data simultaneously.
  */
-// TODO(ericgribkoff): Switching to AtomicInteger and ConcurrentLinkedQueue adds unnecessary
-//   overhead when writes and reads are all done in the transport thread. If we don't move servers
-//   to deframe in the app thread, it might be worthwhile to have a separate non-concurrent
-//   implementation, or even just as an optimization for direct executors.
-// TODO(ericgribkoff): ConcurrentLinkedQueue might be overkill for one producer, one consumer use
+// TODO(ericgribkoff): AtomicInteger and ConcurrentLinkedQueue add unnecessary overhead when
+// deframing in the transport thread. If server deframing stays in transport thread, add alternate
+// non-concurrent implementation.
 public class CompositeReadableBuffer extends AbstractReadableBuffer {
 
   private AtomicInteger readableBytes = new AtomicInteger();

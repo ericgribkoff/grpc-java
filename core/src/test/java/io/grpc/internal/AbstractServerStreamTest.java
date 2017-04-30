@@ -34,6 +34,7 @@ package io.grpc.internal;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -144,17 +145,16 @@ public class AbstractServerStreamTest {
     state.setListener(null);
   }
 
-  // TODO(ericgribkoff) Recreate this for the message producer model
-  //  @Test
-  //  public void messageRead_listenerCalled() {
-  //    final ServerStreamListener streamListener = mock(ServerStreamListener.class);
-  //    stream.transportState().setListener(streamListener);
-  //
-  //    // Normally called by a deframe event.
-  //    stream.transportState().messageRead(new ByteArrayInputStream(new byte[]{}));
-  //
-  //    verify(streamListener).messageRead(isA(InputStream.class));
-  //  }
+  @Test
+  public void messageRead_listenerCalled() {
+    final ServerStreamListener streamListener = mock(ServerStreamListener.class);
+    stream.transportState().setListener(streamListener);
+
+    // Normally called by a deframe event.
+    stream.transportState().scheduleDeframerSource(mock(MessageDeframer.Source.class));
+
+    verify(streamListener).scheduleDeframerSource(isA(MessageDeframer.Source.class));
+  }
 
   @Test
   public void writeHeaders_failsOnNullHeaders() {

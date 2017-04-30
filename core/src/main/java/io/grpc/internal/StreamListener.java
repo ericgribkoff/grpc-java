@@ -48,7 +48,7 @@ public interface StreamListener {
    *
    * @param message the bytes of the message.
    */
-  // TODO(ericgribkoff) Remove this and update the tests that rely on it via mocks
+  // TODO(ericgribkoff) Remove this method.
   void messageRead(InputStream message);
 
   /**

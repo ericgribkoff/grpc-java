@@ -276,10 +276,9 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
     channelRead(rstStreamFrame(STREAM_ID, (int) Http2Error.CANCEL.code()));
     verify(streamListener, never()).messageRead(any(InputStream.class));
+    verify(streamListener).scheduleDeframerSource(any(MessageDeframer.Source.class));
     verify(streamListener).closed(Status.CANCELLED);
     verify(streamListener, atLeastOnce()).onReady();
-    // TODO(ericgribkoff) Update this to work with message producer
-    //verifyNoMoreInteractions(streamListener);
   }
 
   @Test

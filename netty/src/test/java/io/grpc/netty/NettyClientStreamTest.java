@@ -111,21 +111,18 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
   public void setUp() {
     super.setUp();
 
-    // TODO(ericgribkoff) Create test object that implements this method wrapped
-    // around a mockable ClientStreamListener for testing, so this doAnswer() block
-    // is not necessary in this and the other tests.
     doAnswer(
-          new Answer<Void>() {
-            @Override
-            public Void answer(InvocationOnMock invocation) {
-              MessageDeframer.Source mp = (MessageDeframer.Source) invocation.getArguments()[0];
-              InputStream message;
-              while ((message = mp.next()) != null) {
-                listener.messageRead(message);
-              }
-              return null;
+        new Answer<Void>() {
+          @Override
+          public Void answer(InvocationOnMock invocation) {
+            MessageDeframer.Source mp = (MessageDeframer.Source) invocation.getArguments()[0];
+            InputStream message;
+            while ((message = mp.next()) != null) {
+              listener.messageRead(message);
             }
-          })
+            return null;
+          }
+        })
       .when(listener)
       .scheduleDeframerSource(any(MessageDeframer.Source.class));
   }

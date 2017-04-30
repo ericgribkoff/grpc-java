@@ -216,7 +216,7 @@ public abstract class AbstractServerStream extends AbstractStream2
 
     @Override
     public void deframerClosed(boolean hasPartialMessage) {
-      if (hasPartialMessage) {
+      if (expectNoPartialMessageAfterEndOfStream && hasPartialMessage) {
         // TODO(ericgribkoff) Exercise this code path in a test
         // We've received the entire stream and have data available but we don't have
         // enough to read the next frame ... this is bad.
