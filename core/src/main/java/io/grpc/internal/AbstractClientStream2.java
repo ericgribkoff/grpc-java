@@ -286,7 +286,6 @@ public abstract class AbstractClientStream2 extends AbstractStream2
      * @param trailers new instance of {@code Trailers}, either empty or those returned by the
      *     server
      */
-    // Post-conditions: No additional data frames will be sent to the deframer.
     public final void transportReportStatus(
         final Status status, boolean stopDelivery, final Metadata trailers) {
       Preconditions.checkNotNull(status, "status");

@@ -190,6 +190,8 @@ public abstract class AbstractServerStream extends AbstractStream2
   protected abstract static class TransportState extends AbstractStream2.TransportState {
     /** Whether listener.closed() has been called. */
     private boolean listenerClosed;
+    /** Whether to throw an exception if deframer has a partial message upon closing. */
+    private boolean expectNoPartialMessageAfterEndOfStream;
     private ServerStreamListener listener;
     private final StatsTraceContext statsTraceCtx;
 
@@ -243,6 +245,7 @@ public abstract class AbstractServerStream extends AbstractStream2
       // Deframe the message. If a failure occurs, deframeFailed will be called.
       deframe(frame);
       if (endOfStream && !isDeframerScheduledToClose()) {
+        expectNoPartialMessageAfterEndOfStream = true;
         scheduleDeframerClose(false);
       }
     }
@@ -282,7 +285,8 @@ public abstract class AbstractServerStream extends AbstractStream2
         }
         listenerClosed = true;
         onStreamDeallocated();
-        if (!isDeframerScheduledToClose()) {
+        if (!isDeframerScheduledToCloseImmediately()) {
+          expectNoPartialMessageAfterEndOfStream = false;
           scheduleDeframerClose(true);
         }
         listener().closed(newStatus);

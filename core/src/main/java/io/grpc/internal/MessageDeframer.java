@@ -186,10 +186,7 @@ public class MessageDeframer {
        * Called when the transport has indicated via {@link Sink#scheduleClose(boolean)} that the
        * deframer should close.
        *
-       * @param hasPartialMessage whether there is an incomplete message queued. Always false if
-       *     {@link Sink#scheduleClose(boolean stopDelivery)} was called with
-       *     {@code stopDeliver=true}, as the transport thread requested close regardless of any
-       *     pending messages. // TODO(ericgribkoff) Move this decision into AbstractServerStream?
+       * @param hasPartialMessage whether there is an incomplete message queued.
        */
       void deframerClosed(boolean hasPartialMessage);
 
@@ -215,10 +212,6 @@ public class MessageDeframer {
   private int maxInboundMessageSize;
   private Decompressor decompressor;
 
-  // unprocessed and pendingDeliveries both track pending work for the message source, but
-  // at different levels of granularity - unprocessed is made up of http2 data frames and
-  // pendingDeliveries tracks the number of gRPC messages requested by the application and not yet
-  // delivered.
   private CompositeReadableBuffer unprocessed = new CompositeReadableBuffer();
   private final AtomicInteger pendingDeliveries = new AtomicInteger();
 
@@ -335,7 +328,9 @@ public class MessageDeframer {
 
     @Override
     public void scheduleClose(boolean stopDelivery) {
-      Preconditions.checkState(!isScheduledToClose(), "close already scheduled");
+      Preconditions.checkState(
+          !isScheduledToClose() || (stopDelivery && !isScheduledToCloseImmediately()),
+          "close already scheduled");
       if (stopDelivery) {
         closeRequested = CloseRequested.IMMEDIATELY;
       } else {
@@ -377,13 +372,7 @@ public class MessageDeframer {
 
     private void closeAndNotify() {
       Preconditions.checkState(!closed, "source already closed");
-      boolean hasPartialMessage;
-      if (closeRequested == CloseRequested.IMMEDIATELY) {
-        // We aborted based on the transport's instructions, so hasPartialMessage is irrelevant
-        hasPartialMessage = false;
-      } else {
-        hasPartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
-      }
+      boolean hasPartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
       closed = true;
       try {
         if (unprocessed != null) {
