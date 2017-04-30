@@ -183,16 +183,17 @@ public class MessageDeframer {
       void bytesRead(int numBytes);
 
       /**
-       * Called when the transport has indicated via {@link Sink#scheduleClose(boolean)} that the
-       * deframer should close.
+       * Called when deframer closes in response to a close scheduled via
+       * {@link Sink#scheduleClose(boolean)}. If invoked, no further callbacks will be sent and no
+       * further calls may be made to the deframer.
        *
        * @param hasPartialMessage whether there is an incomplete message queued.
        */
       void deframerClosed(boolean hasPartialMessage);
 
       /**
-       * Called when deframe fails. If invoked, this will be the last call made to the listener, as
-       * the deframer is in an unrecoverable state.
+       * Called when deframe fails. If invoked, it will be followed by
+       * {@link #deframerClosed(boolean)}, as the deframer is in an unrecoverable state.
        */
       void deframeFailed(Throwable t);
     }
@@ -352,7 +353,7 @@ public class MessageDeframer {
   }
 
   private class DeframerSource implements Source {
-    private final Source.Listener producerListener;
+    private final Source.Listener sourceListener;
     private State state = State.HEADER;
     private int requiredLength = HEADER_LENGTH;
     private boolean compressedFlag;
@@ -366,8 +367,8 @@ public class MessageDeframer {
      */
     private boolean deframeFailed;
 
-    private DeframerSource(Source.Listener producerListener) {
-      this.producerListener = producerListener;
+    private DeframerSource(Source.Listener sourceListener) {
+      this.sourceListener = sourceListener;
     }
 
     private void closeAndNotify() {
@@ -385,7 +386,7 @@ public class MessageDeframer {
         unprocessed = null;
         nextFrame = null;
       }
-      producerListener.deframerClosed(hasPartialMessage);
+      sourceListener.deframerClosed(hasPartialMessage);
     }
 
     /** Reads and delivers a messages to the listener, if possible. */
@@ -398,59 +399,51 @@ public class MessageDeframer {
         // May be invoked after close by previous calls to scheduleDeframerSource.
         return null;
       }
-      if (inDelivery) {
-        return null;
-      }
-      inDelivery = true;
 
-      try {
-        while (closeRequested != CloseRequested.IMMEDIATELY
-            && (pendingDeliveries.get() > 0 && readRequiredBytes())) {
-          switch (state) {
-            case HEADER:
-              processHeader();
-              if (deframeFailed) {
-                // Error occurred
-                return null;
-              }
-              break;
-            case BODY:
-              // Read the body and deliver the message.
-              InputStream toReturn = processBody();
-              if (deframeFailed) {
-                // Error occurred
-                return null;
-              }
-              // Since we are about to deliver a message, decrement the number of pending
-              // deliveries remaining.
-              pendingDeliveries.getAndDecrement();
-              return toReturn;
-            default:
-              deframeFailed = true;
-              AssertionError t = new AssertionError("Invalid state: " + state);
-              producerListener.deframeFailed(t);
-              producerListener.deframerClosed(true);
+      while (closeRequested != CloseRequested.IMMEDIATELY
+          && (pendingDeliveries.get() > 0 && readRequiredBytes())) {
+        switch (state) {
+          case HEADER:
+            processHeader();
+            if (deframeFailed) {
+              // Error occurred
               return null;
-          }
+            }
+            break;
+          case BODY:
+            // Read the body and deliver the message.
+            InputStream toReturn = processBody();
+            if (deframeFailed) {
+              // Error occurred
+              return null;
+            }
+            // Since we are about to deliver a message, decrement the number of pending
+            // deliveries remaining.
+            pendingDeliveries.getAndDecrement();
+            return toReturn;
+          default:
+            deframeFailed = true;
+            AssertionError t = new AssertionError("Invalid state: " + state);
+            sourceListener.deframeFailed(t);
+            sourceListener.deframerClosed(true);
+            return null;
         }
-
-        CloseRequested closeRequestedSaved = closeRequested;
-        /*
-         * We are stalled when there are no more bytes to process. At this point in the function,
-         * either all frames have been delivered, or unprocessed is empty.  If there is a partial
-         * message, it will be inside nextFrame and not in unprocessed.  If there is extra data but
-         * no pending deliveries, it will be in unprocessed.
-         */
-        boolean stalled = unprocessed.readableBytes() == 0;
-
-        if (closeRequestedSaved == CloseRequested.IMMEDIATELY
-            || (stalled && closeRequestedSaved == CloseRequested.WHEN_COMPLETE)) {
-          closeAndNotify();
-        }
-        return null;
-      } finally {
-        inDelivery = false;
       }
+
+      CloseRequested closeRequestedSaved = closeRequested;
+      /*
+       * We are stalled when there are no more bytes to process. At this point in the function,
+       * either all frames have been delivered, or unprocessed is empty.  If there is a partial
+       * message, it will be inside nextFrame and not in unprocessed.  If there is extra data but
+       * no pending deliveries, it will be in unprocessed.
+       */
+      boolean stalled = unprocessed.readableBytes() == 0;
+
+      if (closeRequestedSaved == CloseRequested.IMMEDIATELY
+          || (stalled && closeRequestedSaved == CloseRequested.WHEN_COMPLETE)) {
+        closeAndNotify();
+      }
+      return null;
     }
 
     /**
@@ -479,7 +472,7 @@ public class MessageDeframer {
         return true;
       } finally {
         if (totalBytesRead > 0) {
-          producerListener.bytesRead(totalBytesRead);
+          sourceListener.bytesRead(totalBytesRead);
           if (state == State.BODY) {
             statsTraceCtx.inboundWireSize(totalBytesRead);
           }
@@ -499,8 +492,8 @@ public class MessageDeframer {
             Status.INTERNAL
                 .withDescription(debugString + ": Frame header malformed: reserved bits not zero")
                 .asRuntimeException();
-        producerListener.deframeFailed(t);
-        producerListener.deframerClosed(true);
+        sourceListener.deframeFailed(t);
+        sourceListener.deframerClosed(true);
         return;
       }
       compressedFlag = (type & COMPRESSED_FLAG_MASK) != 0;
@@ -516,8 +509,8 @@ public class MessageDeframer {
                         "%s: Frame size %d exceeds maximum: %d. ",
                         debugString, requiredLength, maxInboundMessageSize))
                 .asRuntimeException();
-        producerListener.deframeFailed(t);
-        producerListener.deframerClosed(true);
+        sourceListener.deframeFailed(t);
+        sourceListener.deframerClosed(true);
         return;
       }
       statsTraceCtx.inboundMessage();
@@ -559,8 +552,8 @@ public class MessageDeframer {
                 .withDescription(
                     debugString + ": Can't decode compressed frame as compression not configured.")
                 .asRuntimeException();
-        producerListener.deframeFailed(t);
-        producerListener.deframerClosed(true);
+        sourceListener.deframeFailed(t);
+        sourceListener.deframerClosed(true);
         return null;
       }
 
@@ -573,8 +566,8 @@ public class MessageDeframer {
       } catch (IOException e) {
         deframeFailed = true;
         RuntimeException t = new RuntimeException(e);
-        producerListener.deframeFailed(t);
-        producerListener.deframerClosed(true);
+        sourceListener.deframeFailed(t);
+        sourceListener.deframerClosed(true);
         return null;
       }
     }

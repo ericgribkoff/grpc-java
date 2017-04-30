@@ -86,7 +86,7 @@ public abstract class Http2ClientStreamTransportState extends AbstractClientStre
    * Called to process a failure in HTTP/2 processing. It should notify the transport to cancel the
    * stream and call {@code transportReportStatus()}.
    */
-  protected abstract void http2ProcessingFailed(Status status, boolean replacePreviousStatus,
+  protected abstract void http2ProcessingFailed(Status status, boolean stopDelivery,
       Metadata trailers);
 
   /**
