@@ -162,10 +162,10 @@ public abstract class AbstractStream2 implements Stream {
 
     @Override
     public void scheduleDeframerSource(MessageDeframer.Source source) {
-      // TODO(ericgribkoff) listener() can return null here, at least for ServerStream via
-      //   setListener() - this occurs in io.grpc.internal.ServerTransportListener.streamCreated(),
-      //   as the stream listener initialization hits request before it's actually added to the
-      //   stream. This should either be avoided or this null-check must remain.
+      // At least some tests, such as those using
+      // NettyClientTransportTest.EchoServerStreamListener, will throw a NPE here since its
+      // constructor calls request() and invokes this method before setting the listener on the
+      // stream.
       if (listener() != null) {
         listener().scheduleDeframerSource(source);
       }
@@ -207,16 +207,7 @@ public abstract class AbstractStream2 implements Stream {
         frame.close();
         return;
       }
-      try {
-        deframer.sink().deframe(frame);
-      } catch (Throwable t) {
-        // The deframer will not intentionally throw an exception but instead call deframeFailed
-        // directly. This captures other exceptions (such as failed preconditions) that may be
-        // thrown.
-        // TODO(ericgribkoff) Decide if we still want this catch block. Impacts tests like
-        //   io.grpc.netty.NettyServerHandlerTest.streamErrorShouldNotCloseChannel()
-        deframeFailed(t);
-      }
+      deframer.sink().deframe(frame);
     }
 
     /**
@@ -227,16 +218,7 @@ public abstract class AbstractStream2 implements Stream {
       if (isDeframerScheduledToCloseImmediately()) {
         return;
       }
-      try {
-        deframer.sink().request(numMessages);
-      } catch (Throwable t) {
-        // The deframer will not intentionally throw an exception but instead call deframeFailed
-        // directly. This captures other exceptions (such as failed preconditions) that may be
-        // thrown.
-        // TODO(ericgribkoff) Decide if we still want this try/catch block. Impacts tests like
-        //   io.grpc.netty.NettyServerHandlerTest.streamErrorShouldNotCloseChannel()
-        deframeFailed(t);
-      }
+      deframer.sink().request(numMessages);
     }
 
     public final StatsTraceContext getStatsTraceContext() {

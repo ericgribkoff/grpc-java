@@ -302,8 +302,8 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     // Verify the stream was closed.
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(streamListener).closed(captor.capture());
-    assertEquals(e, captor.getValue().asException().getCause());
-    assertEquals(Code.UNKNOWN, captor.getValue().getCode());
+    assertEquals(e, captor.getValue().asException().getCause().getCause());
+    assertEquals(Code.INTERNAL, captor.getValue().getCode());
   }
 
   @Test
