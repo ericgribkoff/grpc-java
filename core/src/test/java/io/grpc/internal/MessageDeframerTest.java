@@ -141,6 +141,20 @@ public class MessageDeframerTest {
   }
 
   @Test
+  public void endOfStreamWithPartialMessageInNextFrame() {
+    deframer.sink().deframe(buffer(new byte[1]));
+    deframer.sink().request(1);
+    deframer.sink().scheduleClose(false);
+    verify(sinkListener, times(3)).scheduleDeframerSource(sourceCaptor.capture());
+    assertNull(sourceCaptor.getValue().next());
+    verify(sourceListener, atLeastOnce()).bytesRead(anyInt());
+    verify(sourceListener).deframerClosed(true);
+    verifyNoMoreInteractions(sinkListener);
+    verifyNoMoreInteractions(sourceListener);
+    checkStats(0, 0, 0);
+  }
+
+  @Test
   public void payloadSplitBetweenBuffers() {
     deframer.sink().request(1);
     deframer.sink().deframe(buffer(new byte[] {0, 0, 0, 0, 7, 3, 14, 1, 5, 9}));

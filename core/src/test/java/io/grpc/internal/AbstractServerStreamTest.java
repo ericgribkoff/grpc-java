@@ -72,8 +72,10 @@ public class AbstractServerStreamTest {
   };
 
   private AbstractServerStream.Sink sink = mock(AbstractServerStream.Sink.class);
+  private AbstractServerStreamBase.TransportState transportState =
+      new AbstractServerStreamBase.TransportState(MAX_MESSAGE_SIZE);
   private AbstractServerStreamBase stream = new AbstractServerStreamBase(
-      allocator, sink, new AbstractServerStreamBase.TransportState(MAX_MESSAGE_SIZE));
+      allocator, sink, transportState);
   private final ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
 
   /**
@@ -95,6 +97,16 @@ public class AbstractServerStreamTest {
     //verify(buffer).close();
     verify(streamListener).closed(eq(Status.OK));
     verify(streamListener, times(0)).messageRead(any(InputStream.class));
+  }
+
+  @Test
+  public void endOfStreamWithPartialMessage_callsDeframeFailed() {
+    ReadableBuffer buffer = mock(ReadableBuffer.class);
+    stream.transportState().inboundDataReceived(buffer, true);
+    stream.transportState().deframerClosed(true);
+    Status status = Status.fromThrowable(transportState.getDeframeFailedCause());
+    assertEquals(Status.INTERNAL.getCode(), status.getCode());
+    assertEquals(": Encountered end-of-stream mid-frame", status.getDescription());
   }
 
   /**
@@ -275,15 +287,23 @@ public class AbstractServerStreamTest {
     }
 
     static class TransportState extends AbstractServerStream.TransportState {
+      private Throwable deframeFailedCause;
+
       protected TransportState(int maxMessageSize) {
         super(maxMessageSize, StatsTraceContext.NOOP);
       }
 
       @Override
-      public void deframeFailed(Throwable cause) {}
+      public void deframeFailed(Throwable cause) {
+        deframeFailedCause = cause;
+      }
 
       @Override
       public void bytesRead(int processedBytes) {}
+
+      private Throwable getDeframeFailedCause() {
+        return deframeFailedCause;
+      }
     }
   }
 }

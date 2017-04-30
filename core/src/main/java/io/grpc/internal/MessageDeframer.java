@@ -425,7 +425,7 @@ public class MessageDeframer {
             deframeFailed = true;
             AssertionError t = new AssertionError("Invalid state: " + state);
             sourceListener.deframeFailed(t);
-            sourceListener.deframerClosed(true);
+            closeAndNotify();
             return null;
         }
       }
@@ -493,7 +493,7 @@ public class MessageDeframer {
                 .withDescription(debugString + ": Frame header malformed: reserved bits not zero")
                 .asRuntimeException();
         sourceListener.deframeFailed(t);
-        sourceListener.deframerClosed(true);
+        closeAndNotify();
         return;
       }
       compressedFlag = (type & COMPRESSED_FLAG_MASK) != 0;
@@ -510,7 +510,7 @@ public class MessageDeframer {
                         debugString, requiredLength, maxInboundMessageSize))
                 .asRuntimeException();
         sourceListener.deframeFailed(t);
-        sourceListener.deframerClosed(true);
+        closeAndNotify();
         return;
       }
       statsTraceCtx.inboundMessage();
@@ -553,7 +553,7 @@ public class MessageDeframer {
                     debugString + ": Can't decode compressed frame as compression not configured.")
                 .asRuntimeException();
         sourceListener.deframeFailed(t);
-        sourceListener.deframerClosed(true);
+        closeAndNotify();
         return null;
       }
 
@@ -567,7 +567,7 @@ public class MessageDeframer {
         deframeFailed = true;
         RuntimeException t = new RuntimeException(e);
         sourceListener.deframeFailed(t);
-        sourceListener.deframerClosed(true);
+        closeAndNotify();
         return null;
       }
     }
