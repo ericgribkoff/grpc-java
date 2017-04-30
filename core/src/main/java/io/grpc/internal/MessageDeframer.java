@@ -135,12 +135,13 @@ public class MessageDeframer {
 
   private final StatsTraceContext statsTraceCtx;
   private final String debugString;
-  private final Producer producer;
+  private final DeframerSource source;
+  private final Sink sink;
 
   private int maxInboundMessageSize;
   private Decompressor decompressor;
 
-  // unprocessed and pendingDeliveries both track pending work for the message producer, but
+  // unprocessed and pendingDeliveries both track pending work for the message source, but
   // at different levels of granularity - unprocessed is made up of http2 data frames and
   // pendingDeliveries tracks the number of gRPC messages requested by the application and not yet
   // delivered.
@@ -148,7 +149,7 @@ public class MessageDeframer {
   private final AtomicInteger pendingDeliveries = new AtomicInteger();
 
   /**
-   * This enum allows the transport thread to schedule a close on the message producer thread.
+   * This enum allows the transport thread to schedule a close on the message source thread.
    *
    * <p>CloseRequested.WHEN_COMPLETE indicates that any messages already queued by the deframer
    * should still be delivered before closing. This means, for example, that the deframer will not
@@ -175,8 +176,6 @@ public class MessageDeframer {
    */
   private volatile CloseRequested closeRequested = CloseRequested.NONE;
 
-  private final Sink dataFrameSink;
-
   /**
    * Create a deframer.
    *
@@ -197,16 +196,15 @@ public class MessageDeframer {
     this.maxInboundMessageSize = maxMessageSize;
     this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
     this.debugString = debugString;
-    this.dataFrameSink = new DataFrameSink(Preconditions.checkNotNull(listener, "sink"));
-    this.producer = new Producer(checkNotNull(producerListener, "producerListener"));
+    this.sink = new DeframerSink(Preconditions.checkNotNull(listener, "sink"));
+    this.source = new DeframerSource(checkNotNull(producerListener, "producerListener"));
   }
 
   public Sink sink() {
-    return dataFrameSink;
+    return sink;
   }
 
-  // TODO(ericgribkoff) Figure out name...
-  private class DataFrameSink implements Sink {
+  private class DeframerSink implements Sink {
     private final Sink.Listener sinkListener;
 
     /** Set to true when {@link #request(int)} is called. */
@@ -214,7 +212,7 @@ public class MessageDeframer {
     /** Set to true when {@link #deframe(ReadableBuffer)} is called. */
     private boolean deframeCalled;
 
-    private DataFrameSink(Sink.Listener sinkListener) {
+    private DeframerSink(Sink.Listener sinkListener) {
       this.sinkListener = sinkListener;
     }
 
@@ -260,7 +258,7 @@ public class MessageDeframer {
       Preconditions.checkArgument(numMessages > 0, "numMessages must be > 0");
       requestCalled = true;
       pendingDeliveries.getAndAdd(numMessages);
-      sinkListener.scheduleDeframerSource(producer);
+      sinkListener.scheduleDeframerSource(source);
     }
 
     /**
@@ -285,7 +283,7 @@ public class MessageDeframer {
         needToCloseData = false;
 
         // Indicate that all of the data for this stream has been received.
-        sinkListener.scheduleDeframerSource(producer);
+        sinkListener.scheduleDeframerSource(source);
       } finally {
         if (needToCloseData) {
           data.close();
@@ -305,8 +303,8 @@ public class MessageDeframer {
       } else {
         closeRequested = CloseRequested.WHEN_COMPLETE;
       }
-      // Make sure that the message producer will see the scheduled close.
-      sinkListener.scheduleDeframerSource(producer);
+      // Make sure that the message source will see the scheduled close.
+      sinkListener.scheduleDeframerSource(source);
     }
 
     /** Indicates whether or not this deframer received a request to close. */
@@ -322,7 +320,7 @@ public class MessageDeframer {
     }
   }
 
-  private class Producer implements Source {
+  private class DeframerSource implements Source {
     private final Source.Listener producerListener;
     private State state = State.HEADER;
     private int requiredLength = HEADER_LENGTH;
@@ -330,17 +328,17 @@ public class MessageDeframer {
     private boolean inDelivery = false;
     private boolean closed;
     // Indicates a deframing error occurred. When this is set to true, deframeFailed() must be
-    // called on the listener and no further callbacks may be issued by the producer.
+    // called on the listener and no further callbacks may be issued by the source.
     private boolean deframeFailed;
 
     private CompositeReadableBuffer nextFrame;
 
-    private Producer(Source.Listener producerListener) {
+    private DeframerSource(Source.Listener producerListener) {
       this.producerListener = producerListener;
     }
 
     private void closeAndNotify() {
-      Preconditions.checkState(!closed, "producer already closed");
+      Preconditions.checkState(!closed, "source already closed");
       boolean hasPartialMessage;
       if (closeRequested == CloseRequested.IMMEDIATELY) {
         // We aborted based on the transport's instructions, so hasPartialMessage is irrelevant
