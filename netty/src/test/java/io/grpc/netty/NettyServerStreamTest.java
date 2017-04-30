@@ -51,7 +51,7 @@ import com.google.common.collect.ListMultimap;
 import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.Status;
-import io.grpc.internal.MessageDeframer.MessageProducer;
+import io.grpc.internal.MessageDeframer;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.netty.WriteQueue.QueuedCommand;
@@ -91,17 +91,20 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     verify(listener()).onReady();
     reset(listener());
 
-    doAnswer(new Answer<Void>() {
-      @Override
-      public Void answer(InvocationOnMock invocation) {
-        MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
-        InputStream message;
-        while ((message = mp.next()) != null) {
-          serverListener.messageRead(message);
-        }
-        return null;
-      }
-    }).when(serverListener).messageProducerAvailable(any(MessageProducer.class));
+    doAnswer(
+          new Answer<Void>() {
+            @Override
+            public Void answer(InvocationOnMock invocation) {
+              MessageDeframer.Source mp = (MessageDeframer.Source) invocation.getArguments()[0];
+              InputStream message;
+              while ((message = mp.next()) != null) {
+                serverListener.messageRead(message);
+              }
+              return null;
+            }
+          })
+      .when(serverListener)
+      .scheduleDeframerSource(any(MessageDeframer.Source.class));
   }
 
   @Test
@@ -220,7 +223,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     stream().transportState()
         .inboundDataReceived(new EmptyByteBuf(UnpooledByteBufAllocator.DEFAULT), true);
 
-    verify(serverListener, atLeastOnce()).messageProducerAvailable(any(MessageProducer.class));
+    verify(serverListener, atLeastOnce()).scheduleDeframerSource(any(MessageDeframer.Source.class));
     verify(serverListener).halfClosed();
 
     // Server closes. Status sent
@@ -261,7 +264,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     // Client half-closes. Listener gets halfClosed()
     stream().transportState().inboundDataReceived(
         new EmptyByteBuf(UnpooledByteBufAllocator.DEFAULT), true);
-    verify(serverListener, atLeastOnce()).messageProducerAvailable(any(MessageProducer.class));
+    verify(serverListener, atLeastOnce()).scheduleDeframerSource(any(MessageDeframer.Source.class));
     verify(serverListener).halfClosed();
     // Abort from the transport layer
     stream().transportState().transportReportStatus(status);

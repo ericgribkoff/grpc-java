@@ -84,17 +84,20 @@ public class AbstractClientStream2Test {
   public void setUp() {
     MockitoAnnotations.initMocks(this);
 
-//    doAnswer(new Answer<Void>() {
-//      @Override
-//      public Void answer(InvocationOnMock invocation) {
-//        MessageDeframer.Source mp = (MessageDeframer.Source) invocation.getArguments()[0];
-//        InputStream message;
-//        while ((message = mp.next()) != null) {
-//          mockListener.messageRead(message);
-//        }
-//        return null;
-//      }
-//    }).when(mockListener).messageProducerAvailable(any(MessageProducer.class));
+    doAnswer(
+          new Answer<Void>() {
+            @Override
+            public Void answer(InvocationOnMock invocation) {
+              MessageDeframer.Source mp = (MessageDeframer.Source) invocation.getArguments()[0];
+              InputStream message;
+              while ((message = mp.next()) != null) {
+                mockListener.messageRead(message);
+              }
+              return null;
+            }
+          })
+      .when(mockListener)
+      .scheduleDeframerSource(any(MessageDeframer.Source.class));
   }
 
   private final WritableBufferAllocator allocator = new WritableBufferAllocator() {

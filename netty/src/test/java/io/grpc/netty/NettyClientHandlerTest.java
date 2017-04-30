@@ -70,7 +70,7 @@ import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransport.PingCallback;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.KeepAliveManager;
-import io.grpc.internal.MessageDeframer.MessageProducer;
+import io.grpc.internal.MessageDeframer;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ClientHeadersDecoder;
 import io.netty.buffer.ByteBuf;
@@ -146,17 +146,20 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
       mockKeepAliveManager = mock(KeepAliveManager.class);
     }
 
-    doAnswer(new Answer<Void>() {
-      @Override
-      public Void answer(InvocationOnMock invocation) {
-        MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
-        InputStream message;
-        while ((message = mp.next()) != null) {
-          streamListener.messageRead(message);
-        }
-        return null;
-      }
-    }).when(streamListener).messageProducerAvailable(any(MessageProducer.class));
+    doAnswer(
+          new Answer<Void>() {
+            @Override
+            public Void answer(InvocationOnMock invocation) {
+              MessageDeframer.Source mp = (MessageDeframer.Source) invocation.getArguments()[0];
+              InputStream message;
+              while ((message = mp.next()) != null) {
+                streamListener.messageRead(message);
+              }
+              return null;
+            }
+          })
+      .when(streamListener)
+      .scheduleDeframerSource(any(MessageDeframer.Source.class));
 
     initChannel(new GrpcHttp2ClientHeadersDecoder(GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE));
     streamTransportState = new TransportStateImpl(handler(), channel.eventLoop(),

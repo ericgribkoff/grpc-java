@@ -76,7 +76,7 @@ import io.grpc.Status.Code;
 import io.grpc.StreamTracer;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.KeepAliveManager;
-import io.grpc.internal.MessageDeframer.MessageProducer;
+import io.grpc.internal.MessageDeframer;
 import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransportListener;
@@ -166,17 +166,20 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     when(streamTracerFactory.newServerStreamTracer(anyString(), any(Metadata.class)))
         .thenReturn(streamTracer);
 
-    doAnswer(new Answer<Void>() {
-      @Override
-      public Void answer(InvocationOnMock invocation) {
-        MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
-        InputStream message;
-        while ((message = mp.next()) != null) {
-          streamListener.messageRead(message);
-        }
-        return null;
-      }
-    }).when(streamListener).messageProducerAvailable(any(MessageProducer.class));
+    doAnswer(
+        new Answer<Void>() {
+          @Override
+          public Void answer(InvocationOnMock invocation) {
+            MessageDeframer.Source mp = (MessageDeframer.Source) invocation.getArguments()[0];
+            InputStream message;
+            while ((message = mp.next()) != null) {
+              streamListener.messageRead(message);
+            }
+            return null;
+          }
+        })
+      .when(streamListener)
+      .scheduleDeframerSource(any(MessageDeframer.Source.class));
 
     initChannel(new GrpcHttp2ServerHeadersDecoder(GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE));
 
@@ -246,7 +249,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
       verify(streamListener).halfClosed();
     }
     verify(streamListener, atLeastOnce()).onReady();
-    verify(streamListener, atLeastOnce()).messageProducerAvailable(any(MessageProducer.class));
+    verify(streamListener, atLeastOnce()).scheduleDeframerSource(any(MessageDeframer.Source.class));
     verifyNoMoreInteractions(streamListener);
   }
 
@@ -262,7 +265,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     assertArrayEquals(new byte[0], ByteStreams.toByteArray(captor.getValue()));
     verify(streamListener).halfClosed();
     verify(streamListener, atLeastOnce()).onReady();
-    verify(streamListener, atLeastOnce()).messageProducerAvailable(any(MessageProducer.class));
+    verify(streamListener, atLeastOnce()).scheduleDeframerSource(any(MessageDeframer.Source.class));
     verifyNoMoreInteractions(streamListener);
   }
 

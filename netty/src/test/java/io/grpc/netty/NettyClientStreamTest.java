@@ -61,7 +61,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.GrpcUtil;
-import io.grpc.internal.MessageDeframer.MessageProducer;
+import io.grpc.internal.MessageDeframer;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.netty.WriteQueue.QueuedCommand;
 import io.netty.buffer.ByteBuf;
@@ -114,17 +114,20 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     // TODO(ericgribkoff) Create test object that implements this method wrapped
     // around a mockable ClientStreamListener for testing, so this doAnswer() block
     // is not necessary in this and the other tests.
-    doAnswer(new Answer<Void>() {
-      @Override
-      public Void answer(InvocationOnMock invocation) {
-        MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
-        InputStream message;
-        while ((message = mp.next()) != null) {
-          listener.messageRead(message);
-        }
-        return null;
-      }
-    }).when(listener).messageProducerAvailable(any(MessageProducer.class));
+    doAnswer(
+          new Answer<Void>() {
+            @Override
+            public Void answer(InvocationOnMock invocation) {
+              MessageDeframer.Source mp = (MessageDeframer.Source) invocation.getArguments()[0];
+              InputStream message;
+              while ((message = mp.next()) != null) {
+                listener.messageRead(message);
+              }
+              return null;
+            }
+          })
+      .when(listener)
+      .scheduleDeframerSource(any(MessageDeframer.Source.class));
   }
 
 

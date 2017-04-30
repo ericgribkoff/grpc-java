@@ -71,7 +71,18 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
-import io.grpc.internal.*;
+import io.grpc.internal.ClientStream;
+import io.grpc.internal.ClientStreamListener;
+import io.grpc.internal.ClientTransport;
+import io.grpc.internal.InternalServer;
+import io.grpc.internal.ManagedClientTransport;
+import io.grpc.internal.MessageDeframer;
+import io.grpc.internal.ServerListener;
+import io.grpc.internal.ServerStream;
+import io.grpc.internal.ServerStreamListener;
+import io.grpc.internal.ServerTransport;
+import io.grpc.internal.ServerTransportListener;
+import io.grpc.internal.StatsTraceContext;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -183,6 +194,21 @@ public abstract class AbstractTransportTest {
     when(serverStreamTracerFactory.newServerStreamTracer(anyString(), any(Metadata.class)))
         .thenReturn(serverStreamTracer);
     callOptions = CallOptions.DEFAULT.withStreamTracerFactory(clientStreamTracerFactory);
+
+    doAnswer(
+          new Answer<Void>() {
+            @Override
+            public Void answer(InvocationOnMock invocation) {
+              MessageDeframer.Source mp = (MessageDeframer.Source) invocation.getArguments()[0];
+              InputStream message;
+              while ((message = mp.next()) != null) {
+                mockClientStreamListener.messageRead(message);
+              }
+              return null;
+            }
+          })
+      .when(mockClientStreamListener)
+      .scheduleDeframerSource(any(MessageDeframer.Source.class));
   }
 
   @After
@@ -340,7 +366,21 @@ public abstract class AbstractTransportTest {
     StreamCreation serverStreamCreation
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     ServerStream serverStream = serverStreamCreation.stream;
-    ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
+    final ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
+    doAnswer(
+        new Answer<Void>() {
+          @Override
+          public Void answer(InvocationOnMock invocation) {
+            MessageDeframer.Source mp = (MessageDeframer.Source) invocation.getArguments()[0];
+            InputStream message;
+            while ((message = mp.next()) != null) {
+              mockServerStreamListener.messageRead(message);
+            }
+            return null;
+          }
+        })
+      .when(mockServerStreamListener)
+      .scheduleDeframerSource(any(MessageDeframer.Source.class));
 
     client.shutdown();
     client = null;
@@ -528,22 +568,21 @@ public abstract class AbstractTransportTest {
       inOrder.verify(clientStreamTracerFactory).newClientStreamTracer(any(Metadata.class));
     }
     final ClientStreamListener mockClientStreamListener2 = mock(ClientStreamListener.class);
-//    doAnswer(new Answer<Void>() {
-//      @Override
-//      public Void answer(InvocationOnMock invocation) {
-//        try {
-//          MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
-//          InputStream message;
-//          while ((message = mp.next()) != null) {
-//            mockClientStreamListener2.messageRead(message);
-//          }
-//          return null;
-//        } catch (Exception e) {
-//          System.out.println(e);
-//          return null;
-//        }
-//      }
-//    }).when(mockClientStreamListener2).messageProducerAvailable(any(MessageProducer.class));
+    doAnswer(
+          new Answer<Void>() {
+            @Override
+            public Void answer(InvocationOnMock invocation) {
+              MessageDeframer.Source source =
+                  (MessageDeframer.Source) invocation.getArguments()[0];
+              InputStream message;
+              while ((message = source.next()) != null) {
+                mockClientStreamListener2.messageRead(message);
+              }
+              return null;
+            }
+          })
+      .when(mockClientStreamListener2)
+      .scheduleDeframerSource(any(MessageDeframer.Source.class));
 
     stream2.start(mockClientStreamListener2);
     verify(mockClientStreamListener2, timeout(TIMEOUT_MS))
@@ -677,17 +716,21 @@ public abstract class AbstractTransportTest {
         Lists.newArrayList(serverStreamCreation.headers.getAll(binaryKey)));
     ServerStream serverStream = serverStreamCreation.stream;
     final ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
-//    doAnswer(new Answer<Void>() {
-//      @Override
-//      public Void answer(InvocationOnMock invocation) {
-//        MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
-//        InputStream message;
-//        while ((message = mp.next()) != null) {
-//          mockServerStreamListener.messageRead(message);
-//        }
-//        return null;
-//      }
-//    }).when(mockServerStreamListener).messageProducerAvailable(any(MessageProducer.class));
+    doAnswer(
+        new Answer<Void>() {
+          @Override
+          public Void answer(InvocationOnMock invocation) {
+            MessageDeframer.Source source =
+                    (MessageDeframer.Source) invocation.getArguments()[0];
+            InputStream message;
+            while ((message = source.next()) != null) {
+              mockServerStreamListener.messageRead(message);
+            }
+            return null;
+          }
+        })
+      .when(mockServerStreamListener)
+      .scheduleDeframerSource(any(MessageDeframer.Source.class));
 
     if (metricsExpected()) {
       serverInOrder.verify(serverStreamTracerFactory).newServerStreamTracer(
@@ -820,17 +863,21 @@ public abstract class AbstractTransportTest {
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     ServerStream serverStream = serverStreamCreation.stream;
     final ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
-//    doAnswer(new Answer<Void>() {
-//      @Override
-//      public Void answer(InvocationOnMock invocation) {
-//        MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
-//        InputStream message;
-//        while ((message = mp.next()) != null) {
-//          mockServerStreamListener.messageRead(message);
-//        }
-//        return null;
-//      }
-//    }).when(mockServerStreamListener).messageProducerAvailable(any(MessageProducer.class));
+    doAnswer(
+        new Answer<Void>() {
+          @Override
+          public Void answer(InvocationOnMock invocation) {
+            MessageDeframer.Source source =
+                    (MessageDeframer.Source) invocation.getArguments()[0];
+            InputStream message;
+            while ((message = source.next()) != null) {
+              mockServerStreamListener.messageRead(message);
+            }
+            return null;
+          }
+        })
+      .when(mockServerStreamListener)
+      .scheduleDeframerSource(any(MessageDeframer.Source.class));
 
     clientStream.halfClose();
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).halfClosed();
@@ -1154,22 +1201,21 @@ public abstract class AbstractTransportTest {
     assertEquals(methodDescriptor.getFullMethodName(), serverStreamCreation.method);
     ServerStream serverStream = serverStreamCreation.stream;
     final ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
-//    doAnswer(new Answer<Void>() {
-//      @Override
-//      public Void answer(InvocationOnMock invocation) {
-//        try {
-//          MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
-//          InputStream message;
-//          while ((message = mp.next()) != null) {
-//            mockServerStreamListener.messageRead(message);
-//          }
-//          return null;
-//        } catch (Exception e) {
-//          System.out.println(e);
-//          return null;
-//        }
-//      }
-//    }).when(mockServerStreamListener).messageProducerAvailable(any(MessageProducer.class));
+    doAnswer(
+        new Answer<Void>() {
+          @Override
+          public Void answer(InvocationOnMock invocation) {
+            MessageDeframer.Source source =
+                    (MessageDeframer.Source) invocation.getArguments()[0];
+            InputStream message;
+            while ((message = source.next()) != null) {
+              mockServerStreamListener.messageRead(message);
+            }
+            return null;
+          }
+        })
+      .when(mockServerStreamListener)
+      .scheduleDeframerSource(any(MessageDeframer.Source.class));
     serverStream.writeHeaders(new Metadata());
 
     Answer<Void> closeStream = new Answer<Void>() {
@@ -1325,22 +1371,21 @@ public abstract class AbstractTransportTest {
     ClientStream clientStream = client.newStream(methodDescriptor, new Metadata(), callOptions);
     final ClientStreamListener mockClientStreamListener = mock(ClientStreamListener.class);
 
-//    doAnswer(new Answer<Void>() {
-//      @Override
-//      public Void answer(InvocationOnMock invocation) {
-//        try {
-//          MessageProducer mp = (MessageProducer) invocation.getArguments()[0];
-//          InputStream message;
-//          while ((message = mp.next()) != null) {
-//            mockClientStreamListener.messageRead(message);
-//          }
-//          return null;
-//        } catch (Exception e) {
-//          System.out.println(e);
-//          return null;
-//        }
-//      }
-//    }).when(mockClientStreamListener).messageProducerAvailable(any(MessageProducer.class));
+    doAnswer(
+        new Answer<Void>() {
+          @Override
+          public Void answer(InvocationOnMock invocation) {
+            MessageDeframer.Source source =
+                    (MessageDeframer.Source) invocation.getArguments()[0];
+            InputStream message;
+            while ((message = source.next()) != null) {
+              mockClientStreamListener.messageRead(message);
+            }
+            return null;
+          }
+        })
+      .when(mockClientStreamListener)
+      .scheduleDeframerSource(any(MessageDeframer.Source.class));
     clientStream.start(mockClientStreamListener);
 
     MockServerTransportListener serverTransportListener
@@ -1435,9 +1480,8 @@ public abstract class AbstractTransportTest {
     @Override
     public void streamCreated(ServerStream stream, String method, Metadata headers) {
       ServerStreamListener listener = mock(ServerStreamListener.class);
-      ForwardingServerStreamListener wrappedListener = new ForwardingServerStreamListener(listener);
       streams.add(new StreamCreation(stream, method, headers, listener));
-      stream.setListener(wrappedListener);
+      stream.setListener(listener);
     }
 
     @Override

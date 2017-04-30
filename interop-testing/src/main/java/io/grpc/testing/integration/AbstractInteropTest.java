@@ -1298,7 +1298,6 @@ public abstract class AbstractInteropTest {
 
   /** Start a fullDuplexCall which the server will not respond, and verify the deadline expires. */
   @Test(timeout = 10000)
-  // TODO(ericgribkoff) Saw failure in TransportCompressionTest
   public void timeoutOnSleepingServer() throws Exception {
     TestServiceGrpc.TestServiceStub stub =
         asyncStub.withDeadlineAfter(1, TimeUnit.MILLISECONDS);

@@ -83,6 +83,8 @@ public class MessageDeframer {
 
     boolean isScheduledToClose();
 
+    boolean isScheduledToCloseImmediately();
+
     /** A listener of deframing sink events. */
     public interface Listener {
       /**
@@ -311,6 +313,12 @@ public class MessageDeframer {
     @Override
     public boolean isScheduledToClose() {
       return closeRequested != CloseRequested.NONE;
+    }
+
+    /** Indicates whether or not this deframer received a request to close immediately. */
+    @Override
+    public boolean isScheduledToCloseImmediately() {
+      return closeRequested == CloseRequested.IMMEDIATELY;
     }
   }
 

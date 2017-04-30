@@ -69,8 +69,12 @@ import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.StatusException;
-import io.grpc.internal.*;
-import io.grpc.internal.MessageDeframer.MessageProducer;
+import io.grpc.internal.AbstractStream2;
+import io.grpc.internal.ClientStreamListener;
+import io.grpc.internal.ClientTransport;
+import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.ManagedClientTransport;
+import io.grpc.internal.MessageDeframer;
 import io.grpc.okhttp.OkHttpClientTransport.ClientFrameHandler;
 import io.grpc.okhttp.internal.ConnectionSpec;
 import io.grpc.okhttp.internal.framed.ErrorCode;
@@ -1723,9 +1727,9 @@ public class OkHttpClientTransportTest {
     }
 
     @Override
-    public void messageProducerAvailable(MessageDeframer.Source mp) {
+    public void scheduleDeframerSource(MessageDeframer.Source source) {
       InputStream message;
-      while ((message = mp.next()) != null) {
+      while ((message = source.next()) != null) {
         messageRead(message);
       }
     }

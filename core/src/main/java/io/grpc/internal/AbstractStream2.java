@@ -180,10 +180,23 @@ public abstract class AbstractStream2 implements Stream {
       deframer.sink().scheduleClose(stopDelivery);
     }
 
-    /** Indicates whether the deframer is scheduled to close. */
+    /**
+     * Indicates whether the deframer is scheduled to close and will not accept calls
+     * to {@link MessageDeframer.Sink#deframe(ReadableBuffer)} .
+     */
     protected final boolean isDeframerScheduledToClose() {
       return deframer.sink().isScheduledToClose();
     }
+
+    /**
+     * Indicates whether the deframer is scheduled to close immediately and will not accept calls
+     * to {@link MessageDeframer.Sink#deframe(ReadableBuffer)} or to
+     * {@link MessageDeframer.Sink#request(int)}.
+     */
+    protected final boolean isDeframerScheduledToCloseImmediately() {
+      return deframer.sink().isScheduledToCloseImmediately();
+    }
+
 
     /**
      * Called to parse a received frame and attempt delivery of any completed messages. Must be
@@ -211,6 +224,9 @@ public abstract class AbstractStream2 implements Stream {
      * transport thread.
      */
     public final void requestMessagesFromDeframer(int numMessages) {
+      if (isDeframerScheduledToCloseImmediately()) {
+        return;
+      }
       try {
         deframer.sink().request(numMessages);
       } catch (Throwable t) {
