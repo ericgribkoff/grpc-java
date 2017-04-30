@@ -48,14 +48,12 @@ import javax.annotation.concurrent.NotThreadSafe;
 /**
  * Deframer for GRPC frames.
  *
- * <p>This is divided into a Sink and a Source. The sink receives inbound http2 data frames,
- * requests for gRPC messages, and deframing settings from the transport thread.
+ * <p>The operation of the deframer is divided between a {@link Sink} that is called from the
+ * transport thread and a {@link Source} that produces gRPC messages.
  *
- * <p>The source does the actual deframing, taking the http2 data frames queued by the sink and
- * returning gRPC messages.
- *
- * <p>This class is not thread-safe. All calls to public methods should be made in the transport
- * thread.
+ * <p>This class is not thread-safe. All calls to {@link Sink} methods should be made in the
+ * transport thread. It is thread-safe for a single thread to concurrently invoke {@link Source}
+ * methods. Typically this will be the transport thread itself or the application thread.
  */
 @NotThreadSafe
 public class MessageDeframer {
@@ -69,20 +67,81 @@ public class MessageDeframer {
     IMMEDIATELY
   }
 
-  /** A sink for use by the transport thread. */
+  /**
+   * A sink for use by the transport thread.
+   *
+   * <p>Calls to {@link Sink#request(int)} and {@link Sink#deframe(ReadableBuffer)} result in
+   * callbacks to {@link Sink.Listener#scheduleDeframerSource(Source)}.
+   */
   public interface Sink {
     void setMaxInboundMessageSize(int messageSize);
 
+    /**
+     * Sets the decompressor available to use. The message encoding for the stream comes later in
+     * time, and thus will not be available at the time of construction. This should only be set
+     * once, since the compression codec cannot change after the headers have been sent.
+     *
+     * @param decompressor the decompressing wrapper.
+     */
     void setDecompressor(Decompressor decompressor);
 
+    /**
+     * Requests up to the given number of messages from the call to be delivered via calls to
+     * {@link Source#next()}. No additional messages will be delivered.
+     *
+     * <p>If {@link #scheduleClose(boolean stopDelivery)} has been called with
+     * {@code stopDelivery=false}, this method will have no effect.
+     *
+     * <p>Calls to this method will trigger the {@link Sink.Listener#scheduleDeframerSource(Source)}
+     * callback.
+     *
+     * @param numMessages the requested number of messages to be delivered to the listener.
+     * @throws IllegalStateException if {@link #scheduleClose(boolean stopDelivery)} has been
+     *     called previously with {@code stopDelivery=true}.
+     */
     void request(int numMessages);
 
+    /**
+     * Adds the given data to this deframer.
+     *
+     * <p>If {@link #scheduleClose(boolean)} has been called prior to invoking this method, an
+     * exception will be thrown.
+     *
+     * <p>Calls to this method will trigger the {@link Sink.Listener#scheduleDeframerSource(Source)}
+     * callback.
+     *
+     * @param data the raw data read from the remote endpoint. Must be non-null.
+     * @throws IllegalStateException if {@link #scheduleClose(boolean)} has been called previously.
+     */
     void deframe(ReadableBuffer data);
 
+    /**
+     * Schedule closing of the deframer. Since {@link Source} may be running in a separate thread,
+     * the transport cannot assume the deframer closes immediately. Scheduling a close will
+     * eventually cause {@link Source} to invoke {@link Source.Listener#deframeFailed(Throwable)}.
+     *
+     * <p>If {@code stopDelivery} is false, {@link Source#next} will continue to return messages
+     * until all complete queued messages have been delivered. Typically this is used when the
+     * transport receives trailers or end-of-stream.
+     *
+     * <p>If {@code stopDelivery} is true, the next call to {@link Source#next} will trigger a
+     * close of the deframer, regardless of any queued messages. Typically this is used upon a
+     * client cancellation, as any pending messages will be discarded.
+     *
+     * <p>Calls to this method will trigger the {@link Sink.Listener#scheduleDeframerSource(Source)}
+     * callback.
+     *
+     * @param stopDelivery whether to close the deframer even if messages remain undelivered
+     */
     void scheduleClose(boolean stopDelivery);
 
+    /** Indicates {@link #scheduleClose(boolean)} has been called. */
     boolean isScheduledToClose();
 
+    /**
+     * Indicates whether {@link #scheduleClose(boolean stopDelivery)} has been called with
+     * @{code stopDelivery=true}.
+     */
     boolean isScheduledToCloseImmediately();
 
     /** A listener of deframing sink events. */
@@ -97,10 +156,22 @@ public class MessageDeframer {
 
   /** A source for deframed gRPC messages. */
   public interface Source {
+    /**
+     * Returns the next gRPC message, if the data has been received by {@link Source} and the
+     * application has requested another message.
+     *
+     * <p>Calls to this method will also check if the deframer should be closed due to a previous
+     * call to {@link Sink#scheduleClose(boolean)}.
+     */
     @Nullable
     InputStream next();
 
-    /** A listener of deframing source events. */
+    /**
+     * A listener of deframing source events. If deframing occurs outside of the transport
+     * thread, it is up to the implementation to ensure that these methods are thread-safe:
+     * typically this means either scheduling a response on the transport thread itself or
+     * obtaining the necessary lock.
+     */
     interface Listener {
       /**
        * Called when the given number of bytes has been read from the input source of the deframer.
@@ -112,22 +183,25 @@ public class MessageDeframer {
       void bytesRead(int numBytes);
 
       /**
-       * Called when there are no complete messages remaining to be delivered and the transport has
-       * called scheduleClose().
+       * Called when the transport has indicated via {@link Sink#scheduleClose(boolean)} that the
+       * deframer should close.
        *
-       * @param hasPartialMessage whether there is an incomplete message queued
+       * @param hasPartialMessage whether there is an incomplete message queued. Always false if
+       *     {@link Sink#scheduleClose(boolean stopDelivery)} was called with
+       *     {@code stopDeliver=true}, as the transport thread requested close regardless of any
+       *     pending messages. // TODO(ericgribkoff) Move this decision into AbstractServerStream?
        */
       void deframerClosed(boolean hasPartialMessage);
 
       /**
-       * Called when deframe fails. If invoked, this will be the last call made to the listener
-       * (other than messageProducerAvailable(), which should be a separate interface), as the
-       * deframing is in an unrecoverable state.
+       * Called when deframe fails. If invoked, this will be the last call made to the listener, as
+       * the deframer is in an unrecoverable state.
        */
       void deframeFailed(Throwable t);
     }
   }
 
+  /** Used to track whether {@link Source} is processing a gRPC message header or body. */
   private enum State {
     HEADER,
     BODY
@@ -149,7 +223,7 @@ public class MessageDeframer {
   private final AtomicInteger pendingDeliveries = new AtomicInteger();
 
   /**
-   * This enum allows the transport thread to schedule a close on the message source thread.
+   * This enum allows the transport thread to schedule a close on the source thread.
    *
    * <p>CloseRequested.WHEN_COMPLETE indicates that any messages already queued by the deframer
    * should still be delivered before closing. This means, for example, that the deframer will not
@@ -179,15 +253,16 @@ public class MessageDeframer {
   /**
    * Create a deframer.
    *
-   * @param listener listener for deframer events.
+   * @param sinkListener listener for deframer sink events.
+   * @param sourceListener listener for deframer source events
    * @param decompressor the compression used if a compressed frame is encountered, with {@code
    *     NONE} meaning unsupported
    * @param maxMessageSize the maximum allowed size for received messages.
    * @param debugString a string that will appear on errors statuses
    */
   public MessageDeframer(
-      Sink.Listener listener,
-      Source.Listener producerListener,
+      Sink.Listener sinkListener,
+      Source.Listener sourceListener,
       Decompressor decompressor,
       int maxMessageSize,
       StatsTraceContext statsTraceCtx,
@@ -196,8 +271,8 @@ public class MessageDeframer {
     this.maxInboundMessageSize = maxMessageSize;
     this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
     this.debugString = debugString;
-    this.sink = new DeframerSink(Preconditions.checkNotNull(listener, "sink"));
-    this.source = new DeframerSource(checkNotNull(producerListener, "producerListener"));
+    this.sink = new DeframerSink(Preconditions.checkNotNull(sinkListener, "sink listener"));
+    this.source = new DeframerSource(checkNotNull(sourceListener, "source listener"));
   }
 
   public Sink sink() {
@@ -217,22 +292,13 @@ public class MessageDeframer {
     }
 
     @Override
-    // Preconditions: request() has not yet been called (=> the stream has not yet started)
     public void setMaxInboundMessageSize(int messageSize) {
       Preconditions.checkState(
           !requestCalled, "already requested messages, too late to set max inbound message size");
       maxInboundMessageSize = messageSize;
     }
 
-    /**
-     * Sets the decompressor available to use. The message encoding for the stream comes later in
-     * time, and thus will not be available at the time of construction. This should only be set
-     * once, since the compression codec cannot change after the headers have been sent.
-     *
-     * @param decompressor the decompressing wrapper.
-     */
     @Override
-    // Preconditions: deframe() has not yet been called
     public void setDecompressor(Decompressor decompressor) {
       Preconditions.checkState(
           !deframeCalled, "already started to deframe, too late to set decompressor");
@@ -240,18 +306,7 @@ public class MessageDeframer {
           checkNotNull(decompressor, "Can't pass an empty decompressor");
     }
 
-    /**
-     * Requests up to the given number of messages from the call to be delivered via {@link
-     * Listener#scheduleDeframerSource(Source)}. No additional messages will be delivered.
-     *
-     * <p>If {@code scheduleClose()} has already been called, this method will have no effect.
-     *
-     * @param numMessages the requested number of messages to be delivered to the listener.
-     */
     @Override
-    // Preconditions: closeRequested != CloseRequested.IMMEDIATELY
-    // Postconditions: pendingDeliveries_n = pendingDeliveries_(n-1) + numMessages
-    // messageProducerAvailable triggered on listener
     public void request(int numMessages) {
       Preconditions.checkState(
           closeRequested != CloseRequested.IMMEDIATELY, "immediate close requested");
@@ -261,28 +316,15 @@ public class MessageDeframer {
       sinkListener.scheduleDeframerSource(source);
     }
 
-    /**
-     * Adds the given data to this deframer and attempts delivery to the listener.
-     *
-     * @param data the raw data read from the remote endpoint. Must be non-null.
-     * @throws IllegalStateException if already scheduled to close or if this method has previously
-     *     been called with {@code endOfStream=true}.
-     */
     @Override
-    // Preconditions: not scheduled to close
-    // Postconditions: data will be added to unprocessed
-    //   triggers call to listener.messageProducerAvailable
     public void deframe(ReadableBuffer data) {
       Preconditions.checkNotNull(data, "data");
       deframeCalled = true;
       boolean needToCloseData = true;
       try {
         Preconditions.checkState(!isScheduledToClose(), "close already scheduled");
-
         unprocessed.addBuffer(data);
         needToCloseData = false;
-
-        // Indicate that all of the data for this stream has been received.
         sinkListener.scheduleDeframerSource(source);
       } finally {
         if (needToCloseData) {
@@ -291,11 +333,7 @@ public class MessageDeframer {
       }
     }
 
-    /** Schedule close in the client thread. */
     @Override
-    // Preconditions: not already scheduled to close
-    // Postconditions: closeScheduled = true
-    //   triggers call to listener.messageProducerAvailable
     public void scheduleClose(boolean stopDelivery) {
       Preconditions.checkState(!isScheduledToClose(), "close already scheduled");
       if (stopDelivery) {
@@ -303,17 +341,15 @@ public class MessageDeframer {
       } else {
         closeRequested = CloseRequested.WHEN_COMPLETE;
       }
-      // Make sure that the message source will see the scheduled close.
+      // Ensure that the source will see the scheduled close.
       sinkListener.scheduleDeframerSource(source);
     }
 
-    /** Indicates whether or not this deframer received a request to close. */
     @Override
     public boolean isScheduledToClose() {
       return closeRequested != CloseRequested.NONE;
     }
 
-    /** Indicates whether or not this deframer received a request to close immediately. */
     @Override
     public boolean isScheduledToCloseImmediately() {
       return closeRequested == CloseRequested.IMMEDIATELY;
@@ -327,11 +363,13 @@ public class MessageDeframer {
     private boolean compressedFlag;
     private boolean inDelivery = false;
     private boolean closed;
-    // Indicates a deframing error occurred. When this is set to true, deframeFailed() must be
-    // called on the listener and no further callbacks may be issued by the source.
-    private boolean deframeFailed;
-
     private CompositeReadableBuffer nextFrame;
+
+    /**
+     * Indicates a deframing error occurred. When this is set to true, deframeFailed() must be
+     * called on the listener and no further callbacks may be issued.
+     */
+    private boolean deframeFailed;
 
     private DeframerSource(Source.Listener producerListener) {
       this.producerListener = producerListener;
@@ -368,7 +406,7 @@ public class MessageDeframer {
         return null;
       }
       if (closed) {
-        // May be called after close by previously scheduled messageProducerAvailable() calls
+        // May be invoked after close by previous calls to scheduleDeframerSource.
         return null;
       }
       if (inDelivery) {
@@ -377,7 +415,6 @@ public class MessageDeframer {
       inDelivery = true;
 
       try {
-        // Process the uncompressed bytes.
         while (closeRequested != CloseRequested.IMMEDIATELY
             && (pendingDeliveries.get() > 0 && readRequiredBytes())) {
           switch (state) {
@@ -395,7 +432,7 @@ public class MessageDeframer {
                 // Error occurred
                 return null;
               }
-              // Since we've delivered a message, decrement the number of pending
+              // Since we are about to deliver a message, decrement the number of pending
               // deliveries remaining.
               pendingDeliveries.getAndDecrement();
               return toReturn;
@@ -410,12 +447,10 @@ public class MessageDeframer {
 
         CloseRequested closeRequestedSaved = closeRequested;
         /*
-         * We are stalled when there are no more bytes to process. This allows delivering errors as
-         * soon as the buffered input has been consumed, independent of whether the application has
-         * requested another message.  At this point in the function, either all frames have been
-         * delivered, or unprocessed is empty.  If there is a partial message, it will be inside
-         * next frame and not in unprocessed.  If there is extra data but no pending deliveries, it
-         * will be in unprocessed.
+         * We are stalled when there are no more bytes to process. At this point in the function,
+         * either all frames have been delivered, or unprocessed is empty.  If there is a partial
+         * message, it will be inside nextFrame and not in unprocessed.  If there is extra data but
+         * no pending deliveries, it will be in unprocessed.
          */
         boolean stalled = unprocessed.readableBytes() == 0;
 
@@ -503,8 +538,6 @@ public class MessageDeframer {
 
     /**
      * Processes the GRPC message body, which depending on frame header flags may be compressed.
-     *
-     * @return null if error occurred
      */
     @Nullable
     private InputStream processBody() {
