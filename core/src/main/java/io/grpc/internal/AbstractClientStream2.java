@@ -87,8 +87,8 @@ public abstract class AbstractClientStream2 extends AbstractStream2
      * Tears down the stream, typically in the event of a timeout. This method may be called
      * multiple times and from any thread.
      *
-     * <p>This is a clone of {@link ClientStream#cancel(Status)}; {@link
-     * AbstractClientStream2#cancel} delegates to this method.
+     * <p>This is a clone of {@link ClientStream#cancel(Status)};
+     * {@link AbstractClientStream2#cancel} delegates to this method.
      */
     void cancel(Status status);
   }
@@ -104,11 +104,8 @@ public abstract class AbstractClientStream2 extends AbstractStream2
    */
   private volatile boolean cancelled;
 
-  protected AbstractClientStream2(
-      WritableBufferAllocator bufferAllocator,
-      StatsTraceContext statsTraceCtx,
-      Metadata headers,
-      boolean useGet) {
+  protected AbstractClientStream2(WritableBufferAllocator bufferAllocator,
+      StatsTraceContext statsTraceCtx, Metadata headers, boolean useGet) {
     Preconditions.checkNotNull(headers, "headers");
     this.useGet = useGet;
     if (!useGet) {
@@ -185,13 +182,12 @@ public abstract class AbstractClientStream2 extends AbstractStream2
   }
 
   /**
-   * {@code MessageProducer.Listener} methods will be called from the deframing thread. Other
-   * methods should only be called from the transport thread.
+   * {@link MessageDeframer.Source.Listener} methods will be called from the deframing thread.
+   * Other methods should only be called from the transport thread.
    */
   protected abstract static class TransportState extends AbstractStream2.TransportState {
     /** Whether listener.closed() has been called. */
     private final StatsTraceContext statsTraceCtx;
-
     private boolean listenerClosed;
     private ClientStreamListener listener;
 
@@ -263,9 +259,7 @@ public abstract class AbstractClientStream2 extends AbstractStream2
       Preconditions.checkNotNull(status, "status");
       Preconditions.checkNotNull(trailers, "trailers");
       if (statusReported) {
-        log.log(
-            Level.INFO,
-            "Received trailers on closed stream:\n {1}\n {2}",
+        log.log(Level.INFO,"Received trailers on closed stream:\n {1}\n {2}",
             new Object[] {status, trailers});
         return;
       }
@@ -286,8 +280,8 @@ public abstract class AbstractClientStream2 extends AbstractStream2
      * @param trailers new instance of {@code Trailers}, either empty or those returned by the
      *     server
      */
-    public final void transportReportStatus(
-        final Status status, boolean stopDelivery, final Metadata trailers) {
+    public final void transportReportStatus(final Status status, boolean stopDelivery,
+        final Metadata trailers) {
       Preconditions.checkNotNull(status, "status");
       Preconditions.checkNotNull(trailers, "trailers");
       if (statusReported && !stopDelivery) {
@@ -381,8 +375,7 @@ public abstract class AbstractClientStream2 extends AbstractStream2
     @Override
     public void close() {
       closed = true;
-      Preconditions.checkState(
-          payload != null,
+      Preconditions.checkState(payload != null,
           "Lack of request message. GET request is only supported for unary requests");
       abstractClientStreamSink().writeHeaders(headers, payload);
       payload = null;
