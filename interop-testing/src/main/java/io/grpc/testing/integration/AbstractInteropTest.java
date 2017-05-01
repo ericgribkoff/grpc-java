@@ -571,7 +571,7 @@ public abstract class AbstractInteropTest {
 
     final List<StreamingOutputCallResponse> responses =
         new ArrayList<StreamingOutputCallResponse>();
-    final ErrorResponse errorResponse = new ErrorResponse();
+    final List<Status> errors = new ArrayList<Status>();
     final CountDownLatch latch = new CountDownLatch(1);
     final SettableFuture<StreamingOutputCallResponse> firstValue = SettableFuture.create();
     StreamObserver<StreamingOutputCallResponse> responseObserver =
@@ -592,7 +592,7 @@ public abstract class AbstractInteropTest {
 
           @Override
           public void onError(Throwable t) {
-            errorResponse.setStatus(Status.fromThrowable(t));
+            errors.add(Status.fromThrowable(t));
             latch.countDown();
           }
 
@@ -611,7 +611,8 @@ public abstract class AbstractInteropTest {
       fail("operation timed out");
     }
     assertEquals(1, responses.size());
-    assertEquals(Status.Code.CANCELLED, errorResponse.getStatus().getCode());
+    assertEquals(1, errors.size());
+    assertEquals(Status.Code.CANCELLED, errors.get(0).getCode());
 
     if (metricsExpected()) {
       assertMetrics("grpc.testing.TestService/FullDuplexCall", Status.Code.CANCELLED);
@@ -1239,18 +1240,6 @@ public abstract class AbstractInteropTest {
     verifyNoMoreInteractions(responseObserver);
     if (metricsExpected()) {
       assertMetrics("grpc.testing.TestService/FullDuplexCall", Status.Code.UNKNOWN);
-    }
-  }
-
-  private static class ErrorResponse {
-    private Status status;
-
-    private void setStatus(Status status) {
-      this.status = status;
-    }
-
-    private Status getStatus() {
-      return status;
     }
   }
 

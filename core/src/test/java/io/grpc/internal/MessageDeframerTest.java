@@ -81,7 +81,6 @@ public class MessageDeframerTest {
   private MessageDeframer deframer = new MessageDeframer(sinkListener, sourceListener,
       Codec.Identity.NONE, DEFAULT_MAX_MESSAGE_SIZE, statsTraceCtx, "test");
 
-  private ArgumentCaptor<InputStream> messages = ArgumentCaptor.forClass(InputStream.class);
   private ArgumentCaptor<MessageDeframer.Source> sourceCaptor =
           ArgumentCaptor.forClass(MessageDeframer.Source.class);
 

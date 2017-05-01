@@ -31,11 +31,13 @@
 
 package io.grpc.internal;
 
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
@@ -92,11 +94,12 @@ public class AbstractServerStreamTest {
     // Frame received after deframer closed, should be ignored and not trigger an exception
     stream.transportState().inboundDataReceived(buffer, true);
 
-    // Can't verify the buffer is closed as this is now handled by a call through the real
-    // ServerStreamListener => test for this separately.
-    //verify(buffer).close();
+    ArgumentCaptor<MessageDeframer.Source> sourceCaptor =
+            ArgumentCaptor.forClass(MessageDeframer.Source.class);
+    verify(streamListener, atLeastOnce()).scheduleDeframerSource(sourceCaptor.capture());
+    assertNull(sourceCaptor.getValue().next());
+    verify(buffer).close();
     verify(streamListener).closed(eq(Status.OK));
-    verify(streamListener, times(0)).messageRead(any(InputStream.class));
   }
 
   @Test
