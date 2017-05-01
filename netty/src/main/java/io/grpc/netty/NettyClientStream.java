@@ -203,8 +203,8 @@ class NettyClientStream extends AbstractClientStream2 {
   }
 
   /**
-   * {@code MessageProducer.Listener} methods will be called from the deframing thread. Other
-   * methods should only be called from the transport thread.
+   * {@link io.grpc.internal.MessageDeframer.Source.Listener} methods will be called from the
+   * deframing thread. Other methods should only be called from the transport thread.
    */
   public abstract static class TransportState extends Http2ClientStreamTransportState
       implements StreamIdHolder {

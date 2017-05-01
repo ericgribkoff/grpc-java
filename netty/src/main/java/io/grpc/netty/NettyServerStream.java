@@ -150,10 +150,7 @@ class NettyServerStream extends AbstractServerStream {
     }
   }
 
-  /**
-   * {@code MessageProducer.Listener} methods will be called from the deframing thread. Other
-   * methods should only be called from the transport thread.
-   */
+  /** This should only be called from the transport thread. */
   public static class TransportState extends AbstractServerStream.TransportState
       implements StreamIdHolder {
     private final Http2Stream http2Stream;

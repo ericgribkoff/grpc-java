@@ -40,12 +40,15 @@ import static io.grpc.netty.Utils.STATUS_OK;
 import static io.netty.util.CharsetUtil.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -358,9 +361,10 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream().request(1);
 
     // Verify that the listener was only notified of the first message, not the second.
-    // Can no longer verify this because this mocks the listener, which is now responsible for
-    // the actual close.c
-    //verify(listener).messageRead(any(InputStream.class));
+    ArgumentCaptor<MessageDeframer.Source> sourceCaptor =
+            ArgumentCaptor.forClass(MessageDeframer.Source.class);
+    verify(listener, atLeastOnce()).scheduleDeframerSource(sourceCaptor.capture());
+    assertNull(sourceCaptor.getValue().next());
     verify(listener).closed(eq(Status.CANCELLED), eq(trailers));
   }
 
