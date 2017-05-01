@@ -53,6 +53,7 @@ public interface StreamListener {
 
   /**
    * Called to schedule deframing in the application thread.
+   * 
    * @param source the message deframer source
    */
   void scheduleDeframerSource(MessageDeframer.Source source);
