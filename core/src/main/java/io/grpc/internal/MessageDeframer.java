@@ -89,9 +89,6 @@ public class MessageDeframer {
      * Requests up to the given number of messages from the call to be delivered via calls to
      * {@link Source#next()}. No additional messages will be delivered.
      *
-     * <p>If {@link #scheduleClose(boolean stopDelivery)} has been called with
-     * {@code stopDelivery=false}, this method will have no effect.
-     *
      * <p>Calls to this method will trigger the {@link Sink.Listener#scheduleDeframerSource(Source)}
      * callback.
      *
@@ -104,9 +101,6 @@ public class MessageDeframer {
     /**
      * Adds the given data to this deframer.
      *
-     * <p>If {@link #scheduleClose(boolean)} has been called prior to invoking this method, an
-     * exception will be thrown.
-     *
      * <p>Calls to this method will trigger the {@link Sink.Listener#scheduleDeframerSource(Source)}
      * callback.
      *
@@ -117,8 +111,8 @@ public class MessageDeframer {
 
     /**
      * Schedule closing of the deframer. Since {@link Source} may be running in a separate thread,
-     * the transport cannot assume the deframer closes immediately. Scheduling a close will
-     * eventually cause {@link Source} to invoke {@link Source.Listener#deframeFailed(Throwable)}.
+     * the transport cannot assume the deframer closes immediately. When the close does occur,
+     * {@link Source} will invoke {@link Source.Listener#deframerClosed(boolean)}.
      *
      * <p>If {@code stopDelivery} is false, {@link Source#next} will continue to return messages
      * until all complete queued messages have been delivered. Typically this is used when the
@@ -126,7 +120,9 @@ public class MessageDeframer {
      *
      * <p>If {@code stopDelivery} is true, the next call to {@link Source#next} will trigger a
      * close of the deframer, regardless of any queued messages. Typically this is used upon a
-     * client cancellation, as any pending messages will be discarded.
+     * client cancellation, as any pending messages will be discarded. There is an inherent race
+     * condition when deframing is done outside of the transport thread, so it is possible for the
+     * client to receive a message before close takes place even with {@code stopDelivery=true}.
      *
      * <p>Calls to this method will trigger the {@link Sink.Listener#scheduleDeframerSource(Source)}
      * callback.
@@ -147,7 +143,7 @@ public class MessageDeframer {
     /** A listener of deframing sink events. */
     public interface Listener {
       /**
-       * Called to schedule {@link Source} to run in the application thread. Invoked from transport
+       * Called to schedule {@link Source} to run in the deframing thread. Invoked from transport
        * thread.
        */
       void scheduleDeframerSource(Source source);
@@ -208,7 +204,7 @@ public class MessageDeframer {
   private final StatsTraceContext statsTraceCtx;
   private final String debugString;
   private final DeframerSource source;
-  private final Sink sink;
+  private final DeframerSink sink;
 
   private int maxInboundMessageSize;
   private Decompressor decompressor;
@@ -357,7 +353,6 @@ public class MessageDeframer {
     private State state = State.HEADER;
     private int requiredLength = HEADER_LENGTH;
     private boolean compressedFlag;
-    private boolean inDelivery = false;
     private boolean closed;
     private CompositeReadableBuffer nextFrame;
 
@@ -488,11 +483,10 @@ public class MessageDeframer {
       int type = nextFrame.readUnsignedByte();
       if ((type & RESERVED_MASK) != 0) {
         deframeFailed = true;
-        RuntimeException t =
+        sourceListener.deframeFailed(
             Status.INTERNAL
                 .withDescription(debugString + ": Frame header malformed: reserved bits not zero")
-                .asRuntimeException();
-        sourceListener.deframeFailed(t);
+                .asRuntimeException());
         closeAndNotify();
         return;
       }
@@ -502,14 +496,13 @@ public class MessageDeframer {
       requiredLength = nextFrame.readInt();
       if (requiredLength < 0 || requiredLength > maxInboundMessageSize) {
         deframeFailed = true;
-        RuntimeException t =
+        sourceListener.deframeFailed(
             Status.RESOURCE_EXHAUSTED
                 .withDescription(
                     String.format(
                         "%s: Frame size %d exceeds maximum: %d. ",
                         debugString, requiredLength, maxInboundMessageSize))
-                .asRuntimeException();
-        sourceListener.deframeFailed(t);
+                .asRuntimeException());
         closeAndNotify();
         return;
       }
@@ -547,12 +540,11 @@ public class MessageDeframer {
     private InputStream getCompressedBody() {
       if (decompressor == Codec.Identity.NONE) {
         deframeFailed = true;
-        RuntimeException t =
+        sourceListener.deframeFailed(
             Status.INTERNAL
                 .withDescription(
                     debugString + ": Can't decode compressed frame as compression not configured.")
-                .asRuntimeException();
-        sourceListener.deframeFailed(t);
+                .asRuntimeException());
         closeAndNotify();
         return null;
       }
@@ -565,8 +557,7 @@ public class MessageDeframer {
             unlimitedStream, maxInboundMessageSize, statsTraceCtx, debugString);
       } catch (IOException e) {
         deframeFailed = true;
-        RuntimeException t = new RuntimeException(e);
-        sourceListener.deframeFailed(t);
+        sourceListener.deframeFailed(new RuntimeException(e));
         closeAndNotify();
         return null;
       }
