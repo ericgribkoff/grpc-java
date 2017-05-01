@@ -119,10 +119,11 @@ public abstract class AbstractStream2 implements Stream {
   public abstract static class TransportState
       implements MessageDeframer.Sink.Listener, MessageDeframer.Source.Listener {
     /**
-     * The default number of queued bytes for a given stream, below which {@link
-     * StreamListener#onReady()} will be called.
+     * The default number of queued bytes for a given stream, below which
+     * {@link StreamListener#onReady()} will be called.
      */
-    @VisibleForTesting public static final int DEFAULT_ONREADY_THRESHOLD = 32 * 1024;
+    @VisibleForTesting
+    public static final int DEFAULT_ONREADY_THRESHOLD = 32 * 1024;
 
     private final MessageDeframer deframer;
     private final Object onReadyLock = new Object();
@@ -148,9 +149,8 @@ public abstract class AbstractStream2 implements Stream {
 
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
       this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
-      deframer =
-          new MessageDeframer(
-              this, this, Codec.Identity.NONE, maxMessageSize, statsTraceCtx, getClass().getName());
+      deframer = new MessageDeframer(
+          this, this, Codec.Identity.NONE, maxMessageSize, statsTraceCtx, getClass().getName());
     }
 
     final void setMaxInboundMessageSize(int maxSize) {
@@ -289,8 +289,8 @@ public abstract class AbstractStream2 implements Stream {
     public final void onSentBytes(int numBytes) {
       boolean doNotify;
       synchronized (onReadyLock) {
-        checkState(
-            allocated, "onStreamAllocated was not called, but it seems the stream is active");
+        checkState(allocated,
+            "onStreamAllocated was not called, but it seems the stream is active");
         boolean belowThresholdBefore = numSentBytesQueued < DEFAULT_ONREADY_THRESHOLD;
         numSentBytesQueued -= numBytes;
         boolean belowThresholdAfter = numSentBytesQueued < DEFAULT_ONREADY_THRESHOLD;
