@@ -585,8 +585,8 @@ public class MessageDeframer {
     private long count;
     private long mark = -1;
 
-    SizeEnforcingInputStream(
-        InputStream in, int maxMessageSize, StatsTraceContext statsTraceCtx, String debugString) {
+    SizeEnforcingInputStream(InputStream in, int maxMessageSize, StatsTraceContext statsTraceCtx,
+        String debugString) {
       super(in);
       this.maxMessageSize = maxMessageSize;
       this.statsTraceCtx = statsTraceCtx;
@@ -653,12 +653,9 @@ public class MessageDeframer {
 
     private void verifySize() {
       if (count > maxMessageSize) {
-        throw Status.RESOURCE_EXHAUSTED
-            .withDescription(
-                String.format(
-                    "%s: Compressed frame exceeds maximum frame size: %d. Bytes read: %d. ",
-                    debugString, maxMessageSize, count))
-            .asRuntimeException();
+        throw Status.RESOURCE_EXHAUSTED.withDescription(String.format(
+                "%s: Compressed frame exceeds maximum frame size: %d. Bytes read: %d. ",
+                debugString, maxMessageSize, count)).asRuntimeException();
       }
     }
   }
