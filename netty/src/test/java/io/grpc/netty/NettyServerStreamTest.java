@@ -171,14 +171,14 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     assertThat(ImmutableListMultimap.copyOf(sendHeaders.headers()))
         .containsExactlyEntriesIn(expectedHeaders);
     assertThat(sendHeaders.endOfStream()).isTrue();
-    // TODO(ericgribkoff) Update this to work with message producer
+    // TODO(ericgribkoff) Update this to work with MessageDeframer.Source
     //verifyZeroInteractions(serverListener);
 
     // Sending complete. Listener gets closed()
     stream().transportState().complete();
 
     verify(serverListener).closed(Status.OK);
-    // TODO(ericgribkoff) Update this to work with message producer
+    // TODO(ericgribkoff) Update this to work with MessageDeframer.Source
     //verifyZeroInteractions(serverListener);
   }
 
@@ -201,13 +201,13 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     assertThat(ImmutableListMultimap.copyOf(sendHeaders.headers()))
         .containsExactlyEntriesIn(expectedHeaders);
     assertThat(sendHeaders.endOfStream()).isTrue();
-    // TODO(ericgribkoff) Update this to work with message producer
+    // TODO(ericgribkoff) Update this to work with MessageDeframer.Source
     //verifyZeroInteractions(serverListener);
 
     // Sending complete. Listener gets closed()
     stream().transportState().complete();
     verify(serverListener).closed(Status.OK);
-    // TODO(ericgribkoff) Update this to work with message producer
+    // TODO(ericgribkoff) Update this to work with MessageDeframer.Source
     //verifyZeroInteractions(serverListener);
   }
 
@@ -228,7 +228,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
 
     // Server closes. Status sent
     stream().close(Status.OK, trailers);
-    // TODO(ericgribkoff) Update this to work with message producer
+    // TODO(ericgribkoff) Update this to work with MessageDeframer.Source
     //verifyNoMoreInteractions(serverListener);
 
     ArgumentCaptor<SendResponseHeadersCommand> cmdCap =
@@ -243,7 +243,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     // Sending and receiving complete. Listener gets closed()
     stream().transportState().complete();
     verify(serverListener).closed(Status.OK);
-    // TODO(ericgribkoff) Update this to work with message producer
+    // TODO(ericgribkoff) Update this to work with MessageDeframer.Source
     //verifyNoMoreInteractions(serverListener);
   }
 
@@ -254,7 +254,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     verify(serverListener).closed(same(status));
     verify(channel, never()).writeAndFlush(any(SendResponseHeadersCommand.class));
     verify(channel, never()).writeAndFlush(any(SendGrpcFrameCommand.class));
-    // TODO(ericgribkoff) Update this to work with message producer
+    // TODO(ericgribkoff) Update this to work with MessageDeframer.Source
     //verifyNoMoreInteractions(serverListener);
   }
 
@@ -269,7 +269,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     // Abort from the transport layer
     stream().transportState().transportReportStatus(status);
     verify(serverListener).closed(same(status));
-    // TODO(ericgribkoff) Update this to work with message producer
+    // TODO(ericgribkoff) Update this to work with MessageDeframer.Source
     //verifyNoMoreInteractions(serverListener);
   }
 
@@ -322,7 +322,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     stream.transportState().setListener(serverListener);
     state.onStreamAllocated();
     verify(serverListener, atLeastOnce()).onReady();
-    // TODO(ericgribkoff) Update this to work with message producer
+    // TODO(ericgribkoff) Update this to work with MessageDeframer.Source
     //verifyNoMoreInteractions(serverListener);
     return stream;
   }

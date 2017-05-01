@@ -259,8 +259,8 @@ public abstract class AbstractClientStream2 extends AbstractStream2
       Preconditions.checkNotNull(status, "status");
       Preconditions.checkNotNull(trailers, "trailers");
       if (statusReported) {
-        log.log(Level.INFO,"Received trailers on closed stream:\n {1}\n {2}",
-            new Object[] {status, trailers});
+        log.log(Level.INFO, "Received trailers on closed stream:\n {1}\n {2}",
+            new Object[]{status, trailers});
         return;
       }
       transportReportStatus(status, false, trailers);
@@ -273,6 +273,8 @@ public abstract class AbstractClientStream2 extends AbstractStream2
      * <p>No further data may be sent to the deframer after this method is called. However, if
      * {@link MessageDeframer.Source} is running in another thread, the client will receive any
      * already queued messages before the deframer closes, unless {@code stopDelivery} is true.
+     * Even with {@code stopDelivery=true}, there is an inherent race condition so the client may
+     * still receive a pending message before the close takes effect.
      *
      * @param status the new status to set
      * @param stopDelivery if {@code true}, interrupt {@link MessageDeframer.Source} even if it has
@@ -303,9 +305,9 @@ public abstract class AbstractClientStream2 extends AbstractStream2
     }
 
     /**
-     * This is the logic for listening for deframerClosedNotThreadSafe(), but this call may be
-     * triggered from outside the transport-thread. Subclasses must invoke this message from the
-     * transport thread.
+     * This is the logic for listening for
+     * {@link MessageDeframer.Source.Listener#deframerClosed(boolean)}, which is invoked from the
+     * deframing thread. Subclasses must invoke this message from the transport thread.
      */
     protected void deframerClosedNotThreadSafe() {
       Preconditions.checkState(deframerClosedTask != null, "deframerClosedTask is null");

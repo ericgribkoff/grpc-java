@@ -112,9 +112,9 @@ public abstract class AbstractStream2 implements Stream {
   }
 
   /**
-   * Stream state as used by the transport. {@code MessageProducer.Listener} methods will be called
-   * from the deframing thread. Other methods this should only be called from the transport thread
-   * (except for private interactions with {@code AbstractStream2}).
+   * Stream state as used by the transport. {@link MessageDeframer.Source.Listener} methods will
+   * be called from the deframing thread. Other methods should only be called from the transport
+   * thread (except for private interactions with {@code AbstractStream2}).
    */
   public abstract static class TransportState
       implements MessageDeframer.Sink.Listener, MessageDeframer.Source.Listener {
