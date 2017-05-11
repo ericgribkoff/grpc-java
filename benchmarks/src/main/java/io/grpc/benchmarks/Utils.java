@@ -164,7 +164,7 @@ public final class Utils {
       SocketAddress address, boolean tls, boolean testca, int flowControlWindow,
       boolean useDefaultCiphers) throws IOException {
     NettyChannelBuilder builder =
-        NettyChannelBuilder.forAddress(address).flowControlWindow(flowControlWindow);
+        NettyChannelBuilder.forAddress(address).flowControlWindow(flowControlWindow).maxInboundMessageSize(128 * 1024 * 1024);
     if (tls) {
       builder.negotiationType(NegotiationType.TLS);
       SslContext sslContext = null;
