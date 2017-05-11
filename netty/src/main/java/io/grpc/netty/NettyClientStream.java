@@ -264,9 +264,11 @@ class NettyClientStream extends AbstractClientStream2 {
       handler.getWriteQueue().enqueue(new CancelClientStreamCommand(this, status), true);
     }
 
+    private boolean checkIfInEventLoop = true;
+
     @Override
     public final void deframerClosed(boolean hasPartialMessageIgnored) {
-      if (eventLoop.inEventLoop()) {
+      if (checkIfInEventLoop && eventLoop.inEventLoop()) {
         deframerClosedNotThreadSafe();
       } else {
         eventLoop.execute(new Runnable() {
@@ -280,7 +282,7 @@ class NettyClientStream extends AbstractClientStream2 {
 
     @Override
     public void bytesRead(final int processedBytes) {
-      if (eventLoop.inEventLoop()) {
+      if (checkIfInEventLoop && eventLoop.inEventLoop()) {
         handler.returnProcessedBytes(http2Stream, processedBytes);
         handler.getWriteQueue().scheduleFlush();
       } else {
@@ -296,7 +298,7 @@ class NettyClientStream extends AbstractClientStream2 {
 
     @Override
     public void deframeFailed(final Throwable cause) {
-      if (eventLoop.inEventLoop()) {
+      if (checkIfInEventLoop && eventLoop.inEventLoop()) {
         http2ProcessingFailed(Status.fromThrowable(cause), true, new Metadata());
       } else {
         eventLoop.execute(new Runnable() {

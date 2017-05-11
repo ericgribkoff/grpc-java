@@ -502,11 +502,56 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       callExecutor.execute(new MessageRead());
     }
 
+    class MessagesAvailableBusyWait implements Runnable {
+      MessageDeframer.Source source;
+
+      MessagesAvailableBusyWait(MessageDeframer.Source source) {
+        this.source = source;
+      }
+
+      @Override
+      public void run() {
+        InputStream message;
+        try {
+          while (!source.isClosed()) {
+            if ((message = source.next()) != null) {
+              try {
+                if (closed) {
+                  return;
+                }
+                try {
+                  Context previous = context.attach();
+                  try {
+                    observer.onMessage(method.parseResponse(message));
+                  } finally {
+                    context.detach(previous);
+                  }
+                } finally {
+                  message.close();
+                }
+              } catch (Throwable t) {
+                Status status =
+                    Status.CANCELLED.withCause(t).withDescription("Failed to read message.");
+                stream.cancel(status);
+              }
+            }
+          }
+        } catch (Throwable t) {
+          Status status =
+              Status.CANCELLED.withCause(t).withDescription("Failed to deframe message.");
+          stream.cancel(status);
+          close(status, new Metadata());
+        }
+      }
+    }
+
+    MessagesAvailableBusyWait busyWaiter;
+
     @Override
     public void scheduleDeframerSource(final MessageDeframer.Source source) {
-      class MessagesAvailable extends ContextRunnable {
+      class MessagesAvailableContextRunnable extends ContextRunnable {
 
-        MessagesAvailable() {
+        MessagesAvailableContextRunnable() {
           super(context);
         }
 
@@ -539,7 +584,80 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
         }
       }
 
-      callExecutor.execute(new MessagesAvailable());
+      class MessagesAvailableRunnable implements Runnable {
+        @Override
+        public void run() {
+          InputStream message;
+          try {
+            while ((message = source.next()) != null) {
+              try {
+                if (closed) {
+                  return;
+                }
+                try {
+                  Context previous = context.attach();
+                  try {
+                    observer.onMessage(method.parseResponse(message));
+                  } finally {
+                    context.detach(previous);
+                  }
+                } finally {
+                  message.close();
+                }
+              } catch (Throwable t) {
+                Status status =
+                    Status.CANCELLED.withCause(t).withDescription("Failed to read message.");
+                stream.cancel(status);
+              }
+            }
+          } catch (Throwable t) {
+            Status status =
+                Status.CANCELLED.withCause(t).withDescription("Failed to deframe message.");
+            stream.cancel(status);
+            close(status, new Metadata());
+          }
+        }
+      }
+
+      class MessagesAvailableMinimalRunnable implements Runnable {
+        @Override
+        public void run() {
+          InputStream message;
+          try {
+            while ((message = source.next()) != null) {
+                if (closed) {
+                  return;
+                }
+                try {
+                    observer.onMessage(method.parseResponse(message));
+                } finally {
+                  message.close();
+                }
+            }
+          } catch (Throwable t) {
+            Status status =
+                Status.CANCELLED.withCause(t).withDescription("Failed to deframe message.");
+            stream.cancel(status);
+            close(status, new Metadata());
+          }
+        }
+      }
+
+//      InputStream message;
+//      while ((message = source.next()) != null) {
+//        messageRead(message);
+//      }
+
+//      callExecutor.execute(new MessagesAvailableContextRunnable());
+
+      callExecutor.execute(new MessagesAvailableRunnable());
+
+//      callExecutor.execute(new MessagesAvailableMinimalRunnable());
+
+//      if (busyWaiter == null) {
+//        busyWaiter = new MessagesAvailableBusyWait(source);
+//        callExecutor.execute(busyWaiter);
+//      }
     }
 
     /**

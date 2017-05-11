@@ -169,6 +169,8 @@ public class MessageDeframer {
     @Nullable
     InputStream next();
 
+    boolean isClosed();
+
     /**
      * A listener of deframing source events. If deframing occurs outside of the transport
      * thread, it is up to the implementation to ensure that these methods are thread-safe:
@@ -247,6 +249,7 @@ public class MessageDeframer {
    */
   private volatile CloseRequested closeRequested = CloseRequested.NONE;
 
+  private final Source.Listener sourceListenerHack;
   /**
    * Create a deframer.
    *
@@ -270,6 +273,7 @@ public class MessageDeframer {
     this.debugString = debugString;
     this.sink = new DeframerSink(Preconditions.checkNotNull(sinkListener, "sink listener"));
     this.source = new DeframerSource(checkNotNull(sourceListener, "source listener"));
+    sourceListenerHack = sourceListener;
   }
 
   public Sink sink() {
@@ -312,8 +316,10 @@ public class MessageDeframer {
       Preconditions.checkArgument(numMessages > 0, "numMessages must be > 0");
       requestCalled = true;
       pendingDeliveries.getAndAdd(numMessages);
-      sinkListener.scheduleDeframerSource(source);
+//      sinkListener.scheduleDeframerSource(source);
     }
+
+    private int bytesReceived = 0;
 
     @Override
     public void deframe(ReadableBuffer data) {
@@ -321,9 +327,13 @@ public class MessageDeframer {
       boolean needToCloseData = true;
       try {
         Preconditions.checkState(!isScheduledToClose(), "close already scheduled");
+//        bytesReceived += data.readableBytes();
+        sourceListenerHack.bytesRead(data.readableBytes());
         unprocessed.addBuffer(data);
         needToCloseData = false;
-        sinkListener.scheduleDeframerSource(source);
+//        if (bytesReceived > 4 + 1048576) {
+//          sinkListener.scheduleDeframerSource(source);
+//        }
       } finally {
         if (needToCloseData) {
           data.close();
@@ -337,6 +347,7 @@ public class MessageDeframer {
       closeRequested = CloseRequested.WHEN_COMPLETE;
       // Ensure that the source will see the scheduled close.
       sinkListener.scheduleDeframerSource(source);
+      sourceListenerHack.deframerClosed(false);
     }
 
     @Override
@@ -346,6 +357,7 @@ public class MessageDeframer {
       closeRequested = CloseRequested.IMMEDIATELY;
       // Ensure that the source will see the scheduled close.
       sinkListener.scheduleDeframerSource(source);
+      sourceListenerHack.deframerClosed(false);
     }
 
     @Override
@@ -392,7 +404,12 @@ public class MessageDeframer {
         unprocessed = null;
         nextFrame = null;
       }
-      sourceListener.deframerClosed(hasPartialMessage);
+//      sourceListener.deframerClosed(hasPartialMessage);
+    }
+
+    @Override
+    public boolean isClosed() {
+      return closed;
     }
 
     /** Reads and delivers a messages to the listener, if possible. */
@@ -478,7 +495,7 @@ public class MessageDeframer {
         return true;
       } finally {
         if (totalBytesRead > 0) {
-          sourceListener.bytesRead(totalBytesRead);
+//          sourceListener.bytesRead(totalBytesRead);
           if (state == State.BODY) {
             statsTraceCtx.inboundWireSize(totalBytesRead);
           }

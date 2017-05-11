@@ -25,9 +25,14 @@ run.enabled = false
 jmh {
     jmhVersion = '1.18'
     warmupIterations = 10
-    iterations = 10
+    iterations = 100
     fork = 1
-    jvmArgs = "-server -Xms2g -Xmx2g"
+    jvmArgs = "-server -Xms4g -Xmx4g -Djava.util.logging.config.file=logging.properties"
+   exclude = ["k\$"]
+//    include = ["io.grpc.internal.Deframing.timeToDeliverSingleMessage"]
+    verbosity = "EXTRA"
+//    benchmarkMode = "all"
+//    forceGC = true
 }
 
 dependencies {
