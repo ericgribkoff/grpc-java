@@ -567,13 +567,6 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
 
     @Override
     public void messagesAvailable(final StreamListener.MessageProducer producer) {
-      // TODO(ericgribkoff) Can't use ContextRunnable here or deframing will occur on app thread.
-      // Also can't pass to listener, as listener might not have been set (see LoadWorkerTest).
-      if (listener == null) {
-        // TODO(ericgribkoff) Verify that listener only ever changes once, from null to non-null.
-        return;
-      }
-
       InputStream message;
       while ((message = producer.next()) != null) {
         final InputStream messageCopy = message;
@@ -581,6 +574,7 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
           @Override
           public void runInContext() {
             try {
+              // TODO(ericgribkoff) Figure out this API
               getListener().messagesAvailable(new SingleMessageProducer(messageCopy));
             } catch (RuntimeException e) {
               internalClose();
