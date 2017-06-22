@@ -295,9 +295,6 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
         }
         boolean previouslyReady = clientRequested > 0;
         clientRequested += numMessages;
-        if (clientReceiveQueue.isEmpty()) {
-          clientStreamListener.messagesAvailable(new SingleMessageProducer(null));
-        }
         while (clientRequested > 0 && !clientReceiveQueue.isEmpty()) {
           clientRequested--;
           clientStreamListener.messagesAvailable(clientReceiveQueue.poll());
@@ -333,7 +330,9 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
       }
 
       @Override
-      public void flush() {}
+      public synchronized void flush() {
+        clientStreamListener.messagesAvailable(new SingleMessageProducer(null));
+      }
 
       @Override
       public synchronized boolean isReady() {
@@ -471,9 +470,6 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
         }
         boolean previouslyReady = serverRequested > 0;
         serverRequested += numMessages;
-        if (serverReceiveQueue.isEmpty()) {
-          serverStreamListener.messagesAvailable(new SingleMessageProducer(null));
-        }
         while (serverRequested > 0 && !serverReceiveQueue.isEmpty()) {
           serverRequested--;
           serverStreamListener.messagesAvailable(serverReceiveQueue.poll());
@@ -501,12 +497,13 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
           serverStreamListener.messagesAvailable(producer);
         } else {
           serverReceiveQueue.add(producer);
-          serverStreamListener.messagesAvailable(new SingleMessageProducer(null));
         }
       }
 
       @Override
-      public void flush() {}
+      public synchronized void flush() {
+        serverStreamListener.messagesAvailable(new SingleMessageProducer(null));
+      }
 
       @Override
       public synchronized boolean isReady() {
@@ -552,9 +549,8 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
         if (closed) {
           return;
         }
+        serverStreamListener.messagesAvailable(new SingleMessageProducer(null));
         if (serverReceiveQueue.isEmpty()) {
-          // TODO(ericgribkoff) Verify this
-          serverStreamListener.messagesAvailable(new SingleMessageProducer(null));
           serverStreamListener.halfClosed();
         } else {
           serverNotifyHalfClose = true;

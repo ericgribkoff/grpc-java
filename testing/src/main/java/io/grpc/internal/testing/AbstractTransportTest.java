@@ -727,7 +727,7 @@ public abstract class AbstractTransportTest {
     serverMessages.get(0).close();
 
     clientStream.halfClose();
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS).times(2))
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS).times(3))
         .messagesAvailable(any(StreamListener.MessageProducer.class));
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).halfClosed();
 
