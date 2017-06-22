@@ -569,38 +569,94 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
 
     @Override
     public void messagesAvailable(final StreamListener.MessageProducer producer) {
-      final Queue<InputStream> messages = new LinkedList<InputStream>();
+//      InputStream message;
+//      while ((message = producer.next()) != null) {
+//        final InputStream messageCopy = message;
+//        callExecutor.execute(new ContextRunnable(context) {
+//          @Override
+//          public void runInContext() {
+//            try {
+//              // TODO(ericgribkoff) Figure out this API
+//              getListener().messagesAvailable(new SingleMessageProducer(messageCopy));
+//            } catch (RuntimeException e) {
+//              internalClose();
+//              throw e;
+//            } catch (Error e) {
+//              internalClose();
+//              throw e;
+//            }
+//          }
+//        });
+//      }
 
+      // This breaks because it calls next() twice - once queues the message, clearing it
+      // from the deframer, and the second triggers a endOfStream() which ends up
+      // calling halfClosed(), which queues on the call thread before this returns.
+      // The queued messages are not delivered as they arrive and half-close is seen first,
+      // causing an exception.
+//      final Queue<InputStream> messages = new LinkedList<InputStream>();
+//      InputStream message;
+//      while ((message = producer.next()) != null) {
+//        System.out.println("deframing and storing message");
+//        messages.offer(message);
+//      }
+//      final StreamListener.MessageProducer drainedProducer = new StreamListener.MessageProducer() {
+//        @Nullable
+//        @Override
+//        public InputStream next() {
+//          return messages.poll();
+//        }
+//      };
+//      System.out.println("queuing messagesAvailable");
+//      callExecutor.execute(new ContextRunnable(context) {
+//        @Override
+//        public void runInContext() {
+//          try {
+//            // TODO(ericgribkoff) Add messageRead back to ServerStreamListener to avoid this?
+//            getListener().messagesAvailable(drainedProducer);
+//          } catch (RuntimeException e) {
+//            internalClose();
+//            throw e;
+//          } catch (Error e) {
+//            internalClose();
+//            throw e;
+//          }
+//        }
+//      });
       InputStream message;
       while ((message = producer.next()) != null) {
-        messages.add(message);
-      }
-      final StreamListener.MessageProducer drainedProducer = new StreamListener.MessageProducer() {
-        @Nullable
-        @Override
-        public InputStream next() {
-          return messages.poll();
-        }
-      };
-      callExecutor.execute(new ContextRunnable(context) {
-        @Override
-        public void runInContext() {
-          try {
-            // TODO(ericgribkoff) Add messageRead back to ServerStreamListener to avoid this?
-            getListener().messagesAvailable(drainedProducer);
-          } catch (RuntimeException e) {
-            internalClose();
-            throw e;
-          } catch (Error e) {
-            internalClose();
-            throw e;
+        final Queue<InputStream> messages = new LinkedList<InputStream>();
+        System.out.println("deframing and storing message");
+        messages.offer(message);
+        final StreamListener.MessageProducer drainedProducer = new StreamListener.MessageProducer() {
+          @Nullable
+          @Override
+          public InputStream next() {
+            return messages.poll();
           }
-        }
-      });
+        };
+        System.out.println("queuing messagesAvailable");
+        callExecutor.execute(new ContextRunnable(context) {
+          @Override
+          public void runInContext() {
+            try {
+              // TODO(ericgribkoff) Add messageRead back to ServerStreamListener to avoid this?
+              getListener().messagesAvailable(drainedProducer);
+            } catch (RuntimeException e) {
+              internalClose();
+              throw e;
+            } catch (Error e) {
+              internalClose();
+              throw e;
+            }
+          }
+        });
+      }
     }
 
     @Override
     public void halfClosed() {
+      System.out.println("queuing half close");
       callExecutor.execute(new ContextRunnable(context) {
         @Override
         public void runInContext() {
@@ -666,6 +722,23 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
     @Override
     public void run() {
       context.cancel(cause);
+    }
+  }
+
+  // TODO(ericgribkoff) Get rid of this
+  private static class SingleMessageProducer implements StreamListener.MessageProducer {
+    private InputStream message;
+
+    private SingleMessageProducer(InputStream message) {
+      this.message = message;
+    }
+
+    @Nullable
+    @Override
+    public InputStream next() {
+      InputStream messageToReturn = message;
+      message = null;
+      return messageToReturn;
     }
   }
 }
