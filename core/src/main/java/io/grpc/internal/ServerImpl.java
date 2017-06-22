@@ -47,9 +47,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Queue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -569,79 +567,15 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
 
     @Override
     public void messagesAvailable(final StreamListener.MessageProducer producer) {
-//      InputStream message;
-//      while ((message = producer.next()) != null) {
-//        final InputStream messageCopy = message;
-//        callExecutor.execute(new ContextRunnable(context) {
-//          @Override
-//          public void runInContext() {
-//            try {
-//              // TODO(ericgribkoff) Figure out this API
-//              getListener().messagesAvailable(new SingleMessageProducer(messageCopy));
-//            } catch (RuntimeException e) {
-//              internalClose();
-//              throw e;
-//            } catch (Error e) {
-//              internalClose();
-//              throw e;
-//            }
-//          }
-//        });
-//      }
-
-      // This breaks because it calls next() twice - once queues the message, clearing it
-      // from the deframer, and the second triggers a endOfStream() which ends up
-      // calling halfClosed(), which queues on the call thread before this returns.
-      // The queued messages are not delivered as they arrive and half-close is seen first,
-      // causing an exception.
-//      final Queue<InputStream> messages = new LinkedList<InputStream>();
-//      InputStream message;
-//      while ((message = producer.next()) != null) {
-//        System.out.println("deframing and storing message");
-//        messages.offer(message);
-//      }
-//      final StreamListener.MessageProducer drainedProducer = new StreamListener.MessageProducer() {
-//        @Nullable
-//        @Override
-//        public InputStream next() {
-//          return messages.poll();
-//        }
-//      };
-//      System.out.println("queuing messagesAvailable");
-//      callExecutor.execute(new ContextRunnable(context) {
-//        @Override
-//        public void runInContext() {
-//          try {
-//            // TODO(ericgribkoff) Add messageRead back to ServerStreamListener to avoid this?
-//            getListener().messagesAvailable(drainedProducer);
-//          } catch (RuntimeException e) {
-//            internalClose();
-//            throw e;
-//          } catch (Error e) {
-//            internalClose();
-//            throw e;
-//          }
-//        }
-//      });
       InputStream message;
       while ((message = producer.next()) != null) {
-        final Queue<InputStream> messages = new LinkedList<InputStream>();
-        System.out.println("deframing and storing message");
-        messages.offer(message);
-        final StreamListener.MessageProducer drainedProducer = new StreamListener.MessageProducer() {
-          @Nullable
-          @Override
-          public InputStream next() {
-            return messages.poll();
-          }
-        };
-        System.out.println("queuing messagesAvailable");
+        final InputStream messageCopy = message;
         callExecutor.execute(new ContextRunnable(context) {
           @Override
           public void runInContext() {
             try {
-              // TODO(ericgribkoff) Add messageRead back to ServerStreamListener to avoid this?
-              getListener().messagesAvailable(drainedProducer);
+              // TODO(ericgribkoff) Figure out this API
+              getListener().messagesAvailable(new SingleMessageProducer(messageCopy));
             } catch (RuntimeException e) {
               internalClose();
               throw e;
@@ -652,6 +586,43 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
           }
         });
       }
+
+      // This breaks because it calls next() twice - once queues the message, clearing it
+      // from the deframer, and the second triggers a endOfStream() which ends up
+      // calling halfClosed(), which queues on the call thread before this returns.
+      // The queued messages are not delivered as they arrive and half-close is seen first,
+      // causing an exception.
+      /*
+      final Queue<InputStream> messages = new LinkedList<InputStream>();
+      InputStream message;
+      while ((message = producer.next()) != null) {
+        System.out.println("deframing and storing message");
+        messages.offer(message);
+      }
+      final StreamListener.MessageProducer drainedProducer = new StreamListener.MessageProducer() {
+        @Nullable
+        @Override
+        public InputStream next() {
+          return messages.poll();
+        }
+      };
+      System.out.println("queuing messagesAvailable");
+      callExecutor.execute(new ContextRunnable(context) {
+        @Override
+        public void runInContext() {
+          try {
+            // TODO(ericgribkoff) Add messageRead back to ServerStreamListener to avoid this?
+            getListener().messagesAvailable(drainedProducer);
+          } catch (RuntimeException e) {
+            internalClose();
+            throw e;
+          } catch (Error e) {
+            internalClose();
+            throw e;
+          }
+        }
+      });
+      */
     }
 
     @Override
