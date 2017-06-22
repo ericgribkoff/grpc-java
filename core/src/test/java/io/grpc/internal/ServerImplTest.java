@@ -1042,10 +1042,17 @@ public class ServerImplTest {
     doThrow(expectedT).when(mockListener)
         .messagesAvailable(any(StreamListener.MessageProducer.class));
     // Closing the InputStream is done by the delegated listener (generally ServerCallImpl)
-    listener.messagesAvailable(mock(StreamListener.MessageProducer.class));
+    // next() returns null for this producer, so nothing happens. This is because
+    // we can't just delegate directly in the JumpToApplicationThreadServerStreamListener.
+    listener.messagesAvailable(new SingleMessageProducer(new InputStream() {
+      @Override
+      public int read() throws IOException {
+        return 0;
+      }
+    }));
     try {
       executor.runDueTasks();
-      fail("Expected exception");
+      fail("Expected exception2");
     } catch (Throwable t) {
       assertSame(expectedT, t);
       ensureServerStateNotLeaked();
@@ -1067,7 +1074,12 @@ public class ServerImplTest {
     doThrow(expectedT).when(mockListener)
         .messagesAvailable(any(StreamListener.MessageProducer.class));
     // Closing the InputStream is done by the delegated listener (generally ServerCallImpl)
-    listener.messagesAvailable(mock(StreamListener.MessageProducer.class));
+    listener.messagesAvailable(new SingleMessageProducer(new InputStream() {
+      @Override
+      public int read() throws IOException {
+        return 0;
+      }
+    }));
     try {
       executor.runDueTasks();
       fail("Expected exception");
