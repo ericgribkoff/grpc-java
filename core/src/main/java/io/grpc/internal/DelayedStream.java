@@ -364,14 +364,14 @@ class DelayedStream implements ClientStream {
     }
 
     @Override
-    public void messageRead(final InputStream message) {
+    public void messagesAvailable(final StreamListener.MessageProducer producer) {
       if (passThrough) {
-        realListener.messageRead(message);
+        realListener.messagesAvailable(producer);
       } else {
         delayOrExecute(new Runnable() {
           @Override
           public void run() {
-            realListener.messageRead(message);
+            realListener.messagesAvailable(producer);
           }
         });
       }

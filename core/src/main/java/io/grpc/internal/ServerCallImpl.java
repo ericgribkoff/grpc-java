@@ -236,8 +236,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
     }
 
     @SuppressWarnings("Finally") // The code avoids suppressing the exception thrown from try
-    @Override
-    public void messageRead(final InputStream message) {
+    private void messageRead(final InputStream message) {
       Throwable t = null;
       try {
         if (call.cancelled) {
@@ -258,6 +257,16 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
             throw new RuntimeException(t);
           }
         }
+      }
+    }
+
+    @Override
+    public void messagesAvailable(final StreamListener.MessageProducer producer) {
+      // TODO(ericgribkoff) Handle deframe error/exceptions..well, these will get propagated back
+      // to network thread that called deframe/request, so no need?
+      InputStream message;
+      while ((message = producer.next()) != null) {
+        messageRead(message);
       }
     }
 

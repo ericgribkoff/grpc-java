@@ -34,6 +34,7 @@ import io.grpc.internal.AbstractServerStream.TransportState;
 import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import javax.annotation.Nullable;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -77,7 +78,7 @@ public class AbstractServerStreamTest {
     stream.transportState().inboundDataReceived(buffer, true);
 
     verify(buffer).close();
-    verify(streamListener, times(0)).messageRead(any(InputStream.class));
+    verify(streamListener, times(0)).messagesAvailable(any(StreamListener.MessageProducer.class));
   }
 
   /**
@@ -129,14 +130,20 @@ public class AbstractServerStreamTest {
   }
 
   @Test
-  public void messageRead_listenerCalled() {
+  public void messagesAvailable_listenerCalled() {
     final ServerStreamListener streamListener = mock(ServerStreamListener.class);
     stream.transportState().setListener(streamListener);
 
     // Normally called by a deframe event.
-    stream.transportState().messageRead(new ByteArrayInputStream(new byte[]{}));
+    stream.transportState().messagesAvailable(new StreamListener.MessageProducer() {
+      @Nullable
+      @Override
+      public InputStream next() {
+        return null;
+      }
+    });
 
-    verify(streamListener).messageRead(isA(InputStream.class));
+    verify(streamListener).messagesAvailable(isA(StreamListener.MessageProducer.class));
   }
 
   @Test
@@ -222,7 +229,7 @@ public class AbstractServerStreamTest {
 
   private static class ServerStreamListenerBase implements ServerStreamListener {
     @Override
-    public void messageRead(InputStream message) {}
+    public void messagesAvailable(MessageProducer producer) {}
 
     @Override
     public void onReady() {}

@@ -64,6 +64,7 @@ import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.StreamListener;
 import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2ServerHeadersDecoder;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
@@ -206,11 +207,14 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     // Create a data frame and then trigger the handler to read it.
     ByteBuf frame = grpcDataFrame(STREAM_ID, endStream, contentAsArray());
     channelRead(frame);
-    ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
-    verify(streamListener).messageRead(captor.capture());
-    assertArrayEquals(ByteBufUtil.getBytes(content()), ByteStreams.toByteArray(captor.getValue()));
-    captor.getValue().close();
+    ArgumentCaptor<StreamListener.MessageProducer> captor = ArgumentCaptor
+        .forClass(StreamListener.MessageProducer.class);
+    verify(streamListener, times(2)).messagesAvailable(captor.capture());
+    InputStream message = captor.getValue().next();
+    assertArrayEquals(ByteBufUtil.getBytes(content()), ByteStreams.toByteArray(message));
+    message.close();
 
+    assertNull(captor.getValue().next());
     if (endStream) {
       verify(streamListener).halfClosed();
     }
@@ -225,9 +229,11 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     stream.request(1);
 
     channelRead(emptyGrpcFrame(STREAM_ID, true));
-    ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
-    verify(streamListener).messageRead(captor.capture());
-    assertArrayEquals(new byte[0], ByteStreams.toByteArray(captor.getValue()));
+    ArgumentCaptor<StreamListener.MessageProducer> captor = ArgumentCaptor
+        .forClass(StreamListener.MessageProducer.class);
+    verify(streamListener, times(2)).messagesAvailable(captor.capture());
+    assertArrayEquals(new byte[0], ByteStreams.toByteArray(captor.getValue().next()));
+    assertNull(captor.getValue().next());
     verify(streamListener).halfClosed();
     verify(streamListener, atLeastOnce()).onReady();
     verifyNoMoreInteractions(streamListener);
@@ -239,7 +245,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     createStream();
 
     channelRead(rstStreamFrame(STREAM_ID, (int) Http2Error.CANCEL.code()));
-    verify(streamListener, never()).messageRead(any(InputStream.class));
+    verify(streamListener, never()).messagesAvailable(any(StreamListener.MessageProducer.class));
     verify(streamListener).closed(Status.CANCELLED);
     verify(streamListener, atLeastOnce()).onReady();
     verifyNoMoreInteractions(streamListener);
@@ -254,7 +260,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     // When a DATA frame is read, throw an exception. It will be converted into an
     // Http2StreamException.
     RuntimeException e = new RuntimeException("Fake Exception");
-    doThrow(e).when(streamListener).messageRead(any(InputStream.class));
+    doThrow(e).when(streamListener).messagesAvailable(any(StreamListener.MessageProducer.class));
 
     // Read a DATA frame to trigger the exception.
     channelRead(emptyGrpcFrame(STREAM_ID, true));

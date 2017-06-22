@@ -56,6 +56,7 @@ import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
+import io.grpc.internal.StreamListener;
 import io.grpc.testing.TestUtils;
 import io.netty.channel.ChannelConfig;
 import io.netty.channel.ChannelOption;
@@ -552,8 +553,10 @@ public class NettyClientTransportTest {
     }
 
     @Override
-    public void messageRead(InputStream message) {
-      responseFuture.set(null);
+    public void messagesAvailable(StreamListener.MessageProducer producer) {
+      if (producer.next() != null) {
+        responseFuture.set(null);
+      }
     }
 
     @Override
@@ -571,14 +574,16 @@ public class NettyClientTransportTest {
       this.method = method;
       this.headers = headers;
       stream.writeHeaders(new Metadata());
-      stream.request(1);
     }
 
     @Override
-    public void messageRead(InputStream message) {
-      // Just echo back the message.
-      stream.writeMessage(message);
-      stream.flush();
+    public void messagesAvailable(StreamListener.MessageProducer producer) {
+      InputStream message;
+      while ((message = producer.next()) != null) {
+        // Just echo back the message.
+        stream.writeMessage(message);
+        stream.flush();
+      }
     }
 
     @Override
@@ -609,6 +614,7 @@ public class NettyClientTransportTest {
         public void streamCreated(ServerStream stream, String method, Metadata headers) {
           EchoServerStreamListener listener = new EchoServerStreamListener(stream, method, headers);
           stream.setListener(listener);
+          stream.request(1);
           streamListeners.add(listener);
         }
 

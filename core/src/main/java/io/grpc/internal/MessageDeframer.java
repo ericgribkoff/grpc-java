@@ -23,10 +23,12 @@ import com.google.common.base.Preconditions;
 import io.grpc.Codec;
 import io.grpc.Decompressor;
 import io.grpc.Status;
+import io.grpc.internal.StreamListener.MessageProducer;
 import java.io.Closeable;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
@@ -36,7 +38,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  * thread.
  */
 @NotThreadSafe
-public class MessageDeframer implements Closeable {
+public class MessageDeframer implements Closeable, StreamListener.MessageProducer {
   private static final int HEADER_LENGTH = 5;
   private static final int COMPRESSED_FLAG_MASK = 1;
   private static final int RESERVED_MASK = 0xFE;
@@ -56,11 +58,9 @@ public class MessageDeframer implements Closeable {
     void bytesRead(int numBytes);
 
     /**
-     * Called to deliver the next complete message.
-     *
-     * @param is stream containing the message.
+     * TODO(ericgribkoff) Update. Called to deliver the next complete message.
      */
-    void messageRead(InputStream is);
+    void messagesAvailable(StreamListener.MessageProducer producer);
 
     /**
      * Called when end-of-stream has not yet been reached but there are no complete messages
@@ -91,7 +91,6 @@ public class MessageDeframer implements Closeable {
   private CompositeReadableBuffer unprocessed = new CompositeReadableBuffer();
   private long pendingDeliveries;
   private boolean deliveryStalled = true;
-  private boolean inDelivery = false;
 
   /**
    * Create a deframer.
@@ -127,8 +126,8 @@ public class MessageDeframer implements Closeable {
   }
 
   /**
-   * Requests up to the given number of messages from the call to be delivered to
-   * {@link Listener#messageRead(InputStream)}. No additional messages will be delivered.
+   * Requests up to the given number of messages from the call to be delivered via
+   * {@link Listener#messagesAvailable(MessageProducer)}. No additional messages will be delivered.
    *
    * <p>If {@link #close()} has been called, this method will have no effect.
    *
@@ -140,7 +139,7 @@ public class MessageDeframer implements Closeable {
       return;
     }
     pendingDeliveries += numMessages;
-    deliver();
+    listener.messagesAvailable(this);
   }
 
   /**
@@ -165,7 +164,7 @@ public class MessageDeframer implements Closeable {
 
       // Indicate that all of the data for this stream has been received.
       this.endOfStream = endOfStream;
-      deliver();
+      listener.messagesAvailable(this);
     } finally {
       if (needToCloseData) {
         data.close();
@@ -215,68 +214,61 @@ public class MessageDeframer implements Closeable {
   }
 
   /**
-   * Reads and delivers as many messages to the listener as possible.
+   * TODO(ericgribkoff) Update. Reads and delivers as many messages to the listener as possible.
    */
-  private void deliver() {
-    // We can have reentrancy here when using a direct executor, triggered by calls to
-    // request more messages. This is safe as we simply loop until pendingDelivers = 0
-    if (inDelivery) {
-      return;
+  @Override
+  @Nullable
+  public InputStream next() {
+    // Process the uncompressed bytes.
+    while (pendingDeliveries > 0 && readRequiredBytes()) {
+      switch (state) {
+        case HEADER:
+          processHeader();
+          break;
+        case BODY:
+          // Read the body and deliver the message.
+          InputStream nextMessage = processBody();
+
+          // Since we've delivered a message, decrement the number of pending
+          // deliveries remaining.
+          pendingDeliveries--;
+          return nextMessage;
+        default:
+          throw new AssertionError("Invalid state: " + state);
+      }
     }
-    inDelivery = true;
-    try {
-      // Process the uncompressed bytes.
-      while (pendingDeliveries > 0 && readRequiredBytes()) {
-        switch (state) {
-          case HEADER:
-            processHeader();
-            break;
-          case BODY:
-            // Read the body and deliver the message.
-            processBody();
 
-            // Since we've delivered a message, decrement the number of pending
-            // deliveries remaining.
-            pendingDeliveries--;
-            break;
-          default:
-            throw new AssertionError("Invalid state: " + state);
-        }
+    /*
+     * We are stalled when there are no more bytes to process. This allows delivering errors as
+     * soon as the buffered input has been consumed, independent of whether the application
+     * has requested another message.  At this point in the function, either all frames have been
+     * delivered, or unprocessed is empty.  If there is a partial message, it will be inside next
+     * frame and not in unprocessed.  If there is extra data but no pending deliveries, it will
+     * be in unprocessed.
+     */
+    boolean stalled = unprocessed.readableBytes() == 0;
+
+    if (endOfStream && stalled) {
+      boolean havePartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
+      if (!havePartialMessage) {
+        listener.endOfStream();
+        deliveryStalled = false;
+        return null;
+      } else {
+        // We've received the entire stream and have data available but we don't have
+        // enough to read the next frame ... this is bad.
+        throw Status.INTERNAL.withDescription(
+            debugString + ": Encountered end-of-stream mid-frame").asRuntimeException();
       }
-
-      /*
-       * We are stalled when there are no more bytes to process. This allows delivering errors as
-       * soon as the buffered input has been consumed, independent of whether the application
-       * has requested another message.  At this point in the function, either all frames have been
-       * delivered, or unprocessed is empty.  If there is a partial message, it will be inside next
-       * frame and not in unprocessed.  If there is extra data but no pending deliveries, it will
-       * be in unprocessed.
-       */
-      boolean stalled = unprocessed.readableBytes() == 0;
-
-      if (endOfStream && stalled) {
-        boolean havePartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
-        if (!havePartialMessage) {
-          listener.endOfStream();
-          deliveryStalled = false;
-          return;
-        } else {
-          // We've received the entire stream and have data available but we don't have
-          // enough to read the next frame ... this is bad.
-          throw Status.INTERNAL.withDescription(
-              debugString + ": Encountered end-of-stream mid-frame").asRuntimeException();
-        }
-      }
-
-      // If we're transitioning to the stalled state, notify the listener.
-      boolean previouslyStalled = deliveryStalled;
-      deliveryStalled = stalled;
-      if (stalled && !previouslyStalled) {
-        listener.deliveryStalled();
-      }
-    } finally {
-      inDelivery = false;
     }
+
+    // If we're transitioning to the stalled state, notify the listener.
+    boolean previouslyStalled = deliveryStalled;
+    deliveryStalled = stalled;
+    if (stalled && !previouslyStalled) {
+      listener.deliveryStalled();
+    }
+    return null;
   }
 
   /**
@@ -343,14 +335,16 @@ public class MessageDeframer implements Closeable {
   /**
    * Processes the GRPC message body, which depending on frame header flags may be compressed.
    */
-  private void processBody() {
+  @Nullable
+  private InputStream processBody() {
     InputStream stream = compressedFlag ? getCompressedBody() : getUncompressedBody();
     nextFrame = null;
-    listener.messageRead(stream);
 
     // Done with this frame, begin processing the next header.
     state = State.HEADER;
     requiredLength = HEADER_LENGTH;
+
+    return stream;
   }
 
   private InputStream getUncompressedBody() {

@@ -19,6 +19,7 @@ package io.grpc.netty;
 import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static io.grpc.netty.NettyTestUtil.messageFrame;
+import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.eq;
@@ -40,6 +41,7 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.StreamListener;
 import io.grpc.netty.WriteQueue.QueuedCommand;
 import io.netty.buffer.EmptyByteBuf;
 import io.netty.buffer.UnpooledByteBufAllocator;
@@ -189,6 +191,10 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     stream().transportState()
         .inboundDataReceived(new EmptyByteBuf(UnpooledByteBufAllocator.DEFAULT), true);
 
+    ArgumentCaptor<StreamListener.MessageProducer> producerCaptor =
+        ArgumentCaptor.forClass(StreamListener.MessageProducer.class);
+    verify(serverListener).messagesAvailable(producerCaptor.capture());
+    assertNull(producerCaptor.getValue().next());
     verify(serverListener).halfClosed();
 
     // Server closes. Status sent
@@ -226,6 +232,10 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     // Client half-closes. Listener gets halfClosed()
     stream().transportState().inboundDataReceived(
         new EmptyByteBuf(UnpooledByteBufAllocator.DEFAULT), true);
+    ArgumentCaptor<StreamListener.MessageProducer> producerCaptor =
+        ArgumentCaptor.forClass(StreamListener.MessageProducer.class);
+    verify(serverListener).messagesAvailable(producerCaptor.capture());
+    assertNull(producerCaptor.getValue().next());
     verify(serverListener).halfClosed();
     // Abort from the transport layer
     stream().transportState().transportReportStatus(status);

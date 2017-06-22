@@ -465,8 +465,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       callExecutor.execute(new HeadersRead());
     }
 
-    @Override
-    public void messageRead(final InputStream message) {
+    private void messageRead(final InputStream message) {
       class MessageRead extends ContextRunnable {
         MessageRead() {
           super(context);
@@ -493,6 +492,16 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       }
 
       callExecutor.execute(new MessageRead());
+    }
+
+    @Override
+    public void messagesAvailable(final StreamListener.MessageProducer producer) {
+      // TODO(ericgribkoff) Handle deframe error/exceptions..well, these will get propagated back
+      // to network thread that called deframe/request, so no need?
+      InputStream message;
+      while ((message = producer.next()) != null) {
+        messageRead(message);
+      }
     }
 
     /**

@@ -55,6 +55,7 @@ import io.grpc.internal.ClientTransport.PingCallback;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.KeepAliveManager;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.StreamListener;
 import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2ClientHeadersDecoder;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
@@ -273,11 +274,13 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     // Create a data frame and then trigger the handler to read it.
     ByteBuf frame = grpcDataFrame(3, false, contentAsArray());
     channelRead(frame);
-    ArgumentCaptor<InputStream> isCaptor = ArgumentCaptor.forClass(InputStream.class);
-    verify(streamListener).messageRead(isCaptor.capture());
+    ArgumentCaptor<StreamListener.MessageProducer> producerCaptor =
+        ArgumentCaptor.forClass(StreamListener.MessageProducer.class);
+    verify(streamListener, times(2)).messagesAvailable(producerCaptor.capture());
+    InputStream message = producerCaptor.getValue().next();
     assertArrayEquals(ByteBufUtil.getBytes(content()),
-        ByteStreams.toByteArray(isCaptor.getValue()));
-    isCaptor.getValue().close();
+        ByteStreams.toByteArray(message));
+    message.close();
   }
 
   @Test

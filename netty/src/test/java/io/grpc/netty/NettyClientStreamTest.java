@@ -25,6 +25,8 @@ import static io.grpc.netty.Utils.STATUS_OK;
 import static io.netty.util.CharsetUtil.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
@@ -35,6 +37,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -48,6 +51,7 @@ import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.StreamListener;
 import io.grpc.netty.WriteQueue.QueuedCommand;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -58,7 +62,6 @@ import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.util.AsciiString;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
-import java.io.InputStream;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -304,14 +307,20 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     // Only allow the first to be delivered.
     stream().request(1);
 
+    // Verify that the first was delivered.
+    ArgumentCaptor<StreamListener.MessageProducer> producerCaptor =
+        ArgumentCaptor.forClass(StreamListener.MessageProducer.class);
+    verify(listener, times(3)).messagesAvailable(producerCaptor.capture());
+    assertNotNull(producerCaptor.getValue().next());
+    // TODO(ericgribkoff) Need to call next() again to update deliveryStalled. Should make this
+    // less brittle for testing.
+    assertNull(producerCaptor.getValue().next());
+
     // Receive error trailers. The server status will not be processed until after all of the
     // data frames have been processed. Since cancellation will interrupt message delivery,
     // this status will never be processed and the listener will instead only see the
     // cancellation.
     stream().transportState().transportHeadersReceived(grpcResponseTrailers(Status.INTERNAL), true);
-
-    // Verify that the first was delivered.
-    verify(listener).messageRead(any(InputStream.class));
 
     // Now set the error status.
     Metadata trailers = Utils.convertTrailers(grpcResponseTrailers(Status.CANCELLED));
@@ -321,7 +330,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream().request(1);
 
     // Verify that the listener was only notified of the first message, not the second.
-    verify(listener).messageRead(any(InputStream.class));
+    verify(listener, times(3)).messagesAvailable(producerCaptor.capture());
     verify(listener).closed(eq(Status.CANCELLED), eq(trailers));
   }
 
@@ -337,7 +346,13 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream().transportState().transportDataReceived(simpleGrpcFrame(), true);
 
     // Verify that the message was delivered.
-    verify(listener).messageRead(any(InputStream.class));
+    ArgumentCaptor<StreamListener.MessageProducer> producerCaptor =
+        ArgumentCaptor.forClass(StreamListener.MessageProducer.class);
+    verify(listener, times(2)).messagesAvailable(producerCaptor.capture());
+    // TODO(ericgribkoff) This test cannot check the message here, as the deframer has already been
+    // closed. Need to add a doAnswer() block here to automatically call next() as soon as
+    // messagesAvailable() is invoked.
+    //assertNotNull(producerCaptor.getValue().next());
 
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener).closed(captor.capture(), any(Metadata.class));

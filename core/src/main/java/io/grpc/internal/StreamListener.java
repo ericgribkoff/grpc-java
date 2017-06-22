@@ -17,6 +17,7 @@
 package io.grpc.internal;
 
 import java.io.InputStream;
+import javax.annotation.Nullable;
 
 /**
  * An observer of {@link Stream} events. It is guaranteed to only have one concurrent callback at a
@@ -24,16 +25,17 @@ import java.io.InputStream;
  */
 public interface StreamListener {
   /**
-   * Called upon receiving a message from the remote end-point. The {@link InputStream} is
-   * non-blocking and contains the entire message.
+   * TODO(ericgribkoff) Update. Called upon receiving a message from the remote end-point. The
+   * {@link InputStream} is non-blocking and contains the entire message.
    *
    * <p>The provided {@code message} {@link InputStream} must be closed by the listener.
    *
    * <p>This method should return quickly, as the same thread may be used to process other streams.
    *
-   * @param message the bytes of the message.
+   * @param producer which can provide a sequence of {@link java.io.InputStream} messages to a
+   *     consumer.
    */
-  void messageRead(InputStream message);
+  void messagesAvailable(MessageProducer producer);
 
   /**
    * This indicates that the transport is now capable of sending additional messages
@@ -42,4 +44,16 @@ public interface StreamListener {
    * result in excessive buffering within the transport.
    */
   void onReady();
+
+  /**
+   * A producer for deframed gRPC messages.
+   */
+  interface MessageProducer {
+    /**
+     * Returns the next gRPC message, if the data has been received by {@link Source} and the
+     * application has requested another message.
+     */
+    @Nullable
+    public InputStream next();
+  }
 }

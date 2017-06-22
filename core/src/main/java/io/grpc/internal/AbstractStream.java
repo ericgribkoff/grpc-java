@@ -146,8 +146,8 @@ public abstract class AbstractStream implements Stream {
     protected abstract StreamListener listener();
 
     @Override
-    public void messageRead(InputStream is) {
-      listener().messageRead(is);
+    public void messagesAvailable(StreamListener.MessageProducer producer) {
+      listener().messagesAvailable(producer);
     }
 
     /**

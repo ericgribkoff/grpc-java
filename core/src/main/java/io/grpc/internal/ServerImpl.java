@@ -51,6 +51,7 @@ import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
@@ -497,11 +498,14 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
 
   private static class NoopListener implements ServerStreamListener {
     @Override
-    public void messageRead(InputStream value) {
-      try {
-        value.close();
-      } catch (IOException e) {
-        throw new RuntimeException(e);
+    public void messagesAvailable(StreamListener.MessageProducer producer) {
+      InputStream message;
+      while ((message = producer.next()) != null) {
+        try {
+          message.close();
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
       }
     }
 
@@ -562,21 +566,32 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
     }
 
     @Override
-    public void messageRead(final InputStream message) {
-      callExecutor.execute(new ContextRunnable(context) {
-        @Override
-        public void runInContext() {
-          try {
-            getListener().messageRead(message);
-          } catch (RuntimeException e) {
-            internalClose();
-            throw e;
-          } catch (Error e) {
-            internalClose();
-            throw e;
+    public void messagesAvailable(final StreamListener.MessageProducer producer) {
+      // TODO(ericgribkoff) Can't use ContextRunnable here or deframing will occur on app thread.
+      // Also can't pass to listener, as listener might not have been set (see LoadWorkerTest).
+      if (listener == null) {
+        // TODO(ericgribkoff) Verify that listener only ever changes once, from null to non-null.
+        return;
+      }
+
+      InputStream message;
+      while ((message = producer.next()) != null) {
+        final InputStream messageCopy = message;
+        callExecutor.execute(new ContextRunnable(context) {
+          @Override
+          public void runInContext() {
+            try {
+              getListener().messagesAvailable(new SingleMessageProducer(messageCopy));
+            } catch (RuntimeException e) {
+              internalClose();
+              throw e;
+            } catch (Error e) {
+              internalClose();
+              throw e;
+            }
           }
-        }
-      });
+        });
+      }
     }
 
     @Override
@@ -646,6 +661,23 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
     @Override
     public void run() {
       context.cancel(cause);
+    }
+  }
+
+  // TODO(ericgribkoff) Get rid of this
+  private static class SingleMessageProducer implements StreamListener.MessageProducer {
+    private InputStream message;
+
+    private SingleMessageProducer(InputStream message) {
+      this.message = message;
+    }
+
+    @Nullable
+    @Override
+    public InputStream next() {
+      InputStream messageToReturn = message;
+      message = null;
+      return messageToReturn;
     }
   }
 }
