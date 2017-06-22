@@ -43,11 +43,8 @@ import io.grpc.ServerTransportFilter;
 import io.grpc.Status;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -567,25 +564,34 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
 
     @Override
     public void messagesAvailable(final StreamListener.MessageProducer producer) {
+      final Queue<InputStream> messages = new LinkedList<InputStream>();
+
       InputStream message;
       while ((message = producer.next()) != null) {
-        final InputStream messageCopy = message;
-        callExecutor.execute(new ContextRunnable(context) {
-          @Override
-          public void runInContext() {
-            try {
-              // TODO(ericgribkoff) Figure out this API
-              getListener().messagesAvailable(new SingleMessageProducer(messageCopy));
-            } catch (RuntimeException e) {
-              internalClose();
-              throw e;
-            } catch (Error e) {
-              internalClose();
-              throw e;
-            }
-          }
-        });
+        messages.add(message);
       }
+      final StreamListener.MessageProducer drainedProducer = new StreamListener.MessageProducer() {
+        @Nullable
+        @Override
+        public InputStream next() {
+          return messages.poll();
+        }
+      };
+      callExecutor.execute(new ContextRunnable(context) {
+        @Override
+        public void runInContext() {
+          try {
+            // TODO(ericgribkoff) Add messageRead back to ServerStreamListener to avoid this?
+            getListener().messagesAvailable(drainedProducer);
+          } catch (RuntimeException e) {
+            internalClose();
+            throw e;
+          } catch (Error e) {
+            internalClose();
+            throw e;
+          }
+        }
+      });
     }
 
     @Override
@@ -655,23 +661,6 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
     @Override
     public void run() {
       context.cancel(cause);
-    }
-  }
-
-  // TODO(ericgribkoff) Get rid of this
-  private static class SingleMessageProducer implements StreamListener.MessageProducer {
-    private InputStream message;
-
-    private SingleMessageProducer(InputStream message) {
-      this.message = message;
-    }
-
-    @Nullable
-    @Override
-    public InputStream next() {
-      InputStream messageToReturn = message;
-      message = null;
-      return messageToReturn;
     }
   }
 }
