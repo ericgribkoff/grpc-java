@@ -498,8 +498,8 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
   private static class NoopListener implements ServerStreamListener {
     @Override
     public void messagesAvailable(MessageProducer producer) {
-      InputStream message = producer.next();
-      if (message != null) {
+      InputStream message;
+      while ((message = producer.next()) != null) {
         try {
           message.close();
         } catch (IOException e) {

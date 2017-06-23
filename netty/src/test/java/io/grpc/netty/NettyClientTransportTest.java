@@ -553,7 +553,9 @@ public class NettyClientTransportTest {
 
     @Override
     public void messagesAvailable(MessageProducer producer) {
-      responseFuture.set(null);
+      if (producer.next() != null) {
+        responseFuture.set(null);
+      }
     }
 
     @Override
