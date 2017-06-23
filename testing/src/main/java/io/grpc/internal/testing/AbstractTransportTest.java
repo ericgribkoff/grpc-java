@@ -674,7 +674,7 @@ public abstract class AbstractTransportTest {
     }
 
     clientStream.flush();
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).messageRead(inputStreamCaptor.capture());
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).messagesAvailable(inputStreamCaptor.capture());
     if (metricsExpected()) {
       clientInOrder.verify(clientStreamTracer).outboundWireSize(anyLong());
       clientInOrder.verify(clientStreamTracer).outboundUncompressedSize(anyLong());
@@ -714,7 +714,7 @@ public abstract class AbstractTransportTest {
     }
 
     serverStream.flush();
-    verify(mockClientStreamListener, timeout(TIMEOUT_MS)).messageRead(inputStreamCaptor.capture());
+    verify(mockClientStreamListener, timeout(TIMEOUT_MS)).messagesAvailable(inputStreamCaptor.capture());
     if (metricsExpected()) {
       serverInOrder.verify(serverStreamTracer).outboundWireSize(anyLong());
       serverInOrder.verify(serverStreamTracer, atLeast(1)).outboundUncompressedSize(anyLong());
@@ -993,8 +993,8 @@ public abstract class AbstractTransportTest {
       }
 
       @Override
-      public void messageRead(InputStream message) {
-        assertEquals("foo", methodDescriptor.parseResponse(message));
+      public void messagesAvailable(MessageProducer producer) {
+        assertEquals("foo", methodDescriptor.parseResponse(producer));
         clientStream.cancel(status);
       }
 
@@ -1123,7 +1123,7 @@ public abstract class AbstractTransportTest {
       largeMessage = sb.toString();
     }
 
-    doAnswer(closeStream).when(mockServerStreamListener).messageRead(any(InputStream.class));
+    doAnswer(closeStream).when(mockServerStreamListener).messagesAvailable(any(InputStream.class));
     serverStream.request(1);
     verify(mockClientStreamListener, timeout(TIMEOUT_MS)).onReady();
     assertTrue(clientStream.isReady());
@@ -1146,9 +1146,9 @@ public abstract class AbstractTransportTest {
       clientStream.flush();
     }
     doPingPong(serverListener);
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).messageRead(any(InputStream.class));
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).messagesAvailable(any(InputStream.class));
 
-    doAnswer(closeStream).when(mockClientStreamListener).messageRead(any(InputStream.class));
+    doAnswer(closeStream).when(mockClientStreamListener).messagesAvailable(any(InputStream.class));
     clientStream.request(1);
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).onReady();
     assertTrue(serverStream.isReady());
@@ -1170,24 +1170,24 @@ public abstract class AbstractTransportTest {
       serverStream.flush();
     }
     doPingPong(serverListener);
-    verify(mockClientStreamListener, timeout(TIMEOUT_MS)).messageRead(any(InputStream.class));
+    verify(mockClientStreamListener, timeout(TIMEOUT_MS)).messagesAvailable(any(InputStream.class));
 
     serverStream.request(3);
     clientStream.request(3);
     doPingPong(serverListener);
     // times() is total number throughout the entire test
     verify(mockClientStreamListener, timeout(TIMEOUT_MS).times(4))
-        .messageRead(any(InputStream.class));
+        .messagesAvailable(any(InputStream.class));
     verify(mockServerStreamListener, timeout(TIMEOUT_MS).times(4))
-        .messageRead(any(InputStream.class));
+        .messagesAvailable(any(InputStream.class));
 
     // Request the rest
     serverStream.request(clientSent);
     clientStream.request(serverSent);
     verify(mockClientStreamListener, timeout(TIMEOUT_MS).times(clientSent))
-        .messageRead(any(InputStream.class));
+        .messagesAvailable(any(InputStream.class));
     verify(mockServerStreamListener, timeout(TIMEOUT_MS).times(serverSent))
-        .messageRead(any(InputStream.class));
+        .messagesAvailable(any(InputStream.class));
 
     verify(mockClientStreamListener, timeout(TIMEOUT_MS).times(2)).onReady();
     assertTrue(clientStream.isReady());
@@ -1203,17 +1203,17 @@ public abstract class AbstractTransportTest {
     }
     doPingPong(serverListener);
     verify(mockClientStreamListener, timeout(TIMEOUT_MS).times(clientSent + 4))
-        .messageRead(any(InputStream.class));
+        .messagesAvailable(any(InputStream.class));
     verify(mockServerStreamListener, timeout(TIMEOUT_MS).times(serverSent + 4))
-        .messageRead(any(InputStream.class));
+        .messagesAvailable(any(InputStream.class));
 
     // Drain exactly how many messages are left
     serverStream.request(1);
     clientStream.request(1);
     verify(mockServerStreamListener, timeout(TIMEOUT_MS).times(serverSent + 5))
-        .messageRead(any(InputStream.class));
+        .messagesAvailable(any(InputStream.class));
     verify(mockClientStreamListener, timeout(TIMEOUT_MS).times(clientSent + 5))
-        .messageRead(any(InputStream.class));
+        .messagesAvailable(any(InputStream.class));
 
     // And now check that the streams can still complete gracefully
     clientStream.writeMessage(methodDescriptor.streamRequest(largeMessage));
@@ -1224,7 +1224,7 @@ public abstract class AbstractTransportTest {
 
     serverStream.request(1);
     verify(mockServerStreamListener, timeout(TIMEOUT_MS).times(serverSent + 6))
-        .messageRead(any(InputStream.class));
+        .messagesAvailable(any(InputStream.class));
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).halfClosed();
 
     serverStream.writeMessage(methodDescriptor.streamResponse(largeMessage));
@@ -1236,7 +1236,7 @@ public abstract class AbstractTransportTest {
 
     clientStream.request(1);
     verify(mockClientStreamListener, timeout(TIMEOUT_MS).times(clientSent + 6))
-        .messageRead(any(InputStream.class));
+        .messagesAvailable(any(InputStream.class));
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture());
     assertCodeEquals(Status.OK, statusCaptor.getValue());
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
@@ -1275,7 +1275,7 @@ public abstract class AbstractTransportTest {
     server.stream.close(Status.INTERNAL, new Metadata());
     // Even though the client requested a message earlier, the write should not go through
     verify(clientListener, never()).headersRead(any(Metadata.class));
-    verify(clientListener, never()).messageRead(any(InputStream.class));
+    verify(clientListener, never()).messagesAvailable(any(InputStream.class));
     verify(clientListener, never()).closed(any(Status.class), any(Metadata.class));
 
     // Make sure new streams still work properly
@@ -1310,7 +1310,7 @@ public abstract class AbstractTransportTest {
     clientStream.halfClose();
     clientStream.cancel(Status.UNKNOWN);
     // Even though the server requested a message earlier, the write should not go through
-    verify(server.listener, never()).messageRead(any(InputStream.class));
+    verify(server.listener, never()).messagesAvailable(any(InputStream.class));
     verify(server.listener, never()).halfClosed();
     verify(server.listener, never()).closed(any(Status.class));
 

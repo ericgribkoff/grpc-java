@@ -497,11 +497,14 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
 
   private static class NoopListener implements ServerStreamListener {
     @Override
-    public void messageRead(InputStream value) {
-      try {
-        value.close();
-      } catch (IOException e) {
-        throw new RuntimeException(e);
+    public void messagesAvailable(MessageProducer producer) {
+      InputStream message = producer.next();
+      if (message != null) {
+        try {
+          message.close();
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
       }
     }
 
@@ -562,12 +565,12 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
     }
 
     @Override
-    public void messageRead(final InputStream message) {
+    public void messagesAvailable(final MessageProducer producer) {
       callExecutor.execute(new ContextRunnable(context) {
         @Override
         public void runInContext() {
           try {
-            getListener().messageRead(message);
+            getListener().messagesAvailable(producer);
           } catch (RuntimeException e) {
             internalClose();
             throw e;

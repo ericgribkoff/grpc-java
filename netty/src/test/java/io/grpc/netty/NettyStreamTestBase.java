@@ -130,7 +130,7 @@ public abstract class NettyStreamTestBase<T extends Stream> {
           .transportDataReceived(messageFrame(MESSAGE), false);
     }
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
-    verify(listener()).messageRead(captor.capture());
+    verify(listener()).messagesAvailable(captor.capture());
 
     // Verify that inbound flow control window update has been disabled for the stream.
     assertEquals(MESSAGE, NettyTestUtil.toString(captor.getValue()));

@@ -313,9 +313,9 @@ public class DelayedStreamTest {
       public void start(ClientStreamListener passedListener) {
         passedListener.onReady();
         passedListener.headersRead(headers);
-        passedListener.messageRead(message1);
+        passedListener.messagesAvailable(message1);
         passedListener.onReady();
-        passedListener.messageRead(message2);
+        passedListener.messagesAvailable(message2);
         passedListener.closed(status, trailers);
 
         verifyNoMoreInteractions(listener);
@@ -323,9 +323,9 @@ public class DelayedStreamTest {
     });
     inOrder.verify(listener).onReady();
     inOrder.verify(listener).headersRead(headers);
-    inOrder.verify(listener).messageRead(message1);
+    inOrder.verify(listener).messagesAvailable(message1);
     inOrder.verify(listener).onReady();
-    inOrder.verify(listener).messageRead(message2);
+    inOrder.verify(listener).messagesAvailable(message2);
     inOrder.verify(listener).closed(status, trailers);
   }
 
@@ -344,8 +344,8 @@ public class DelayedStreamTest {
     verify(listener).onReady();
     delayedListener.headersRead(headers);
     verify(listener).headersRead(headers);
-    delayedListener.messageRead(message);
-    verify(listener).messageRead(message);
+    delayedListener.messagesAvailable(message);
+    verify(listener).messagesAvailable(message);
     delayedListener.closed(status, trailers);
     verify(listener).closed(status, trailers);
   }

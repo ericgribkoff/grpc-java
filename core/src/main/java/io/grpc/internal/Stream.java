@@ -28,7 +28,7 @@ import java.io.InputStream;
 public interface Stream {
   /**
    * Requests up to the given number of messages from the call to be delivered to
-   * {@link StreamListener#messageRead(java.io.InputStream)}. No additional messages will be
+   * {@link StreamListener#messagesAvailable(StreamListener.MessageProducer)}. No additional messages will be
    * delivered.  If the stream has a {@code start()} method, it must be called before requesting
    * messages.
    *

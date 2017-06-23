@@ -237,7 +237,8 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
 
     @SuppressWarnings("Finally") // The code avoids suppressing the exception thrown from try
     @Override
-    public void messageRead(final InputStream message) {
+    public void messagesAvailable(final MessageProducer producer) {
+      InputStream message = producer.next();
       Throwable t = null;
       try {
         if (call.cancelled) {

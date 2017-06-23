@@ -466,7 +466,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     }
 
     @Override
-    public void messageRead(final InputStream message) {
+    public void messagesAvailable(final MessageProducer producer) {
       class MessageRead extends ContextRunnable {
         MessageRead() {
           super(context);
@@ -475,6 +475,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
         @Override
         public final void runInContext() {
           try {
+            InputStream message = producer.next();
             if (closed) {
               return;
             }

@@ -23,6 +23,7 @@ import com.google.common.annotations.VisibleForTesting;
 import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
+import io.grpc.internal.StreamListener.MessageProducer;
 import java.io.InputStream;
 import javax.annotation.concurrent.GuardedBy;
 
@@ -146,8 +147,8 @@ public abstract class AbstractStream implements Stream {
     protected abstract StreamListener listener();
 
     @Override
-    public void messageRead(InputStream is) {
-      listener().messageRead(is);
+    public void messagesAvailable(MessageProducer producer) {
+      listener().messagesAvailable(producer);
     }
 
     /**

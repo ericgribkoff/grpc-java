@@ -1704,8 +1704,8 @@ public class OkHttpClientTransportTest {
     }
 
     @Override
-    public void messageRead(InputStream message) {
-      String msg = getContent(message);
+    public void messagesAvailable(MessageProducer producer) {
+      String msg = getContent(producer);
       if (msg != null) {
         messages.add(msg);
       }

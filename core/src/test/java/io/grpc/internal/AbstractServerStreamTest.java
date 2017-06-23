@@ -77,7 +77,7 @@ public class AbstractServerStreamTest {
     stream.transportState().inboundDataReceived(buffer, true);
 
     verify(buffer).close();
-    verify(streamListener, times(0)).messageRead(any(InputStream.class));
+    verify(streamListener, times(0)).messagesAvailable(any(InputStream.class));
   }
 
   /**
@@ -134,9 +134,9 @@ public class AbstractServerStreamTest {
     stream.transportState().setListener(streamListener);
 
     // Normally called by a deframe event.
-    stream.transportState().messageRead(new ByteArrayInputStream(new byte[]{}));
+    stream.transportState().messagesAvailable(new ByteArrayInputStream(new byte[]{}));
 
-    verify(streamListener).messageRead(isA(InputStream.class));
+    verify(streamListener).messagesAvailable(isA(InputStream.class));
   }
 
   @Test
@@ -222,7 +222,7 @@ public class AbstractServerStreamTest {
 
   private static class ServerStreamListenerBase implements ServerStreamListener {
     @Override
-    public void messageRead(InputStream message) {}
+    public void messagesAvailable(MessageProducer producer) {}
 
     @Override
     public void onReady() {}

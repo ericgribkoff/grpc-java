@@ -552,7 +552,7 @@ public class NettyClientTransportTest {
     }
 
     @Override
-    public void messageRead(InputStream message) {
+    public void messagesAvailable(MessageProducer producer) {
       responseFuture.set(null);
     }
 
@@ -575,9 +575,9 @@ public class NettyClientTransportTest {
     }
 
     @Override
-    public void messageRead(InputStream message) {
+    public void messagesAvailable(MessageProducer producer) {
       // Just echo back the message.
-      stream.writeMessage(message);
+      stream.writeMessage(producer);
       stream.flush();
     }
 

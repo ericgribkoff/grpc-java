@@ -23,10 +23,12 @@ import com.google.common.base.Preconditions;
 import io.grpc.Codec;
 import io.grpc.Decompressor;
 import io.grpc.Status;
+import io.grpc.internal.StreamListener.MessageProducer;
 import java.io.Closeable;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
@@ -58,9 +60,9 @@ public class MessageDeframer implements Closeable {
     /**
      * Called to deliver the next complete message.
      *
-     * @param is stream containing the message.
+     * @param producer stream containing the message.
      */
-    void messageRead(InputStream is);
+    void messagesAvailable(MessageProducer producer);
 
     /**
      * Called when end-of-stream has not yet been reached but there are no complete messages
@@ -128,7 +130,7 @@ public class MessageDeframer implements Closeable {
 
   /**
    * Requests up to the given number of messages from the call to be delivered to
-   * {@link Listener#messageRead(InputStream)}. No additional messages will be delivered.
+   * {@link Listener#messagesAvailable(MessageProducer)}. No additional messages will be delivered.
    *
    * <p>If {@link #close()} has been called, this method will have no effect.
    *
@@ -346,7 +348,7 @@ public class MessageDeframer implements Closeable {
   private void processBody() {
     InputStream stream = compressedFlag ? getCompressedBody() : getUncompressedBody();
     nextFrame = null;
-    listener.messageRead(stream);
+    listener.messagesAvailable(new SingleMessageProducer(stream));
 
     // Done with this frame, begin processing the next header.
     state = State.HEADER;
@@ -460,6 +462,22 @@ public class MessageDeframer implements Closeable {
                 "%s: Compressed frame exceeds maximum frame size: %d. Bytes read: %d. ",
                 debugString, maxMessageSize, count)).asRuntimeException();
       }
+    }
+  }
+
+  private static class SingleMessageProducer implements StreamListener.MessageProducer {
+    private InputStream message;
+
+    private SingleMessageProducer(InputStream message) {
+      this.message = message;
+    }
+
+    @Nullable
+    @Override
+    public InputStream next() {
+      InputStream messageToReturn = message;
+      message = null;
+      return messageToReturn;
     }
   }
 }

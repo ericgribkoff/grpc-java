@@ -311,7 +311,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream().transportState().transportHeadersReceived(grpcResponseTrailers(Status.INTERNAL), true);
 
     // Verify that the first was delivered.
-    verify(listener).messageRead(any(InputStream.class));
+    verify(listener).messagesAvailable(any(InputStream.class));
 
     // Now set the error status.
     Metadata trailers = Utils.convertTrailers(grpcResponseTrailers(Status.CANCELLED));
@@ -321,7 +321,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream().request(1);
 
     // Verify that the listener was only notified of the first message, not the second.
-    verify(listener).messageRead(any(InputStream.class));
+    verify(listener).messagesAvailable(any(InputStream.class));
     verify(listener).closed(eq(Status.CANCELLED), eq(trailers));
   }
 
@@ -337,7 +337,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream().transportState().transportDataReceived(simpleGrpcFrame(), true);
 
     // Verify that the message was delivered.
-    verify(listener).messageRead(any(InputStream.class));
+    verify(listener).messagesAvailable(any(InputStream.class));
 
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener).closed(captor.capture(), any(Metadata.class));

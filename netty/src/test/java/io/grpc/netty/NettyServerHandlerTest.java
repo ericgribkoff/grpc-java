@@ -207,7 +207,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     ByteBuf frame = grpcDataFrame(STREAM_ID, endStream, contentAsArray());
     channelRead(frame);
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
-    verify(streamListener).messageRead(captor.capture());
+    verify(streamListener).messagesAvailable(captor.capture());
     assertArrayEquals(ByteBufUtil.getBytes(content()), ByteStreams.toByteArray(captor.getValue()));
     captor.getValue().close();
 
@@ -226,7 +226,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
     channelRead(emptyGrpcFrame(STREAM_ID, true));
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
-    verify(streamListener).messageRead(captor.capture());
+    verify(streamListener).messagesAvailable(captor.capture());
     assertArrayEquals(new byte[0], ByteStreams.toByteArray(captor.getValue()));
     verify(streamListener).halfClosed();
     verify(streamListener, atLeastOnce()).onReady();
@@ -239,7 +239,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     createStream();
 
     channelRead(rstStreamFrame(STREAM_ID, (int) Http2Error.CANCEL.code()));
-    verify(streamListener, never()).messageRead(any(InputStream.class));
+    verify(streamListener, never()).messagesAvailable(any(InputStream.class));
     verify(streamListener).closed(Status.CANCELLED);
     verify(streamListener, atLeastOnce()).onReady();
     verifyNoMoreInteractions(streamListener);
@@ -254,7 +254,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     // When a DATA frame is read, throw an exception. It will be converted into an
     // Http2StreamException.
     RuntimeException e = new RuntimeException("Fake Exception");
-    doThrow(e).when(streamListener).messageRead(any(InputStream.class));
+    doThrow(e).when(streamListener).messagesAvailable(any(InputStream.class));
 
     // Read a DATA frame to trigger the exception.
     channelRead(emptyGrpcFrame(STREAM_ID, true));

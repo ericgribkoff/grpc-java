@@ -274,7 +274,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     ByteBuf frame = grpcDataFrame(3, false, contentAsArray());
     channelRead(frame);
     ArgumentCaptor<InputStream> isCaptor = ArgumentCaptor.forClass(InputStream.class);
-    verify(streamListener).messageRead(isCaptor.capture());
+    verify(streamListener).messagesAvailable(isCaptor.capture());
     assertArrayEquals(ByteBufUtil.getBytes(content()),
         ByteStreams.toByteArray(isCaptor.getValue()));
     isCaptor.getValue().close();
