@@ -67,6 +67,7 @@ import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.StreamListener;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -157,8 +158,8 @@ public abstract class AbstractTransportTest {
   private ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
   private ArgumentCaptor<Throwable> throwableCaptor = ArgumentCaptor.forClass(Throwable.class);
   private ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
-  private ArgumentCaptor<InputStream> inputStreamCaptor
-      = ArgumentCaptor.forClass(InputStream.class);
+  private ArgumentCaptor<StreamListener.MessageProducer> producerCaptor
+      = ArgumentCaptor.forClass(StreamListener.MessageProducer.class);
   private final ClientStreamTracer.Factory clientStreamTracerFactory =
       mock(ClientStreamTracer.Factory.class);
   private final ClientStreamTracer clientStreamTracer = spy(new ClientStreamTracer() {});
@@ -674,14 +675,17 @@ public abstract class AbstractTransportTest {
     }
 
     clientStream.flush();
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).messagesAvailable(inputStreamCaptor.capture());
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS))
+        .messagesAvailable(producerCaptor.capture());
     if (metricsExpected()) {
       clientInOrder.verify(clientStreamTracer).outboundWireSize(anyLong());
       clientInOrder.verify(clientStreamTracer).outboundUncompressedSize(anyLong());
       serverInOrder.verify(serverStreamTracer).inboundMessage();
     }
-    assertEquals("Hello!", methodDescriptor.parseRequest(inputStreamCaptor.getValue()));
-    inputStreamCaptor.getValue().close();
+    InputStream message = producerCaptor.getValue().next();
+    assertEquals("Hello!", methodDescriptor.parseRequest(message));
+    message.close();
+    assertNull("no additional message expected", producerCaptor.getValue().next());
 
     clientStream.halfClose();
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).halfClosed();
@@ -714,19 +718,22 @@ public abstract class AbstractTransportTest {
     }
 
     serverStream.flush();
-    verify(mockClientStreamListener, timeout(TIMEOUT_MS)).messagesAvailable(inputStreamCaptor.capture());
+    verify(mockClientStreamListener, timeout(TIMEOUT_MS))
+        .messagesAvailable(producerCaptor.capture());
     if (metricsExpected()) {
       serverInOrder.verify(serverStreamTracer).outboundWireSize(anyLong());
       serverInOrder.verify(serverStreamTracer, atLeast(1)).outboundUncompressedSize(anyLong());
       clientInOrder.verify(clientStreamTracer).inboundHeaders();
       clientInOrder.verify(clientStreamTracer).inboundMessage();
     }
-    assertEquals("Hi. Who are you?", methodDescriptor.parseResponse(inputStreamCaptor.getValue()));
+    message = producerCaptor.getValue().next();
+    assertEquals("Hi. Who are you?", methodDescriptor.parseResponse(message));
     if (metricsExpected()) {
       clientInOrder.verify(clientStreamTracer).inboundWireSize(anyLong());
       clientInOrder.verify(clientStreamTracer, atLeast(1)).inboundUncompressedSize(anyLong());
     }
-    inputStreamCaptor.getValue().close();
+    message.close();
+    assertNull("no additional message expected", producerCaptor.getValue().next());
 
     Status status = Status.OK.withDescription("That was normal");
     Metadata trailers = new Metadata();
@@ -994,7 +1001,8 @@ public abstract class AbstractTransportTest {
 
       @Override
       public void messagesAvailable(MessageProducer producer) {
-        assertEquals("foo", methodDescriptor.parseResponse(producer));
+        assertEquals("foo", methodDescriptor.parseResponse(producer.next()));
+        assertNull("no additional message expected", producer.next());
         clientStream.cancel(status);
       }
 
@@ -1108,7 +1116,10 @@ public abstract class AbstractTransportTest {
       @Override
       public Void answer(InvocationOnMock invocation) throws Exception {
         Object[] args = invocation.getArguments();
-        ((InputStream) args[0]).close();
+        InputStream message = ((StreamListener.MessageProducer) args[0]).next();
+        if (message != null) {
+          message.close();
+        }
         return null;
       }
     };
@@ -1123,7 +1134,8 @@ public abstract class AbstractTransportTest {
       largeMessage = sb.toString();
     }
 
-    doAnswer(closeStream).when(mockServerStreamListener).messagesAvailable(any(InputStream.class));
+    doAnswer(closeStream).when(mockServerStreamListener)
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
     serverStream.request(1);
     verify(mockClientStreamListener, timeout(TIMEOUT_MS)).onReady();
     assertTrue(clientStream.isReady());
@@ -1146,9 +1158,11 @@ public abstract class AbstractTransportTest {
       clientStream.flush();
     }
     doPingPong(serverListener);
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).messagesAvailable(any(InputStream.class));
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS))
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
 
-    doAnswer(closeStream).when(mockClientStreamListener).messagesAvailable(any(InputStream.class));
+    doAnswer(closeStream).when(mockClientStreamListener)
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
     clientStream.request(1);
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).onReady();
     assertTrue(serverStream.isReady());
@@ -1170,24 +1184,25 @@ public abstract class AbstractTransportTest {
       serverStream.flush();
     }
     doPingPong(serverListener);
-    verify(mockClientStreamListener, timeout(TIMEOUT_MS)).messagesAvailable(any(InputStream.class));
+    verify(mockClientStreamListener, timeout(TIMEOUT_MS))
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
 
     serverStream.request(3);
     clientStream.request(3);
     doPingPong(serverListener);
     // times() is total number throughout the entire test
     verify(mockClientStreamListener, timeout(TIMEOUT_MS).times(4))
-        .messagesAvailable(any(InputStream.class));
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
     verify(mockServerStreamListener, timeout(TIMEOUT_MS).times(4))
-        .messagesAvailable(any(InputStream.class));
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
 
     // Request the rest
     serverStream.request(clientSent);
     clientStream.request(serverSent);
     verify(mockClientStreamListener, timeout(TIMEOUT_MS).times(clientSent))
-        .messagesAvailable(any(InputStream.class));
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
     verify(mockServerStreamListener, timeout(TIMEOUT_MS).times(serverSent))
-        .messagesAvailable(any(InputStream.class));
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
 
     verify(mockClientStreamListener, timeout(TIMEOUT_MS).times(2)).onReady();
     assertTrue(clientStream.isReady());
@@ -1203,17 +1218,17 @@ public abstract class AbstractTransportTest {
     }
     doPingPong(serverListener);
     verify(mockClientStreamListener, timeout(TIMEOUT_MS).times(clientSent + 4))
-        .messagesAvailable(any(InputStream.class));
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
     verify(mockServerStreamListener, timeout(TIMEOUT_MS).times(serverSent + 4))
-        .messagesAvailable(any(InputStream.class));
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
 
     // Drain exactly how many messages are left
     serverStream.request(1);
     clientStream.request(1);
     verify(mockServerStreamListener, timeout(TIMEOUT_MS).times(serverSent + 5))
-        .messagesAvailable(any(InputStream.class));
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
     verify(mockClientStreamListener, timeout(TIMEOUT_MS).times(clientSent + 5))
-        .messagesAvailable(any(InputStream.class));
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
 
     // And now check that the streams can still complete gracefully
     clientStream.writeMessage(methodDescriptor.streamRequest(largeMessage));
@@ -1224,7 +1239,7 @@ public abstract class AbstractTransportTest {
 
     serverStream.request(1);
     verify(mockServerStreamListener, timeout(TIMEOUT_MS).times(serverSent + 6))
-        .messagesAvailable(any(InputStream.class));
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).halfClosed();
 
     serverStream.writeMessage(methodDescriptor.streamResponse(largeMessage));
@@ -1236,7 +1251,7 @@ public abstract class AbstractTransportTest {
 
     clientStream.request(1);
     verify(mockClientStreamListener, timeout(TIMEOUT_MS).times(clientSent + 6))
-        .messagesAvailable(any(InputStream.class));
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture());
     assertCodeEquals(Status.OK, statusCaptor.getValue());
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
@@ -1275,7 +1290,7 @@ public abstract class AbstractTransportTest {
     server.stream.close(Status.INTERNAL, new Metadata());
     // Even though the client requested a message earlier, the write should not go through
     verify(clientListener, never()).headersRead(any(Metadata.class));
-    verify(clientListener, never()).messagesAvailable(any(InputStream.class));
+    verify(clientListener, never()).messagesAvailable(any(StreamListener.MessageProducer.class));
     verify(clientListener, never()).closed(any(Status.class), any(Metadata.class));
 
     // Make sure new streams still work properly
@@ -1310,7 +1325,7 @@ public abstract class AbstractTransportTest {
     clientStream.halfClose();
     clientStream.cancel(Status.UNKNOWN);
     // Even though the server requested a message earlier, the write should not go through
-    verify(server.listener, never()).messagesAvailable(any(InputStream.class));
+    verify(server.listener, never()).messagesAvailable(any(StreamListener.MessageProducer.class));
     verify(server.listener, never()).halfClosed();
     verify(server.listener, never()).closed(any(Status.class));
 

@@ -25,6 +25,8 @@ import static io.grpc.netty.Utils.STATUS_OK;
 import static io.netty.util.CharsetUtil.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
@@ -48,6 +50,7 @@ import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.StreamListener;
 import io.grpc.netty.WriteQueue.QueuedCommand;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -58,7 +61,6 @@ import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.util.AsciiString;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
-import java.io.InputStream;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -311,7 +313,11 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream().transportState().transportHeadersReceived(grpcResponseTrailers(Status.INTERNAL), true);
 
     // Verify that the first was delivered.
-    verify(listener).messagesAvailable(any(InputStream.class));
+    ArgumentCaptor<StreamListener.MessageProducer> producerCaptor
+        = ArgumentCaptor.forClass(StreamListener.MessageProducer.class);
+    verify(listener).messagesAvailable(producerCaptor.capture());
+    assertNotNull("message expected", producerCaptor.getValue().next());
+    assertNull("no additional message expected", producerCaptor.getValue().next());
 
     // Now set the error status.
     Metadata trailers = Utils.convertTrailers(grpcResponseTrailers(Status.CANCELLED));
@@ -321,7 +327,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream().request(1);
 
     // Verify that the listener was only notified of the first message, not the second.
-    verify(listener).messagesAvailable(any(InputStream.class));
+    verify(listener).messagesAvailable(any(StreamListener.MessageProducer.class));
     verify(listener).closed(eq(Status.CANCELLED), eq(trailers));
   }
 
@@ -337,7 +343,11 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream().transportState().transportDataReceived(simpleGrpcFrame(), true);
 
     // Verify that the message was delivered.
-    verify(listener).messagesAvailable(any(InputStream.class));
+    ArgumentCaptor<StreamListener.MessageProducer> producerCaptor
+        = ArgumentCaptor.forClass(StreamListener.MessageProducer.class);
+    verify(listener).messagesAvailable(producerCaptor.capture());
+    assertNotNull("message expected", producerCaptor.getValue().next());
+    assertNull("no additional message expected", producerCaptor.getValue().next());
 
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener).closed(captor.capture(), any(Metadata.class));

@@ -34,6 +34,7 @@ import io.grpc.internal.AbstractServerStream.TransportState;
 import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import javax.annotation.Nullable;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -77,7 +78,7 @@ public class AbstractServerStreamTest {
     stream.transportState().inboundDataReceived(buffer, true);
 
     verify(buffer).close();
-    verify(streamListener, times(0)).messagesAvailable(any(InputStream.class));
+    verify(streamListener, times(0)).messagesAvailable(any(StreamListener.MessageProducer.class));
   }
 
   /**
@@ -134,9 +135,10 @@ public class AbstractServerStreamTest {
     stream.transportState().setListener(streamListener);
 
     // Normally called by a deframe event.
-    stream.transportState().messagesAvailable(new ByteArrayInputStream(new byte[]{}));
+    stream.transportState()
+        .messagesAvailable(new SingleMessageProducer(new ByteArrayInputStream(new byte[]{})));
 
-    verify(streamListener).messagesAvailable(isA(InputStream.class));
+    verify(streamListener).messagesAvailable(isA(StreamListener.MessageProducer.class));
   }
 
   @Test
@@ -265,6 +267,22 @@ public class AbstractServerStreamTest {
 
       @Override
       public void bytesRead(int processedBytes) {}
+    }
+  }
+
+  private static class SingleMessageProducer implements StreamListener.MessageProducer {
+    private InputStream message;
+
+    private SingleMessageProducer(InputStream message) {
+      this.message = message;
+    }
+
+    @Nullable
+    @Override
+    public InputStream next() {
+      InputStream messageToReturn = message;
+      message = null;
+      return messageToReturn;
     }
   }
 }

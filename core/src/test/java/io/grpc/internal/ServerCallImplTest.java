@@ -44,6 +44,7 @@ import io.grpc.internal.ServerCallImpl.ServerStreamListenerImpl;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import javax.annotation.Nullable;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -377,7 +378,7 @@ public class ServerCallImplTest {
   public void streamListener_messageRead() {
     ServerStreamListenerImpl<Long> streamListener =
         new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, context);
-    streamListener.messagesAvailable(UNARY_METHOD.streamRequest(1234L));
+    streamListener.messagesAvailable(new SingleMessageProducer(UNARY_METHOD.streamRequest(1234L)));
 
     verify(callListener).onMessage(1234L);
   }
@@ -386,11 +387,11 @@ public class ServerCallImplTest {
   public void streamListener_messageRead_onlyOnce() {
     ServerStreamListenerImpl<Long> streamListener =
         new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, context);
-    streamListener.messagesAvailable(UNARY_METHOD.streamRequest(1234L));
+    streamListener.messagesAvailable(new SingleMessageProducer(UNARY_METHOD.streamRequest(1234L)));
     // canceling the call should short circuit future halfClosed() calls.
     streamListener.closed(Status.CANCELLED);
 
-    streamListener.messagesAvailable(UNARY_METHOD.streamRequest(1234L));
+    streamListener.messagesAvailable(new SingleMessageProducer(UNARY_METHOD.streamRequest(1234L)));
 
     verify(callListener).onMessage(1234L);
   }
@@ -407,7 +408,7 @@ public class ServerCallImplTest {
 
     thrown.expect(RuntimeException.class);
     thrown.expectMessage("unexpected exception");
-    streamListener.messagesAvailable(inputStream);
+    streamListener.messagesAvailable(new SingleMessageProducer(inputStream));
   }
 
   private static class LongMarshaller implements Marshaller<Long> {
@@ -423,6 +424,22 @@ public class ServerCallImplTest {
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
+    }
+  }
+
+  private static class SingleMessageProducer implements StreamListener.MessageProducer {
+    private InputStream message;
+
+    private SingleMessageProducer(InputStream message) {
+      this.message = message;
+    }
+
+    @Nullable
+    @Override
+    public InputStream next() {
+      InputStream messageToReturn = message;
+      message = null;
+      return messageToReturn;
     }
   }
 }

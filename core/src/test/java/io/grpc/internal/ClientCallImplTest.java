@@ -68,6 +68,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import javax.annotation.Nullable;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -183,7 +184,8 @@ public class ClientCallImplTest {
      * stream.  However, since the server closed it "first" the second exception is lost leading to
      * the call being counted as successful.
      */
-    streamListener.messagesAvailable(new ByteArrayInputStream(new byte[]{}));
+    streamListener
+        .messagesAvailable(new SingleMessageProducer(new ByteArrayInputStream(new byte[]{})));
     streamListener.closed(Status.OK, new Metadata());
     executor.release();
 
@@ -466,8 +468,8 @@ public class ClientCallImplTest {
     ClientStreamListener listener = listenerArgumentCaptor.getValue();
     listener.onReady();
     listener.headersRead(new Metadata());
-    listener.messagesAvailable(new ByteArrayInputStream(new byte[0]));
-    listener.messagesAvailable(new ByteArrayInputStream(new byte[0]));
+    listener.messagesAvailable(new SingleMessageProducer(new ByteArrayInputStream(new byte[0])));
+    listener.messagesAvailable(new SingleMessageProducer(new ByteArrayInputStream(new byte[0])));
     listener.closed(Status.OK, new Metadata());
 
     assertTrue(latch.await(5, TimeUnit.SECONDS));
@@ -759,7 +761,8 @@ public class ClientCallImplTest {
     ClientStreamListener streamListener = listenerArgumentCaptor.getValue();
     streamListener.onReady();
     streamListener.headersRead(new Metadata());
-    streamListener.messagesAvailable(new ByteArrayInputStream(new byte[0]));
+    streamListener
+        .messagesAvailable(new SingleMessageProducer(new ByteArrayInputStream(new byte[0])));
     verify(stream).cancel(statusCaptor.capture());
     Status status = statusCaptor.getValue();
     assertEquals(Status.CANCELLED.getCode(), status.getCode());
@@ -818,6 +821,22 @@ public class ClientCallImplTest {
       while (!commands.isEmpty()) {
         commands.poll().run();
       }
+    }
+  }
+
+  private static class SingleMessageProducer implements StreamListener.MessageProducer {
+    private InputStream message;
+
+    private SingleMessageProducer(InputStream message) {
+      this.message = message;
+    }
+
+    @Nullable
+    @Override
+    public InputStream next() {
+      InputStream messageToReturn = message;
+      message = null;
+      return messageToReturn;
     }
   }
 }

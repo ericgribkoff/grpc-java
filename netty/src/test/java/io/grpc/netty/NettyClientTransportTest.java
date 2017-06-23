@@ -576,9 +576,12 @@ public class NettyClientTransportTest {
 
     @Override
     public void messagesAvailable(MessageProducer producer) {
-      // Just echo back the message.
-      stream.writeMessage(producer);
-      stream.flush();
+      InputStream message;
+      while ((message = producer.next()) != null) {
+        // Just echo back the message.
+        stream.writeMessage(message);
+        stream.flush();
+      }
     }
 
     @Override
