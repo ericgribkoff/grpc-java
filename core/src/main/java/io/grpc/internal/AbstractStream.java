@@ -25,6 +25,7 @@ import io.grpc.Compressor;
 import io.grpc.Decompressor;
 import io.grpc.internal.StreamListener.MessageProducer;
 import java.io.InputStream;
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
@@ -177,31 +178,55 @@ public abstract class AbstractStream implements Stream {
      * Called to parse a received frame and attempt delivery of any completed
      * messages. Must be called from the transport thread.
      */
-    protected final void deframe(ReadableBuffer frame, boolean endOfStream) {
-      if (deframer.isClosed()) {
-        frame.close();
-        return;
-      }
-      try {
-        deframer.deframe(frame, endOfStream);
-      } catch (Throwable t) {
-        deframeFailed(t);
-      }
+    protected final void deframe(final ReadableBuffer frame, final boolean endOfStream) {
+      listener().messagesAvailable(new StreamListener.MessageProducer() {
+        private boolean requested = false;
+        @Nullable
+        @Override
+        public InputStream next() {
+          if (requested) {
+            return null;
+          }
+          requested = true;
+          if (deframer.isClosed()) {
+            frame.close();
+            return null;
+          }
+          try {
+            deframer.deframe(frame, endOfStream);
+          } catch (Throwable t) {
+            deframeFailed(t);
+          }
+          return null;
+        }
+      });
     }
 
     /**
      * Called to request the given number of messages from the deframer. Must be called
      * from the transport thread.
      */
-    public final void requestMessagesFromDeframer(int numMessages) {
-      if (deframer.isClosed()) {
-        return;
-      }
-      try {
-        deframer.request(numMessages);
-      } catch (Throwable t) {
-        deframeFailed(t);
-      }
+    public final void requestMessagesFromDeframer(final int numMessages) {
+      listener().messagesAvailable(new StreamListener.MessageProducer() {
+        private boolean requested = false;
+        @Nullable
+        @Override
+        public InputStream next() {
+          if (requested) {
+            return null;
+          }
+          requested = true;
+          if (deframer.isClosed()) {
+            return null;
+          }
+          try {
+            deframer.request(numMessages);
+          } catch (Throwable t) {
+            deframeFailed(t);
+          }
+          return null;
+        }
+      });
     }
 
     public final StatsTraceContext getStatsTraceContext() {
