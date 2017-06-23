@@ -35,6 +35,8 @@ public interface StreamListener {
    * @param producer which can provide a sequence of {@link java.io.InputStream} messages to a
    *     consumer.
    */
+  // ejona's suggestion: for client-thread deframing, treat producer as "runnable" and do the
+  // deframe()/request() calls in here
   void messagesAvailable(MessageProducer producer);
 
   /**
@@ -50,7 +52,7 @@ public interface StreamListener {
    */
   interface MessageProducer {
     /**
-     * Returns the next gRPC message, if the data has been received by {@link Source} and the
+     * Returns the next gRPC message, if the data has been received by the deframer and the
      * application has requested another message.
      */
     @Nullable

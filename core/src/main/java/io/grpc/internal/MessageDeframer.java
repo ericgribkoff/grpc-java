@@ -344,6 +344,8 @@ public class MessageDeframer implements Closeable, StreamListener.MessageProduce
     state = State.HEADER;
     requiredLength = HEADER_LENGTH;
 
+    // ejona's suggestion: don't return the InputStream, call listener.messagesAvailable(new
+    //   SingleMessageProducer(stream)) here directly. Smaller API change.
     return stream;
   }
 
