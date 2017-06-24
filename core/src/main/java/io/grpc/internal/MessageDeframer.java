@@ -203,6 +203,9 @@ public class MessageDeframer implements Closeable {
 
   // Must be called AFTER all frames have been queued
   public void closeWhenComplete() {
+    if (unprocessed == null) {
+      return;
+    }
     boolean stalled = unprocessed.readableBytes() == 0;
     if (stalled) {
       close();
@@ -213,6 +216,9 @@ public class MessageDeframer implements Closeable {
 
   public void stopDeliveryAndClose() {
     // Need to do same stalled check here! - but not thread safe...
+    if (unprocessed == null) {
+      return;
+    }
     boolean stalled = unprocessed.readableBytes() == 0;
     if (stalled) {
       close();
@@ -238,6 +244,8 @@ public class MessageDeframer implements Closeable {
     } finally {
       unprocessed = null;
       nextFrame = null;
+      System.out.println("unprocessed and nextFrame set to null");
+      System.out.println("Thread id: " + Thread.currentThread().getId());
     }
   }
 
@@ -245,6 +253,9 @@ public class MessageDeframer implements Closeable {
    * Indicates whether or not this deframer has been closed.
    */
   public boolean isClosed() {
+    System.out.println("isClosed called");
+    System.out.println(unprocessed == null);
+    System.out.println("Thread id: " + Thread.currentThread().getId());
     return unprocessed == null;
   }
 

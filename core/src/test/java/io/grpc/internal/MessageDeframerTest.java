@@ -103,6 +103,7 @@ public class MessageDeframerTest {
   public void endOfStreamWithPayloadShouldNotifyEndOfStream() {
     deframer.request(1);
     deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 1, 3}), true);
+    deframer.closeWhenComplete();
     verify(listener).messagesAvailable(producerCaptor.capture());
     assertEquals(Bytes.asList(new byte[] {3}), bytes(producerCaptor.getValue().next()));
     assertNull("no additional message expected", producerCaptor.getValue().next());
@@ -115,6 +116,7 @@ public class MessageDeframerTest {
   @Test
   public void endOfStreamShouldNotifyEndOfStream() {
     deframer.deframe(buffer(new byte[0]), true);
+    deframer.closeWhenComplete();
     verify(listener).deframerClosed();
     verifyNoMoreInteractions(listener);
     checkStats(0, 0, 0);
@@ -182,6 +184,7 @@ public class MessageDeframerTest {
   @Test
   public void endOfStreamCallbackShouldWaitForMessageDelivery() {
     deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 1, 3}), true);
+    deframer.closeWhenComplete();
     verifyNoMoreInteractions(listener);
 
     deframer.request(1);
@@ -222,6 +225,7 @@ public class MessageDeframerTest {
       }
     }).when(listener).messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
     deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 1, 3}), true);
+    deframer.closeWhenComplete();
     verifyNoMoreInteractions(listener);
 
     deframer.request(1);

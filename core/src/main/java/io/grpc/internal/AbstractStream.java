@@ -213,12 +213,16 @@ public abstract class AbstractStream implements Stream {
     protected final void deframe(final ReadableBuffer frame, final boolean endOfStream) {
       System.out.println("deframe " + isClient);
       if (deframer.isClosed()) {
+        System.out.println("closed");
         frame.close();
+        return;
       }
+      System.out.println("not closed");
       try {
         deframer.deframe(frame, endOfStream);
       } catch (Throwable t) {
         System.out.println("Deframe failed " + isClient);
+        t.printStackTrace(System.out);
         deframeFailed(t);
         deframer.close(); // unrecoverable state
       }
