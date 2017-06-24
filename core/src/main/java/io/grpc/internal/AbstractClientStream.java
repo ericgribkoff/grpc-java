@@ -173,7 +173,8 @@ public abstract class AbstractClientStream extends AbstractStream
     private boolean listenerClosed;
     private ClientStreamListener listener;
 
-    private Runnable deliveryStalledTask;
+    //    private Runnable deliveryStalledTask;
+    private Runnable deframerClosedTask;
 
     /**
      * Whether the stream is closed from the transport's perspective. This can differ from {@link
@@ -182,7 +183,7 @@ public abstract class AbstractClientStream extends AbstractStream
     private boolean statusReported;
 
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
-      super(maxMessageSize, statsTraceCtx);
+      super(maxMessageSize, statsTraceCtx, true);
       this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
     }
 
@@ -192,18 +193,18 @@ public abstract class AbstractClientStream extends AbstractStream
       this.listener = Preconditions.checkNotNull(listener, "listener");
     }
 
-    @Override
-    public final void deliveryStalled() {
-      if (deliveryStalledTask != null) {
-        deliveryStalledTask.run();
-        deliveryStalledTask = null;
-      }
-    }
-
-    @Override
-    public final void endOfStream() {
-      deliveryStalled();
-    }
+    //    @Override
+    //    public final void deliveryStalled() {
+    //      if (deliveryStalledTask != null) {
+    //        deliveryStalledTask.run();
+    //        deliveryStalledTask = null;
+    //      }
+    //    }
+    //
+    //    @Override
+    //    public final void endOfStream() {
+    //      deliveryStalled();
+    //    }
 
     @Override
     protected final ClientStreamListener listener() {
@@ -286,17 +287,28 @@ public abstract class AbstractClientStream extends AbstractStream
 
       // If not stopping delivery, then we must wait until the deframer is stalled (i.e., it has no
       // complete messages to deliver).
-      if (stopDelivery || isDeframerStalled()) {
-        deliveryStalledTask = null;
-        closeListener(status, trailers);
-      } else {
-        deliveryStalledTask = new Runnable() {
-          @Override
-          public void run() {
-            closeListener(status, trailers);
+      //      if (stopDelivery || isDeframerStalled()) {
+      //        deliveryStalledTask = null;
+      //        closeListener(status, trailers);
+      //      } else {
+      //        deliveryStalledTask = new Runnable() {
+      //          @Override
+      //          public void run() {
+      //            closeListener(status, trailers);
+      //          }
+      //        };
+      //      }
+      deframerClosedTask = new Runnable() {
+        @Override
+        public void run() {
+          if (!listenerClosed) {
+            listenerClosed = true;
+            statsTraceCtx.streamClosed(status);
+            listener().closed(status, trailers);
           }
-        };
-      }
+        }
+      };
+      closeDeframer(stopDelivery);
     }
 
     /**
@@ -304,12 +316,22 @@ public abstract class AbstractClientStream extends AbstractStream
      *
      * @throws IllegalStateException if the call has not yet been started.
      */
-    private void closeListener(Status status, Metadata trailers) {
-      if (!listenerClosed) {
-        listenerClosed = true;
-        closeDeframer();
-        statsTraceCtx.streamClosed(status);
-        listener().closed(status, trailers);
+    //    private void closeListener(Status status, Metadata trailers) {
+    //      if (!listenerClosed) {
+    //        listenerClosed = true;
+    //        closeDeframer();
+    //        statsTraceCtx.streamClosed(status);
+    //        listener().closed(status, trailers);
+    //      }
+    //    }
+
+    @Override
+    public void deframerClosed() {
+      // TODO(ericgribkoff) Decide if this is statement is necessary
+      // Necessary only if we call deframerClosed on deframing error (e.g., any non-scheduled close)
+      if (deframerClosedTask != null) {
+        System.out.println("deframerClosed on client");
+        deframerClosedTask.run();
       }
     }
   }

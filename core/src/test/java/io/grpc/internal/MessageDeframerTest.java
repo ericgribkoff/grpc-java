@@ -106,7 +106,7 @@ public class MessageDeframerTest {
     verify(listener).messagesAvailable(producerCaptor.capture());
     assertEquals(Bytes.asList(new byte[] {3}), bytes(producerCaptor.getValue().next()));
     assertNull("no additional message expected", producerCaptor.getValue().next());
-    verify(listener).endOfStream();
+    verify(listener).deframerClosed();
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
     checkStats(1, 1, 1);
@@ -115,7 +115,7 @@ public class MessageDeframerTest {
   @Test
   public void endOfStreamShouldNotifyEndOfStream() {
     deframer.deframe(buffer(new byte[0]), true);
-    verify(listener).endOfStream();
+    verify(listener).deframerClosed();
     verifyNoMoreInteractions(listener);
     checkStats(0, 0, 0);
   }
@@ -188,7 +188,7 @@ public class MessageDeframerTest {
     verify(listener).messagesAvailable(producerCaptor.capture());
     assertEquals(Bytes.asList(new byte[] {3}), bytes(producerCaptor.getValue().next()));
     assertNull("no additional message expected", producerCaptor.getValue().next());
-    verify(listener).endOfStream();
+    verify(listener).deframerClosed();
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
     checkStats(1, 1, 1);
@@ -228,7 +228,7 @@ public class MessageDeframerTest {
     verify(listener).messagesAvailable(producerCaptor.capture());
     assertEquals(Bytes.asList(new byte[] {3}), bytes(producerCaptor.getValue().next()));
     assertNull("no additional message expected", producerCaptor.getValue().next());
-    verify(listener).endOfStream();
+    verify(listener).deframerClosed();
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
   }

@@ -176,8 +176,12 @@ public abstract class AbstractServerStream extends AbstractStream
     private ServerStreamListener listener;
     private final StatsTraceContext statsTraceCtx;
 
+    private boolean endOfStream = false;
+    private Status statusToReport = null;
+    private boolean deframerClosed = false;
+
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
-      super(maxMessageSize, statsTraceCtx);
+      super(maxMessageSize, statsTraceCtx, false);
       this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
     }
 
@@ -195,14 +199,14 @@ public abstract class AbstractServerStream extends AbstractStream
       super.onStreamAllocated();
     }
 
-    @Override
-    public void deliveryStalled() {}
-
-    @Override
-    public void endOfStream() {
-      closeDeframer();
-      listener().halfClosed();
-    }
+    //    @Override
+    //    public void deliveryStalled() {}
+    //
+    //    @Override
+    //    public void endOfStream() {
+    //      closeDeframer();
+    //      listener().halfClosed();
+    //    }
 
     @Override
     protected ServerStreamListener listener() {
@@ -219,7 +223,12 @@ public abstract class AbstractServerStream extends AbstractStream
      */
     public void inboundDataReceived(ReadableBuffer frame, boolean endOfStream) {
       // Deframe the message. If a failure occurs, deframeFailed will be called.
-      deframe(frame, endOfStream);
+      //      deframe(frame, endOfStream);
+      deframe(frame, false);
+      if (endOfStream) {
+        this.endOfStream = true;
+        closeDeframer(false);
+      }
     }
 
     /**
@@ -234,7 +243,13 @@ public abstract class AbstractServerStream extends AbstractStream
      */
     public final void transportReportStatus(Status status) {
       Preconditions.checkArgument(!status.isOk(), "status must not be OK");
-      closeListener(status);
+      // Only close deframer here if we haven't already in response to "end of stream"
+      if (deframerClosed) {
+        closeListener(status);
+      } else {
+        statusToReport = status;
+        closeDeframer(true);
+      }
     }
 
     /**
@@ -243,7 +258,24 @@ public abstract class AbstractServerStream extends AbstractStream
      * #transportReportStatus}.
      */
     public void complete() {
-      closeListener(Status.OK);
+      if (deframerClosed) {
+        closeListener(Status.OK);
+      } else {
+        statusToReport = Status.OK;
+        closeDeframer(true);
+      }
+    }
+
+    @Override
+    public void deframerClosed() {
+      System.out.println("deframerClosed on server");
+      deframerClosed = true;
+      if (endOfStream) {
+        listener.halfClosed();
+      }
+      if (statusToReport != null) {
+        closeListener(statusToReport);
+      }
     }
 
     /**
@@ -257,7 +289,6 @@ public abstract class AbstractServerStream extends AbstractStream
         }
         listenerClosed = true;
         onStreamDeallocated();
-        closeDeframer();
         listener().closed(newStatus);
       }
     }
