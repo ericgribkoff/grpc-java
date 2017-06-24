@@ -64,17 +64,6 @@ public class MessageDeframer implements Closeable {
      */
     void messagesAvailable(MessageProducer producer);
 
-    //    /**
-    //     * Called when end-of-stream has not yet been reached but there are no complete messages
-    //     * remaining to be delivered.
-    //     */
-    //    void deliveryStalled();
-
-    //    /**
-    //     * Called when the stream is complete and all messages have been successfully delivered.
-    //     */
-    //    void endOfStream();
-
     /**
      * Called when the deframer closes.
      */
@@ -86,7 +75,6 @@ public class MessageDeframer implements Closeable {
   }
 
   private final Listener listener;
-  private Listener messagesAvailableListener;
   private int maxInboundMessageSize;
   private final StatsTraceContext statsTraceCtx;
   private final String debugString;
@@ -101,8 +89,8 @@ public class MessageDeframer implements Closeable {
   private boolean deliveryStalled = true;
   private boolean inDelivery = false;
 
-  private volatile boolean closeWhenComplete = false;
-  private volatile boolean stopDelivery = false;
+  private boolean closeWhenComplete = false;
+  private boolean stopDelivery = false;
 
   /**
    * Create a deframer.
@@ -116,19 +104,10 @@ public class MessageDeframer implements Closeable {
   public MessageDeframer(Listener listener, Decompressor decompressor, int maxMessageSize,
       StatsTraceContext statsTraceCtx, String debugString) {
     this.listener = Preconditions.checkNotNull(listener, "sink");
-    this.messagesAvailableListener = listener;
     this.decompressor = Preconditions.checkNotNull(decompressor, "decompressor");
     this.maxInboundMessageSize = maxMessageSize;
     this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
     this.debugString = debugString;
-  }
-
-  public void setMessagesAvailableListener(Listener l) {
-    messagesAvailableListener = l;
-  }
-
-  public void resetMessagesAvailableListener() {
-    messagesAvailableListener = listener;
   }
 
   void setMaxInboundMessageSize(int messageSize) {
@@ -201,7 +180,8 @@ public class MessageDeframer implements Closeable {
     return deliveryStalled;
   }
 
-  // Must be called AFTER all frames have been queued
+  /** Close when any messages currently in unprocessed have been requested and delivered. */
+  // TODO(ericgribkoff) Add check in deframe() to stop additional messages being queued up.
   public void closeWhenComplete() {
     if (unprocessed == null) {
       return;
@@ -214,8 +194,8 @@ public class MessageDeframer implements Closeable {
     }
   }
 
+  /** Interrupt any messages currently in unprocessed and close. */
   public void stopDeliveryAndClose() {
-    // Need to do same stalled check here! - but not thread safe...
     if (unprocessed == null) {
       return;
     }
@@ -244,8 +224,6 @@ public class MessageDeframer implements Closeable {
     } finally {
       unprocessed = null;
       nextFrame = null;
-      System.out.println("unprocessed and nextFrame set to null");
-      System.out.println("Thread id: " + Thread.currentThread().getId());
     }
   }
 
@@ -253,9 +231,6 @@ public class MessageDeframer implements Closeable {
    * Indicates whether or not this deframer has been closed.
    */
   public boolean isClosed() {
-    System.out.println("isClosed called");
-    System.out.println(unprocessed == null);
-    System.out.println("Thread id: " + Thread.currentThread().getId());
     return unprocessed == null;
   }
 
@@ -312,27 +287,6 @@ public class MessageDeframer implements Closeable {
       if (closeWhenComplete && stalled) {
         close();
       }
-
-      //      if (endOfStream && stalled) {
-      //        boolean havePartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
-      //        if (!havePartialMessage) {
-      //          listener.endOfStream();
-      //          deliveryStalled = false;
-      //          return;
-      //        } else {
-      //          // We've received the entire stream and have data available but we don't have
-      //          // enough to read the next frame ... this is bad.
-      //          throw Status.INTERNAL.withDescription(
-      //              debugString + ": Encountered end-of-stream mid-frame").asRuntimeException();
-      //        }
-      //      }
-      //
-      //      // If we're transitioning to the stalled state, notify the listener.
-      //      boolean previouslyStalled = deliveryStalled;
-      //      deliveryStalled = stalled;
-      //      if (stalled && !previouslyStalled) {
-      //        listener.deliveryStalled();
-      //      }
     } finally {
       inDelivery = false;
     }
@@ -405,8 +359,7 @@ public class MessageDeframer implements Closeable {
   private void processBody() {
     InputStream stream = compressedFlag ? getCompressedBody() : getUncompressedBody();
     nextFrame = null;
-    System.out.println("Delivering message in processBody");
-    messagesAvailableListener.messagesAvailable(new SingleMessageProducer(stream));
+    listener.messagesAvailable(new SingleMessageProducer(stream));
 
     // Done with this frame, begin processing the next header.
     state = State.HEADER;

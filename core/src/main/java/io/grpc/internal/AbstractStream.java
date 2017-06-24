@@ -25,9 +25,6 @@ import io.grpc.Compressor;
 import io.grpc.Decompressor;
 import io.grpc.internal.StreamListener.MessageProducer;
 import java.io.InputStream;
-import java.util.LinkedList;
-import java.util.Queue;
-import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
@@ -134,12 +131,8 @@ public abstract class AbstractStream implements Stream {
     @GuardedBy("onReadyLock")
     private boolean deallocated;
 
-    private boolean isClient;
-
-    protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx,
-        boolean isClient) {
+    protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
       this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
-      this.isClient = isClient;
       deframer = new MessageDeframer(
           this, Codec.Identity.NONE, maxMessageSize, statsTraceCtx, getClass().getName());
     }
@@ -171,118 +164,28 @@ public abstract class AbstractStream implements Stream {
      */
     // TODO(ericgribkoff) Break this into two no-arg methods
     protected final void closeDeframer(boolean stopDelivery) {
-//      if (isClient) {
-//      }
       if (stopDelivery) {
-        System.out.println("stopDeliveryAndClose " + isClient);
-        new Exception().printStackTrace(System.out);
         deframer.stopDeliveryAndClose();
-        // need to queue another call to something in the deframer to make sure this is picked up
       } else {
-        System.out.println("Queueing closeDeframer " + isClient);
-        new Exception().printStackTrace(System.out);
         deframer.closeWhenComplete();
-//        listener().messagesAvailable(new StreamListener.MessageProducer() {
-//          private boolean finished = false;
-//
-//          @Nullable
-//          @Override
-//          public InputStream next() {
-//            if (finished) {
-//              return null;
-//            }
-//            finished = true;
-//            deframer.closeWhenComplete();
-//            return null;
-//          }
-//        });
       }
     }
-
-    /**
-     * Indicates whether delivery is currently stalled, pending receipt of more data.
-     */
-    //    protected final boolean isDeframerStalled() {
-    //      return deframer.isStalled();
-    //    }
 
     /**
      * Called to parse a received frame and attempt delivery of any completed
      * messages. Must be called from the transport thread.
      */
     protected final void deframe(final ReadableBuffer frame, final boolean endOfStream) {
-      System.out.println("deframe " + isClient);
       if (deframer.isClosed()) {
-        System.out.println("closed");
         frame.close();
         return;
       }
-      System.out.println("not closed");
       try {
         deframer.deframe(frame, endOfStream);
       } catch (Throwable t) {
-        System.out.println("Deframe failed " + isClient);
-        t.printStackTrace(System.out);
         deframeFailed(t);
         deframer.close(); // unrecoverable state
       }
-////      if (isClient) {
-//        System.out.println("Queueing deframe " + isClient);
-////      }
-//      listener().messagesAvailable(new StreamListener.MessageProducer() {
-//        private boolean finished = false;
-//        private Queue<InputStream> messageQueue = new LinkedList<InputStream>();
-//
-//        @Nullable
-//        @Override
-//        public InputStream next() {
-//          if (finished) {
-//            InputStream message = messageQueue.poll();
-//            if (message != null) {
-//              System.out.println("delivering queued message " + isClient);
-//              return message;
-//            }
-//            deframer.resetMessagesAvailableListener();
-//            return null;
-//          }
-//          deframer.setMessagesAvailableListener(new MessageDeframer.Listener() {
-//
-//            @Override
-//            public void bytesRead(int numBytes) {
-//
-//            }
-//
-//            @Override
-//            public void messagesAvailable(MessageProducer producer) {
-//              System.out.println("messageProducer captured " + isClient);
-//              messageQueue.add(producer.next());
-//            }
-//
-//            @Override
-//            public void deframerClosed() {
-//
-//            }
-//          });
-//          finished = true;
-//          if (deframer.isClosed()) {
-//            frame.close();
-//            return null;
-//          }
-//          try {
-//            deframer.deframe(frame, endOfStream);
-//          } catch (Throwable t) {
-//            deframeFailed(t);
-//          }
-//          InputStream message = messageQueue.poll();
-//          if (message == null) {
-//            deframer.resetMessagesAvailableListener();
-//            System.out.println("returning null " + isClient);
-//          } else {
-//            System.out.println("returning captured message right away " + isClient + message);
-//          }
-//          return message;
-//        }
-//      });
     }
 
     /**
@@ -290,7 +193,6 @@ public abstract class AbstractStream implements Stream {
      * from the transport thread.
      */
     public final void requestMessagesFromDeframer(final int numMessages) {
-      System.out.println("requestMessagesFromDeframer " + isClient);
       if (deframer.isClosed()) {
         return;
       }
@@ -300,62 +202,6 @@ public abstract class AbstractStream implements Stream {
         deframeFailed(t);
         deframer.close(); // unrecoverable state
       }
-//      if (isClient) {
-//        System.out.println("Queueing request " + isClient);
-////      }
-//      listener().messagesAvailable(new StreamListener.MessageProducer() {
-//        private boolean finished = false;
-//        private Queue<InputStream> messageQueue = new LinkedList<InputStream>();
-//
-//        @Nullable
-//        @Override
-//        public InputStream next() {
-//          if (finished) {
-//            InputStream message = messageQueue.poll();
-//            if (message != null) {
-//              System.out.println("delivering queued message " + isClient);
-//              return message;
-//            }
-//            deframer.resetMessagesAvailableListener();
-//            return null;
-//          }
-//          deframer.setMessagesAvailableListener(new MessageDeframer.Listener() {
-//
-//            @Override
-//            public void bytesRead(int numBytes) {
-//
-//            }
-//
-//            @Override
-//            public void messagesAvailable(MessageProducer producer) {
-//              System.out.println("messageProducer captured " + isClient);
-//              messageQueue.add(producer.next());
-//            }
-//
-//            @Override
-//            public void deframerClosed() {
-//
-//            }
-//          });
-//          finished = true;
-//          if (deframer.isClosed()) {
-//            return null;
-//          }
-//          try {
-//            deframer.request(numMessages);
-//          } catch (Throwable t) {
-//            deframeFailed(t);
-//          }
-//          InputStream message = messageQueue.poll();
-//          if (message == null) {
-//            deframer.resetMessagesAvailableListener();
-//            System.out.println("returning null " + isClient);
-//          } else {
-//            System.out.println("returning captured message right away " + isClient + message);
-//          }
-//          return message;
-//        }
-//      });
     }
 
     public final StatsTraceContext getStatsTraceContext() {

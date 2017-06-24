@@ -173,7 +173,6 @@ public abstract class AbstractClientStream extends AbstractStream
     private boolean listenerClosed;
     private ClientStreamListener listener;
 
-    //    private Runnable deliveryStalledTask;
     private Runnable deframerClosedTask;
 
     /**
@@ -183,7 +182,7 @@ public abstract class AbstractClientStream extends AbstractStream
     private boolean statusReported;
 
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
-      super(maxMessageSize, statsTraceCtx, true);
+      super(maxMessageSize, statsTraceCtx);
       this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
     }
 
@@ -192,19 +191,6 @@ public abstract class AbstractClientStream extends AbstractStream
       Preconditions.checkState(this.listener == null, "Already called setListener");
       this.listener = Preconditions.checkNotNull(listener, "listener");
     }
-
-    //    @Override
-    //    public final void deliveryStalled() {
-    //      if (deliveryStalledTask != null) {
-    //        deliveryStalledTask.run();
-    //        deliveryStalledTask = null;
-    //      }
-    //    }
-    //
-    //    @Override
-    //    public final void endOfStream() {
-    //      deliveryStalled();
-    //    }
 
     @Override
     protected final ClientStreamListener listener() {
@@ -285,26 +271,12 @@ public abstract class AbstractClientStream extends AbstractStream
       statusReported = true;
       onStreamDeallocated();
 
-      // If not stopping delivery, then we must wait until the deframer is stalled (i.e., it has no
-      // complete messages to deliver).
-      //      if (stopDelivery || isDeframerStalled()) {
-      //        deliveryStalledTask = null;
-      //        closeListener(status, trailers);
-      //      } else {
-      //        deliveryStalledTask = new Runnable() {
-      //          @Override
-      //          public void run() {
-      //            closeListener(status, trailers);
-      //          }
-      //        };
-      //      }
       deframerClosedTask = new Runnable() {
         @Override
         public void run() {
           if (!listenerClosed) {
             listenerClosed = true;
             statsTraceCtx.streamClosed(status);
-            System.out.println("calling listener.closed() on client");
             listener().closed(status, trailers);
           }
         }
@@ -312,26 +284,11 @@ public abstract class AbstractClientStream extends AbstractStream
       closeDeframer(stopDelivery);
     }
 
-    /**
-     * Closes the listener if not previously closed.
-     *
-     * @throws IllegalStateException if the call has not yet been started.
-     */
-    //    private void closeListener(Status status, Metadata trailers) {
-    //      if (!listenerClosed) {
-    //        listenerClosed = true;
-    //        closeDeframer();
-    //        statsTraceCtx.streamClosed(status);
-    //        listener().closed(status, trailers);
-    //      }
-    //    }
-
     @Override
     public void deframerClosed() {
       // TODO(ericgribkoff) Decide if this is statement is necessary
       // Necessary only if we call deframerClosed on deframing error (e.g., any non-scheduled close)
       if (deframerClosedTask != null) {
-        System.out.println("deframerClosed on client");
         deframerClosedTask.run();
       }
     }
