@@ -212,7 +212,13 @@ public class MessageDeframer implements Closeable {
   }
 
   public void stopDeliveryAndClose() {
-    stopDelivery = true;
+    // Need to do same stalled check here! - but not thread safe...
+    boolean stalled = unprocessed.readableBytes() == 0;
+    if (stalled) {
+      close();
+    } else {
+      stopDelivery = true;
+    }
   }
 
   /**

@@ -304,6 +304,7 @@ public abstract class AbstractClientStream extends AbstractStream
           if (!listenerClosed) {
             listenerClosed = true;
             statsTraceCtx.streamClosed(status);
+            System.out.println("calling listener.closed() on client");
             listener().closed(status, trailers);
           }
         }

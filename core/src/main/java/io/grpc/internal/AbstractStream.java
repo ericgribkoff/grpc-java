@@ -172,25 +172,30 @@ public abstract class AbstractStream implements Stream {
     // TODO(ericgribkoff) Break this into two no-arg methods
     protected final void closeDeframer(boolean stopDelivery) {
 //      if (isClient) {
-        System.out.println("Queueing closeDeframer " + isClient);
 //      }
       if (stopDelivery) {
+        System.out.println("stopDeliveryAndClose " + isClient);
+        new Exception().printStackTrace(System.out);
         deframer.stopDeliveryAndClose();
+        // need to queue another call to something in the deframer to make sure this is picked up
       } else {
-        listener().messagesAvailable(new StreamListener.MessageProducer() {
-          private boolean finished = false;
-
-          @Nullable
-          @Override
-          public InputStream next() {
-            if (finished) {
-              return null;
-            }
-            finished = true;
-            deframer.closeWhenComplete();
-            return null;
-          }
-        });
+        System.out.println("Queueing closeDeframer " + isClient);
+        new Exception().printStackTrace(System.out);
+        deframer.closeWhenComplete();
+//        listener().messagesAvailable(new StreamListener.MessageProducer() {
+//          private boolean finished = false;
+//
+//          @Nullable
+//          @Override
+//          public InputStream next() {
+//            if (finished) {
+//              return null;
+//            }
+//            finished = true;
+//            deframer.closeWhenComplete();
+//            return null;
+//          }
+//        });
       }
     }
 
@@ -206,13 +211,16 @@ public abstract class AbstractStream implements Stream {
      * messages. Must be called from the transport thread.
      */
     protected final void deframe(final ReadableBuffer frame, final boolean endOfStream) {
+      System.out.println("deframe " + isClient);
       if (deframer.isClosed()) {
         frame.close();
       }
       try {
         deframer.deframe(frame, endOfStream);
       } catch (Throwable t) {
+        System.out.println("Deframe failed " + isClient);
         deframeFailed(t);
+        deframer.close(); // unrecoverable state
       }
 ////      if (isClient) {
 //        System.out.println("Queueing deframe " + isClient);
@@ -278,6 +286,7 @@ public abstract class AbstractStream implements Stream {
      * from the transport thread.
      */
     public final void requestMessagesFromDeframer(final int numMessages) {
+      System.out.println("requestMessagesFromDeframer " + isClient);
       if (deframer.isClosed()) {
         return;
       }
@@ -285,6 +294,7 @@ public abstract class AbstractStream implements Stream {
         deframer.request(numMessages);
       } catch (Throwable t) {
         deframeFailed(t);
+        deframer.close(); // unrecoverable state
       }
 //      if (isClient) {
 //        System.out.println("Queueing request " + isClient);

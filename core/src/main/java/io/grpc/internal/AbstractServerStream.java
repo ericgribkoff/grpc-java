@@ -244,9 +244,12 @@ public abstract class AbstractServerStream extends AbstractStream
     public final void transportReportStatus(Status status) {
       Preconditions.checkArgument(!status.isOk(), "status must not be OK");
       // Only close deframer here if we haven't already in response to "end of stream"
+      System.out.println("transportReportStatus on server");
       if (deframerClosed) {
+        System.out.println("deframerClosed=true");
         closeListener(status);
       } else {
+        System.out.println("deframerClosed=false");
         statusToReport = status;
         closeDeframer(true);
       }
@@ -258,9 +261,12 @@ public abstract class AbstractServerStream extends AbstractStream
      * #transportReportStatus}.
      */
     public void complete() {
+      System.out.println("complete on server");
       if (deframerClosed) {
+        System.out.println("deframerClosed=true");
         closeListener(Status.OK);
       } else {
+        System.out.println("deframerClosed=false");
         statusToReport = Status.OK;
         closeDeframer(true);
       }
@@ -271,9 +277,11 @@ public abstract class AbstractServerStream extends AbstractStream
       System.out.println("deframerClosed on server");
       deframerClosed = true;
       if (endOfStream) {
+        System.out.println("halfClosed on server");
         listener.halfClosed();
       }
       if (statusToReport != null) {
+        System.out.println("closeListener on server");
         closeListener(statusToReport);
       }
     }
@@ -289,6 +297,7 @@ public abstract class AbstractServerStream extends AbstractStream
         }
         listenerClosed = true;
         onStreamDeallocated();
+        System.out.println("calling closed on listener server");
         listener().closed(newStatus);
       }
     }
