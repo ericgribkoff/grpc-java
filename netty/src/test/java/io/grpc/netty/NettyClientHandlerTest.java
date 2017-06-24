@@ -63,6 +63,7 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
+import io.netty.channel.EventLoop;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Connection;
@@ -128,7 +129,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     }
 
     initChannel(new GrpcHttp2ClientHeadersDecoder(GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE));
-    streamTransportState = new TransportStateImpl(handler(), DEFAULT_MAX_MESSAGE_SIZE);
+    streamTransportState = new TransportStateImpl(handler(), channel().eventLoop(),
+        DEFAULT_MAX_MESSAGE_SIZE);
     streamTransportState.setListener(streamListener);
 
     grpcHeaders = new DefaultHttp2Headers()
@@ -436,12 +438,14 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
     assertEquals(3, streamTransportState.id());
 
-    streamTransportState = new TransportStateImpl(handler(), DEFAULT_MAX_MESSAGE_SIZE);
+    streamTransportState = new TransportStateImpl(handler(), channel().eventLoop(),
+        DEFAULT_MAX_MESSAGE_SIZE);
     streamTransportState.setListener(streamListener);
     enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
     assertEquals(5, streamTransportState.id());
 
-    streamTransportState = new TransportStateImpl(handler(), DEFAULT_MAX_MESSAGE_SIZE);
+    streamTransportState = new TransportStateImpl(handler(), channel().eventLoop(),
+        DEFAULT_MAX_MESSAGE_SIZE);
     streamTransportState.setListener(streamListener);
     enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
     assertEquals(7, streamTransportState.id());
@@ -643,8 +647,9 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   }
 
   private static class TransportStateImpl extends NettyClientStream.TransportState {
-    public TransportStateImpl(NettyClientHandler handler, int maxMessageSize) {
-      super(handler, maxMessageSize, StatsTraceContext.NOOP);
+    public TransportStateImpl(NettyClientHandler handler, EventLoop eventLoop,
+        int maxMessageSize) {
+      super(handler, eventLoop, maxMessageSize, StatsTraceContext.NOOP);
     }
 
     @Override

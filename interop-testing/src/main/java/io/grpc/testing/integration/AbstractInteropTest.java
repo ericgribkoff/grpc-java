@@ -923,7 +923,7 @@ public abstract class AbstractInteropTest {
         .addResponseParameters(ResponseParameters.newBuilder().setSize(1))
         .build();
     int size = blockingStub.streamingOutputCall(request).next().getSerializedSize();
-
+    System.out.println("Starting real test");
     TestServiceGrpc.TestServiceBlockingStub stub =
         blockingStub.withMaxInboundMessageSize(size - 1);
 

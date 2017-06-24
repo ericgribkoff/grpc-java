@@ -90,7 +90,13 @@ public class MessageDeframer implements Closeable {
   private boolean inDelivery = false;
 
   private boolean closeWhenComplete = false;
-  private boolean stopDelivery = false;
+  private volatile boolean stopDelivery = false;
+
+  public interface MessageInterceptor {
+    void messageRead(InputStream inputStream);
+  }
+
+  public MessageInterceptor messageInterceptor;
 
   /**
    * Create a deframer.
@@ -194,17 +200,12 @@ public class MessageDeframer implements Closeable {
     }
   }
 
-  /** Interrupt any messages currently in unprocessed and close. */
+  /**
+   * Interrupt any messages currently in unprocessed and close. Should be followed by call to
+   * close().
+   */
   public void stopDeliveryAndClose() {
-    if (unprocessed == null) {
-      return;
-    }
-    boolean stalled = unprocessed.readableBytes() == 0;
-    if (stalled) {
-      close();
-    } else {
-      stopDelivery = true;
-    }
+    stopDelivery = true;
   }
 
   /**
@@ -359,7 +360,11 @@ public class MessageDeframer implements Closeable {
   private void processBody() {
     InputStream stream = compressedFlag ? getCompressedBody() : getUncompressedBody();
     nextFrame = null;
-    listener.messagesAvailable(new SingleMessageProducer(stream));
+    if (messageInterceptor != null) {
+      messageInterceptor.messageRead(stream);
+    } else {
+      listener.messagesAvailable(new SingleMessageProducer(stream));
+    }
 
     // Done with this frame, begin processing the next header.
     state = State.HEADER;

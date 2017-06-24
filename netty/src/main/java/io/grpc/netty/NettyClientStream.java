@@ -37,6 +37,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.EventLoop;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.util.AsciiString;
@@ -190,13 +191,15 @@ class NettyClientStream extends AbstractClientStream {
   public abstract static class TransportState extends Http2ClientStreamTransportState
       implements StreamIdHolder {
     private final NettyClientHandler handler;
+    private final EventLoop eventLoop;
     private int id;
     private Http2Stream http2Stream;
 
-    public TransportState(NettyClientHandler handler, int maxMessageSize,
+    public TransportState(NettyClientHandler handler, EventLoop eventLoop, int maxMessageSize,
         StatsTraceContext statsTraceCtx) {
       super(maxMessageSize, statsTraceCtx);
       this.handler = checkNotNull(handler, "handler");
+      this.eventLoop = checkNotNull(eventLoop, "eventLoop");
     }
 
     @Override
@@ -239,19 +242,69 @@ class NettyClientStream extends AbstractClientStream {
 
     @Override
     protected void http2ProcessingFailed(Status status, Metadata trailers) {
-      transportReportStatus(status, false, trailers);
+      System.out.println("client http2 processing failed");
+      transportReportStatus(status, true, trailers);
       handler.getWriteQueue().enqueue(new CancelClientStreamCommand(this, status), true);
     }
 
     @Override
-    public void bytesRead(int processedBytes) {
-      handler.returnProcessedBytes(http2Stream, processedBytes);
-      handler.getWriteQueue().scheduleFlush();
+    public void bytesRead(final int processedBytes) {
+      if (eventLoop.inEventLoop()) {
+        handler.returnProcessedBytes(http2Stream, processedBytes);
+        handler.getWriteQueue().scheduleFlush();
+      } else {
+        eventLoop.execute(new Runnable() {
+          @Override
+          public void run() {
+            handler.returnProcessedBytes(http2Stream, processedBytes);
+            handler.getWriteQueue().scheduleFlush();
+          }
+        });
+      }
     }
 
     @Override
-    protected void deframeFailed(Throwable cause) {
-      http2ProcessingFailed(Status.fromThrowable(cause), new Metadata());
+    protected void deframeFailed(final Throwable cause) {
+      System.out.println("deframeFailed in client");
+      if (eventLoop.inEventLoop()) {
+        System.out.println("in event loop");
+        http2ProcessingFailed(Status.fromThrowable(cause), new Metadata());
+      } else {
+        System.out.println("not in event loop, scheduling handling of deframeFailed");
+        eventLoop.execute(new Runnable() {
+          @Override
+          public void run() {
+            System.out.println("in event loop, handling deframeFailed");
+            http2ProcessingFailed(Status.fromThrowable(cause), new Metadata());
+          }
+        });
+      }
+    }
+
+
+    @Override
+    public void deframerClosed() {
+      if (eventLoop.inEventLoop()) {
+        if (deframerClosedTask != null) {
+          deframerClosedTask.run();
+        }
+      } else {
+        System.out.println("client queuing deframerCLosedTask");
+        // TODO - move if null check here.
+        // Copying this is a problem - not thread safe, for one.
+        //        final Runnable deframerClosedTaskCopy = deframerClosedTask;
+        eventLoop.execute(new Runnable() {
+          @Override
+          public void run() {
+            System.out.println("invoking deframerClosedNotThreadSafe");
+            deframerClosedNotThreadSafe();
+            //            System.out.println("handling deframeClosedTask");
+            //            if (deframerClosedTaskCopy != null) {
+            //              deframerClosedTaskCopy.run();
+            //            }
+          }
+        });
+      }
     }
 
     void transportHeadersReceived(Http2Headers headers, boolean endOfStream) {

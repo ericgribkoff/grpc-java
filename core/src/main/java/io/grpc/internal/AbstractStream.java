@@ -25,6 +25,9 @@ import io.grpc.Compressor;
 import io.grpc.Decompressor;
 import io.grpc.internal.StreamListener.MessageProducer;
 import java.io.InputStream;
+import java.util.LinkedList;
+import java.util.Queue;
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
@@ -131,6 +134,8 @@ public abstract class AbstractStream implements Stream {
     @GuardedBy("onReadyLock")
     private boolean deallocated;
 
+    public boolean client = false;
+
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
       this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
       deframer = new MessageDeframer(
@@ -162,12 +167,42 @@ public abstract class AbstractStream implements Stream {
      * Closes this deframer and frees any resources. After this method is called, additional calls
      * will have no effect.
      */
-    // TODO(ericgribkoff) Break this into two no-arg methods
     protected final void closeDeframer(boolean stopDelivery) {
+      System.out.println("closeDeframer " + client);
       if (stopDelivery) {
         deframer.stopDeliveryAndClose();
+        // Schedule a call to close in case no current operations pick up the stopDelivery flag.
+        listener().messagesAvailable(new StreamListener.MessageProducer() {
+          private boolean finished = false;
+
+          @Nullable
+          @Override
+          public InputStream next() {
+            if (finished) {
+              return null;
+            }
+            finished = true;
+            deframer.close();
+            return null;
+          }
+        });
       } else {
-        deframer.closeWhenComplete();
+        listener().messagesAvailable(new StreamListener.MessageProducer() {
+          private boolean finished = false;
+
+          @Nullable
+          @Override
+          public InputStream next() {
+            // TODO(ericgribkoff) Do we really need finished here? next() shouldn't be called after
+            // initial return of null.
+            if (finished) {
+              return null;
+            }
+            finished = true;
+            deframer.closeWhenComplete();
+            return null;
+          }
+        });
       }
     }
 
@@ -176,16 +211,45 @@ public abstract class AbstractStream implements Stream {
      * messages. Must be called from the transport thread.
      */
     protected final void deframe(final ReadableBuffer frame, final boolean endOfStream) {
-      if (deframer.isClosed()) {
-        frame.close();
-        return;
-      }
-      try {
-        deframer.deframe(frame, endOfStream);
-      } catch (Throwable t) {
-        deframeFailed(t);
-        deframer.close(); // unrecoverable state
-      }
+      System.out.println("deframe " + client);
+      listener().messagesAvailable(new StreamListener.MessageProducer() {
+        private boolean started = false;
+        private final Queue<InputStream> messageQueue = new LinkedList<InputStream>();
+
+        @Nullable
+        @Override
+        public InputStream next() {
+          if (started) {
+            InputStream message = messageQueue.poll();
+            if (message == null) {
+              deframer.messageInterceptor = null;
+            }
+            return message;
+          }
+          started = true;
+          if (deframer.isClosed()) {
+            frame.close();
+            return null;
+          }
+          deframer.messageInterceptor = new MessageDeframer.MessageInterceptor() {
+            @Override
+            public void messageRead(InputStream inputStream) {
+              messageQueue.add(inputStream);
+            }
+          };
+          try {
+            deframer.deframe(frame, endOfStream);
+          } catch (Throwable t) {
+            deframeFailed(t);
+            deframer.close(); // unrecoverable state
+          }
+          InputStream message = messageQueue.poll();
+          if (message == null) {
+            deframer.messageInterceptor = null;
+          }
+          return message;
+        }
+      });
     }
 
     /**
@@ -193,15 +257,44 @@ public abstract class AbstractStream implements Stream {
      * from the transport thread.
      */
     public final void requestMessagesFromDeframer(final int numMessages) {
-      if (deframer.isClosed()) {
-        return;
-      }
-      try {
-        deframer.request(numMessages);
-      } catch (Throwable t) {
-        deframeFailed(t);
-        deframer.close(); // unrecoverable state
-      }
+      System.out.println("requestMessagesFromDeframer " + client);
+      listener().messagesAvailable(new StreamListener.MessageProducer() {
+        private boolean started = false;
+        private final Queue<InputStream> messageQueue = new LinkedList<InputStream>();
+
+        @Nullable
+        @Override
+        public InputStream next() {
+          if (started) {
+            InputStream message = messageQueue.poll();
+            if (message == null) {
+              deframer.messageInterceptor = null;
+            }
+            return message;
+          }
+          started = true;
+          if (deframer.isClosed()) {
+            return null;
+          }
+          deframer.messageInterceptor = new MessageDeframer.MessageInterceptor() {
+            @Override
+            public void messageRead(InputStream inputStream) {
+              messageQueue.add(inputStream);
+            }
+          };
+          try {
+            deframer.request(numMessages);
+          } catch (Throwable t) {
+            deframeFailed(t);
+            deframer.close(); // unrecoverable state
+          }
+          InputStream message = messageQueue.poll();
+          if (message == null) {
+            deframer.messageInterceptor = null;
+          }
+          return message;
+        }
+      });
     }
 
     public final StatsTraceContext getStatsTraceContext() {

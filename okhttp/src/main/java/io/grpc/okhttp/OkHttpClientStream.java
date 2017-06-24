@@ -234,18 +234,33 @@ class OkHttpClientStream extends AbstractClientStream {
     @GuardedBy("lock")
     @Override
     protected void deframeFailed(Throwable cause) {
-      http2ProcessingFailed(Status.fromThrowable(cause), new Metadata());
+      synchronized (lock) {
+        http2ProcessingFailed(Status.fromThrowable(cause), new Metadata());
+      }
     }
 
     @GuardedBy("lock")
     @Override
     public void bytesRead(int processedBytes) {
-      processedWindow -= processedBytes;
-      if (processedWindow <= WINDOW_UPDATE_THRESHOLD) {
-        int delta = Utils.DEFAULT_WINDOW_SIZE - processedWindow;
-        window += delta;
-        processedWindow += delta;
-        frameWriter.windowUpdate(id(), delta);
+      synchronized (lock) {
+        processedWindow -= processedBytes;
+        if (processedWindow <= WINDOW_UPDATE_THRESHOLD) {
+          int delta = Utils.DEFAULT_WINDOW_SIZE - processedWindow;
+          window += delta;
+          processedWindow += delta;
+          frameWriter.windowUpdate(id(), delta);
+        }
+      }
+    }
+
+    @GuardedBy("lock")
+    @Override
+    public void deframerClosed() {
+      synchronized (lock) {
+        deframerClosedNotThreadSafe();
+        //        if (deframerClosedTask != null) {
+        //          deframerClosedTask.run();
+        //        }
       }
     }
 

@@ -206,6 +206,7 @@ public class AbstractClientStreamTest {
     // Simulate getting a reset
     stream.transportState().transportReportStatus(status, false /*stop delivery*/, new Metadata());
 
+    // TODO(ericgribkoff) Mock listener doesn't call onNext(), so it doesn't see the close.
     verify(mockListener).closed(any(Status.class), any(Metadata.class));
   }
   
@@ -314,5 +315,8 @@ public class AbstractClientStreamTest {
 
     @Override
     public void bytesRead(int processedBytes) {}
+
+    @Override
+    public void deframerClosed() {}
   }
 }

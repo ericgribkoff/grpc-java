@@ -336,5 +336,8 @@ public class Http2ClientStreamTransportStateTest {
 
     @Override
     public void bytesRead(int processedBytes) {}
+
+    @Override
+    public void deframerClosed() {}
   }
 }
