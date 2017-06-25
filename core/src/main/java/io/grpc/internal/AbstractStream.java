@@ -172,37 +172,21 @@ public abstract class AbstractStream implements Stream {
       if (stopDelivery) {
         deframer.stopDeliveryAndClose();
         // Schedule a call to close in case no current operations pick up the stopDelivery flag.
-        listener().messagesAvailable(new StreamListener.MessageProducer() {
-          private boolean finished = false;
-
-          @Nullable
-          @Override
-          public InputStream next() {
-            if (finished) {
-              return null;
+        listener().messagesAvailable(new InitializingMessageProducer(deframer,
+          new Runnable() {
+            @Override
+            public void run() {
+              deframer.close();
             }
-            finished = true;
-            deframer.close();
-            return null;
-          }
-        });
+          }));
       } else {
-        listener().messagesAvailable(new StreamListener.MessageProducer() {
-          private boolean finished = false;
-
-          @Nullable
-          @Override
-          public InputStream next() {
-            // TODO(ericgribkoff) Do we really need finished here? next() shouldn't be called after
-            // initial return of null.
-            if (finished) {
-              return null;
+        listener().messagesAvailable(new InitializingMessageProducer(deframer,
+          new Runnable() {
+            @Override
+            public void run() {
+              deframer.closeWhenComplete();
             }
-            finished = true;
-            deframer.closeWhenComplete();
-            return null;
-          }
-        });
+          }));
       }
     }
 
@@ -212,44 +196,22 @@ public abstract class AbstractStream implements Stream {
      */
     protected final void deframe(final ReadableBuffer frame, final boolean endOfStream) {
       System.out.println("deframe " + client);
-      listener().messagesAvailable(new StreamListener.MessageProducer() {
-        private boolean started = false;
-        private final Queue<InputStream> messageQueue = new LinkedList<InputStream>();
-
-        @Nullable
-        @Override
-        public InputStream next() {
-          if (started) {
-            InputStream message = messageQueue.poll();
-            if (message == null) {
-              deframer.messageInterceptor = null;
+      listener().messagesAvailable(new InitializingMessageProducer(deframer,
+        new Runnable() {
+          @Override
+          public void run() {
+            if (deframer.isClosed()) {
+              frame.close();
+              return;
             }
-            return message;
-          }
-          started = true;
-          if (deframer.isClosed()) {
-            frame.close();
-            return null;
-          }
-          deframer.messageInterceptor = new MessageDeframer.MessageInterceptor() {
-            @Override
-            public void messageRead(InputStream inputStream) {
-              messageQueue.add(inputStream);
+            try {
+              deframer.deframe(frame, endOfStream);
+            } catch (Throwable t) {
+              deframeFailed(t);
+              deframer.close(); // unrecoverable state
             }
-          };
-          try {
-            deframer.deframe(frame, endOfStream);
-          } catch (Throwable t) {
-            deframeFailed(t);
-            deframer.close(); // unrecoverable state
           }
-          InputStream message = messageQueue.poll();
-          if (message == null) {
-            deframer.messageInterceptor = null;
-          }
-          return message;
-        }
-      });
+        }));
     }
 
     /**
@@ -258,43 +220,21 @@ public abstract class AbstractStream implements Stream {
      */
     public final void requestMessagesFromDeframer(final int numMessages) {
       System.out.println("requestMessagesFromDeframer " + client);
-      listener().messagesAvailable(new StreamListener.MessageProducer() {
-        private boolean started = false;
-        private final Queue<InputStream> messageQueue = new LinkedList<InputStream>();
-
-        @Nullable
-        @Override
-        public InputStream next() {
-          if (started) {
-            InputStream message = messageQueue.poll();
-            if (message == null) {
-              deframer.messageInterceptor = null;
+      listener().messagesAvailable(new InitializingMessageProducer(deframer,
+        new Runnable() {
+          @Override
+          public void run() {
+            if (deframer.isClosed()) {
+              return;
             }
-            return message;
-          }
-          started = true;
-          if (deframer.isClosed()) {
-            return null;
-          }
-          deframer.messageInterceptor = new MessageDeframer.MessageInterceptor() {
-            @Override
-            public void messageRead(InputStream inputStream) {
-              messageQueue.add(inputStream);
+            try {
+              deframer.request(numMessages);
+            } catch (Throwable t) {
+              deframeFailed(t);
+              deframer.close(); // unrecoverable state
             }
-          };
-          try {
-            deframer.request(numMessages);
-          } catch (Throwable t) {
-            deframeFailed(t);
-            deframer.close(); // unrecoverable state
           }
-          InputStream message = messageQueue.poll();
-          if (message == null) {
-            deframer.messageInterceptor = null;
-          }
-          return message;
-        }
-      });
+        }));
     }
 
     public final StatsTraceContext getStatsTraceContext() {
@@ -384,6 +324,44 @@ public abstract class AbstractStream implements Stream {
       }
       if (doNotify) {
         listener().onReady();
+      }
+    }
+
+    // TODO(ericgribkoff) Separate this into Initializing and Intercepting
+    // (close calls don't need the intercepting part)
+    private static class InitializingMessageProducer implements StreamListener.MessageProducer {
+      private final Runnable runnable;
+      private final MessageDeframer deframer;
+      private final Queue<InputStream> messageQueue = new LinkedList<InputStream>();
+      private boolean initialized = false;
+
+      private InitializingMessageProducer(MessageDeframer deframer, Runnable runnable) {
+        this.deframer = deframer;
+        this.runnable = runnable;
+      }
+
+      private void initialize() {
+        if (!initialized) {
+          deframer.messageInterceptor = new MessageDeframer.MessageInterceptor() {
+            @Override
+            public void messageRead(InputStream inputStream) {
+              messageQueue.add(inputStream);
+            }
+          };
+          runnable.run();
+          initialized = true;
+        }
+      }
+
+      @Nullable
+      @Override
+      public InputStream next() {
+        initialize();
+        InputStream message = messageQueue.poll();
+        if (message == null) {
+          deframer.messageInterceptor = null;
+        }
+        return message;
       }
     }
   }
