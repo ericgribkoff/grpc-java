@@ -151,8 +151,18 @@ public abstract class AbstractStream implements Stream {
      */
     protected abstract StreamListener listener();
 
+    private boolean deframeInApplicationThread = true;
+
     @Override
     public void messagesAvailable(MessageProducer producer) {
+//      if (!deframeInApplicationThread) {
+//        // This doesn't work. We "unset" the interceptor for earlier calls, which loses the
+//        // interceptor for later calls...we need to skip the interceptor altogether when
+//        // deframing in application thread.
+//        if (producer instanceof InitializingMessageProducer) {
+//          ((InitializingMessageProducer) producer).initialize();
+//        }
+//      }
       listener().messagesAvailable(producer);
     }
 
@@ -168,25 +178,25 @@ public abstract class AbstractStream implements Stream {
      * will have no effect.
      */
     protected final void closeDeframer(boolean stopDelivery) {
-      System.out.println("closeDeframer " + client);
+      System.out.println("closeDeframer " + client + " (stopDelivery=" + stopDelivery + ")");
       if (stopDelivery) {
         deframer.stopDeliveryAndClose();
         // Schedule a call to close in case no current operations pick up the stopDelivery flag.
-        listener().messagesAvailable(new InitializingMessageProducer(deframer,
+        messagesAvailable(new InitializingMessageProducer(deframer,
           new Runnable() {
             @Override
             public void run() {
               deframer.close();
             }
-          }));
+          }, deframeInApplicationThread, "stopDeliveryAndClose " + client));
       } else {
-        listener().messagesAvailable(new InitializingMessageProducer(deframer,
+        messagesAvailable(new InitializingMessageProducer(deframer,
           new Runnable() {
             @Override
             public void run() {
               deframer.closeWhenComplete();
             }
-          }));
+          }, deframeInApplicationThread, "closeWhenComplete " + client));
       }
     }
 
@@ -196,7 +206,7 @@ public abstract class AbstractStream implements Stream {
      */
     protected final void deframe(final ReadableBuffer frame, final boolean endOfStream) {
       System.out.println("deframe " + client);
-      listener().messagesAvailable(new InitializingMessageProducer(deframer,
+      messagesAvailable(new InitializingMessageProducer(deframer,
         new Runnable() {
           @Override
           public void run() {
@@ -211,7 +221,7 @@ public abstract class AbstractStream implements Stream {
               deframer.close(); // unrecoverable state
             }
           }
-        }));
+        }, deframeInApplicationThread, "deframe " + client));
     }
 
     /**
@@ -220,7 +230,7 @@ public abstract class AbstractStream implements Stream {
      */
     public final void requestMessagesFromDeframer(final int numMessages) {
       System.out.println("requestMessagesFromDeframer " + client);
-      listener().messagesAvailable(new InitializingMessageProducer(deframer,
+      messagesAvailable(new InitializingMessageProducer(deframer,
         new Runnable() {
           @Override
           public void run() {
@@ -234,7 +244,7 @@ public abstract class AbstractStream implements Stream {
               deframer.close(); // unrecoverable state
             }
           }
-        }));
+        }, deframeInApplicationThread, "request " + client));
     }
 
     public final StatsTraceContext getStatsTraceContext() {
@@ -329,25 +339,39 @@ public abstract class AbstractStream implements Stream {
 
     // TODO(ericgribkoff) Separate this into Initializing and Intercepting
     // (close calls don't need the intercepting part)
+    // TODO(ericgribkoff) See if this should be non-static
     private static class InitializingMessageProducer implements StreamListener.MessageProducer {
       private final Runnable runnable;
       private final MessageDeframer deframer;
       private final Queue<InputStream> messageQueue = new LinkedList<InputStream>();
+      private final String tag;
+      private final boolean deframeInApplicationThread;
       private boolean initialized = false;
 
-      private InitializingMessageProducer(MessageDeframer deframer, Runnable runnable) {
+      private InitializingMessageProducer(MessageDeframer deframer, Runnable runnable,
+          boolean deframeInApplicationThread, String tag) {
         this.deframer = deframer;
         this.runnable = runnable;
+        this.deframeInApplicationThread = deframeInApplicationThread;
+        this.tag = tag;
+
+        if (!deframeInApplicationThread) {
+          initialize();
+        }
       }
 
       private void initialize() {
         if (!initialized) {
-          deframer.messageInterceptor = new MessageDeframer.MessageInterceptor() {
-            @Override
-            public void messageRead(InputStream inputStream) {
-              messageQueue.add(inputStream);
-            }
-          };
+          if (deframeInApplicationThread) {
+            deframer.messageInterceptor = new MessageDeframer.MessageInterceptor() {
+              @Override
+              public void messageRead(InputStream inputStream) {
+                System.out.println("somebody's messageRead called " + tag);
+                messageQueue.add(inputStream);
+              }
+            };
+          }
+          System.out.println("initialized deframer's messageInterceptor " + tag);
           runnable.run();
           initialized = true;
         }
@@ -358,8 +382,9 @@ public abstract class AbstractStream implements Stream {
       public InputStream next() {
         initialize();
         InputStream message = messageQueue.poll();
-        if (message == null) {
+        if (deframeInApplicationThread && message == null) {
           deframer.messageInterceptor = null;
+          System.out.println("unsetting deframer.messageInterceptor " + tag);
         }
         return message;
       }
