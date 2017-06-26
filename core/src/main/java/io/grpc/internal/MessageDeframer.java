@@ -28,7 +28,6 @@ import java.io.Closeable;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
@@ -60,9 +59,9 @@ public class MessageDeframer implements Closeable {
     /**
      * Called to deliver the next complete message.
      *
-     * @param producer stream containing the message.
+     * @param message stream containing the message.
      */
-    void messagesAvailable(MessageProducer producer);
+    void messageRead(InputStream message);
 
     /**
      * Called when the deframer closes.
@@ -360,11 +359,7 @@ public class MessageDeframer implements Closeable {
   private void processBody() {
     InputStream stream = compressedFlag ? getCompressedBody() : getUncompressedBody();
     nextFrame = null;
-    if (messageInterceptor != null) {
-      messageInterceptor.messageRead(stream);
-    } else {
-      listener.messagesAvailable(new SingleMessageProducer(stream));
-    }
+    listener.messageRead(stream);
 
     // Done with this frame, begin processing the next header.
     state = State.HEADER;
@@ -481,19 +476,19 @@ public class MessageDeframer implements Closeable {
     }
   }
 
-  private static class SingleMessageProducer implements StreamListener.MessageProducer {
-    private InputStream message;
-
-    private SingleMessageProducer(InputStream message) {
-      this.message = message;
-    }
-
-    @Nullable
-    @Override
-    public InputStream next() {
-      InputStream messageToReturn = message;
-      message = null;
-      return messageToReturn;
-    }
-  }
+//  private static class SingleMessageProducer implements StreamListener.MessageProducer {
+//    private InputStream message;
+//
+//    private SingleMessageProducer(InputStream message) {
+//      this.message = message;
+//    }
+//
+//    @Nullable
+//    @Override
+//    public InputStream next() {
+//      InputStream messageToReturn = message;
+//      message = null;
+//      return messageToReturn;
+//    }
+//  }
 }

@@ -242,7 +242,6 @@ class NettyClientStream extends AbstractClientStream {
 
     @Override
     protected void http2ProcessingFailed(Status status, Metadata trailers) {
-      System.out.println("client http2 processing failed");
       transportReportStatus(status, true, trailers);
       handler.getWriteQueue().enqueue(new CancelClientStreamCommand(this, status), true);
     }
@@ -265,16 +264,12 @@ class NettyClientStream extends AbstractClientStream {
 
     @Override
     protected void deframeFailed(final Throwable cause) {
-      System.out.println("deframeFailed in client");
       if (eventLoop.inEventLoop()) {
-        System.out.println("in event loop");
         http2ProcessingFailed(Status.fromThrowable(cause), new Metadata());
       } else {
-        System.out.println("not in event loop, scheduling handling of deframeFailed");
         eventLoop.execute(new Runnable() {
           @Override
           public void run() {
-            System.out.println("in event loop, handling deframeFailed");
             http2ProcessingFailed(Status.fromThrowable(cause), new Metadata());
           }
         });
@@ -289,19 +284,10 @@ class NettyClientStream extends AbstractClientStream {
           deframerClosedTask.run();
         }
       } else {
-        System.out.println("client queuing deframerCLosedTask");
-        // TODO - move if null check here.
-        // Copying this is a problem - not thread safe, for one.
-        //        final Runnable deframerClosedTaskCopy = deframerClosedTask;
         eventLoop.execute(new Runnable() {
           @Override
           public void run() {
-            System.out.println("invoking deframerClosedNotThreadSafe");
-            deframerClosedNotThreadSafe();
-            //            System.out.println("handling deframeClosedTask");
-            //            if (deframerClosedTaskCopy != null) {
-            //              deframerClosedTaskCopy.run();
-            //            }
+          deframerClosedNotThreadSafe();
           }
         });
       }

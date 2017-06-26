@@ -258,9 +258,6 @@ class OkHttpClientStream extends AbstractClientStream {
     public void deframerClosed() {
       synchronized (lock) {
         deframerClosedNotThreadSafe();
-        //        if (deframerClosedTask != null) {
-        //          deframerClosedTask.run();
-        //        }
       }
     }
 

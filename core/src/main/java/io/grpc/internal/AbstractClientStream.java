@@ -183,7 +183,6 @@ public abstract class AbstractClientStream extends AbstractStream
 
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
       super(maxMessageSize, statsTraceCtx);
-      client = true;
       this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
     }
 
@@ -198,6 +197,7 @@ public abstract class AbstractClientStream extends AbstractStream
       return listener;
     }
 
+    // TODO(ericgribkoff) Improve this API
     protected void deframerClosedNotThreadSafe() {
       if (deframerClosedTask != null) {
         deframerClosedTask.run();
@@ -271,10 +271,8 @@ public abstract class AbstractClientStream extends AbstractStream
         final Metadata trailers) {
       Preconditions.checkNotNull(status, "status");
       Preconditions.checkNotNull(trailers, "trailers");
-      System.out.println("transport report status: " + status);
       // If stopDelivery, we continue in case previous invocation is waiting for stall
       if (statusReported && !stopDelivery) {
-        System.out.println("Status already reporting, ignoring!");
         return;
       }
       statusReported = true;
@@ -286,7 +284,6 @@ public abstract class AbstractClientStream extends AbstractStream
           if (!listenerClosed) {
             listenerClosed = true;
             statsTraceCtx.streamClosed(status);
-            System.out.println("Client reporting status " + status);
             listener().closed(status, trailers);
           }
         }

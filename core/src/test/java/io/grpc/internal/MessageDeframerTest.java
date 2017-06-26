@@ -18,7 +18,6 @@ package io.grpc.internal;
 
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Mockito.atLeast;
@@ -69,16 +68,14 @@ public class MessageDeframerTest {
   private MessageDeframer deframer = new MessageDeframer(listener, Codec.Identity.NONE,
       DEFAULT_MAX_MESSAGE_SIZE, statsTraceCtx, "test");
 
-  private ArgumentCaptor<StreamListener.MessageProducer> producerCaptor
-      = ArgumentCaptor.forClass(StreamListener.MessageProducer.class);
+  private ArgumentCaptor<InputStream> messages = ArgumentCaptor.forClass(InputStream.class);
 
   @Test
   public void simplePayload() {
     deframer.request(1);
     deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 2, 3, 14}), false);
-    verify(listener).messagesAvailable(producerCaptor.capture());
-    assertEquals(Bytes.asList(new byte[]{3, 14}), bytes(producerCaptor.getValue().next()));
-    assertNull("no additional message expected", producerCaptor.getValue().next());
+    verify(listener).messageRead(messages.capture());
+    assertEquals(Bytes.asList(new byte[]{3, 14}), bytes(messages));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
     checkStats(1, 2, 2);
@@ -88,13 +85,12 @@ public class MessageDeframerTest {
   public void smallCombinedPayloads() {
     deframer.request(2);
     deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 2, 14, 15}), false);
-    verify(listener, times(2)).messagesAvailable(producerCaptor.capture());
-    assertEquals(Bytes.asList(new byte[] {3}), bytes(producerCaptor.getAllValues().get(0).next()));
-    assertNull("no additional message expected", producerCaptor.getAllValues().get(0).next());
+    verify(listener, times(2)).messageRead(messages.capture());
+    List<InputStream> streams = messages.getAllValues();
+    assertEquals(2, streams.size());
+    assertEquals(Bytes.asList(new byte[] {3}), bytes(streams.get(0)));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
-    assertEquals(Bytes.asList(new byte[]{14, 15}),
-        bytes(producerCaptor.getAllValues().get(1).next()));
-    assertNull("no additional message expected", producerCaptor.getAllValues().get(1).next());
+    assertEquals(Bytes.asList(new byte[] {14, 15}), bytes(streams.get(1)));
     verifyNoMoreInteractions(listener);
     checkStats(2, 3, 3);
   }
@@ -104,9 +100,8 @@ public class MessageDeframerTest {
     deframer.request(1);
     deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 1, 3}), true);
     deframer.closeWhenComplete();
-    verify(listener).messagesAvailable(producerCaptor.capture());
-    assertEquals(Bytes.asList(new byte[] {3}), bytes(producerCaptor.getValue().next()));
-    assertNull("no additional message expected", producerCaptor.getValue().next());
+    verify(listener).messageRead(messages.capture());
+    assertEquals(Bytes.asList(new byte[] {3}), bytes(messages));
     verify(listener).deframerClosed();
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
@@ -129,10 +124,8 @@ public class MessageDeframerTest {
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
     deframer.deframe(buffer(new byte[] {2, 6}), false);
-    verify(listener).messagesAvailable(producerCaptor.capture());
-    assertEquals(Bytes.asList(new byte[]{3, 14, 1, 5, 9, 2, 6}),
-        bytes(producerCaptor.getValue().next()));
-    assertNull("no additional message expected", producerCaptor.getValue().next());
+    verify(listener).messageRead(messages.capture());
+    assertEquals(Bytes.asList(new byte[] {3, 14, 1, 5, 9, 2, 6}), bytes(messages));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     assertTrue(deframer.isStalled());
     verifyNoMoreInteractions(listener);
@@ -147,9 +140,8 @@ public class MessageDeframerTest {
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
     deframer.deframe(buffer(new byte[] {0, 0, 1, 3}), false);
-    verify(listener).messagesAvailable(producerCaptor.capture());
-    assertEquals(Bytes.asList(new byte[] {3}), bytes(producerCaptor.getValue().next()));
-    assertNull("no additional message expected", producerCaptor.getValue().next());
+    verify(listener).messageRead(messages.capture());
+    assertEquals(Bytes.asList(new byte[] {3}), bytes(messages));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     assertTrue(deframer.isStalled());
     verifyNoMoreInteractions(listener);
@@ -160,9 +152,8 @@ public class MessageDeframerTest {
   public void emptyPayload() {
     deframer.request(1);
     deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 0}), false);
-    verify(listener).messagesAvailable(producerCaptor.capture());
-    assertEquals(Bytes.asList(), bytes(producerCaptor.getValue().next()));
-    assertNull("no additional message expected", producerCaptor.getValue().next());
+    verify(listener).messageRead(messages.capture());
+    assertEquals(Bytes.asList(), bytes(messages));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
     checkStats(1, 0, 0);
@@ -173,9 +164,8 @@ public class MessageDeframerTest {
     deframer.request(1);
     deframer.deframe(ReadableBuffers.wrap(
         Bytes.concat(new byte[] {0, 0, 0, 3, (byte) 232}, new byte[1000])), false);
-    verify(listener).messagesAvailable(producerCaptor.capture());
-    assertEquals(Bytes.asList(new byte[1000]), bytes(producerCaptor.getValue().next()));
-    assertNull("no additional message expected", producerCaptor.getValue().next());
+    verify(listener).messageRead(messages.capture());
+    assertEquals(Bytes.asList(new byte[1000]), bytes(messages));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
     checkStats(1, 1000, 1000);
@@ -188,9 +178,8 @@ public class MessageDeframerTest {
     verifyNoMoreInteractions(listener);
 
     deframer.request(1);
-    verify(listener).messagesAvailable(producerCaptor.capture());
-    assertEquals(Bytes.asList(new byte[] {3}), bytes(producerCaptor.getValue().next()));
-    assertNull("no additional message expected", producerCaptor.getValue().next());
+    verify(listener).messageRead(messages.capture());
+    assertEquals(Bytes.asList(new byte[] {3}), bytes(messages));
     verify(listener).deframerClosed();
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
@@ -207,9 +196,8 @@ public class MessageDeframerTest {
     assertTrue(payload.length < 100);
     byte[] header = new byte[] {1, 0, 0, 0, (byte) payload.length};
     deframer.deframe(buffer(Bytes.concat(header, payload)), false);
-    verify(listener).messagesAvailable(producerCaptor.capture());
-    assertEquals(Bytes.asList(new byte[1000]), bytes(producerCaptor.getValue().next()));
-    assertNull("no additional message expected", producerCaptor.getValue().next());
+    verify(listener).messageRead(messages.capture());
+    assertEquals(Bytes.asList(new byte[1000]), bytes(messages));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
     checkStats(1, payload.length, 1000);
@@ -223,15 +211,14 @@ public class MessageDeframerTest {
         deframer.request(1);
         return null;
       }
-    }).when(listener).messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
+    }).when(listener).messageRead(Matchers.<InputStream>any());
     deframer.deframe(buffer(new byte[] {0, 0, 0, 0, 1, 3}), true);
     deframer.closeWhenComplete();
     verifyNoMoreInteractions(listener);
 
     deframer.request(1);
-    verify(listener).messagesAvailable(producerCaptor.capture());
-    assertEquals(Bytes.asList(new byte[] {3}), bytes(producerCaptor.getValue().next()));
-    assertNull("no additional message expected", producerCaptor.getValue().next());
+    verify(listener).messageRead(messages.capture());
+    assertEquals(Bytes.asList(new byte[] {3}), bytes(messages));
     verify(listener).deframerClosed();
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);

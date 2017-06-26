@@ -258,6 +258,7 @@ public abstract class AbstractServerStream extends AbstractStream
     }
 
     @Override
+    // TODO(ericgribkoff) Make sure thread-safe, part of cleaning up AbstractClientStream API
     public void deframerClosed() {
       deframerClosed = true;
       if (endOfStream) {
