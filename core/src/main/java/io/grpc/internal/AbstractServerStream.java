@@ -213,8 +213,9 @@ public abstract class AbstractServerStream extends AbstractStream
      * @param endOfStream {@code true} if no more data will be received on the stream.
      */
     public void inboundDataReceived(ReadableBuffer frame, boolean endOfStream) {
+      // TODO(ericgribkoff) Decide if it's appropriate to throw here
+      //Preconditions.checkState(!this.endOfStream, "Past end of stream");
       // Deframe the message. If a failure occurs, deframeFailed will be called.
-      //      deframe(frame, endOfStream);
       deframe(frame);
       if (endOfStream) {
         this.endOfStream = true;
@@ -238,12 +239,13 @@ public abstract class AbstractServerStream extends AbstractStream
       if (deframerClosed) {
         closeListener(status);
       } else {
-        deframerClosedTask = new Runnable() {
-          @Override
-          public void run() {
-            closeListener(status);
-          }
-        };
+        deframerClosedTask =
+            new Runnable() {
+              @Override
+              public void run() {
+                closeListener(status);
+              }
+            };
         closeDeframer(true);
       }
     }
@@ -257,15 +259,14 @@ public abstract class AbstractServerStream extends AbstractStream
       if (deframerClosed) {
         closeListener(Status.OK);
       } else {
-        deframerClosedTask = new Runnable() {
-          @Override
-          public void run() {
-            closeListener(Status.OK);
-          }
-        };
-        closeDeframer(true); // TODO(ericgribkoff) No reason for this to have stopDelivery=true?
-        // transportReportStatus() can be called in response to user cancellation, so needs
-        // stopDelivery=true
+        deframerClosedTask =
+            new Runnable() {
+              @Override
+              public void run() {
+                closeListener(Status.OK);
+              }
+            };
+        closeDeframer(true);
       }
     }
 

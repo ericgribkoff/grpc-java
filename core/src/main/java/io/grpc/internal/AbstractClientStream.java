@@ -279,16 +279,17 @@ public abstract class AbstractClientStream extends AbstractStream
       statusReported = true;
       onStreamDeallocated();
 
-      deframerClosedTask = new Runnable() {
-        @Override
-        public void run() {
-          if (!listenerClosed) {
-            listenerClosed = true;
-            statsTraceCtx.streamClosed(status);
-            listener().closed(status, trailers);
-          }
-        }
-      };
+      deframerClosedTask =
+          new Runnable() {
+            @Override
+            public void run() {
+              if (!listenerClosed) {
+                listenerClosed = true;
+                statsTraceCtx.streamClosed(status);
+                listener().closed(status, trailers);
+              }
+            }
+          };
       closeDeframer(stopDelivery);
     }
   }
