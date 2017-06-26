@@ -149,7 +149,7 @@ public abstract class AbstractStream implements Stream {
      */
     protected abstract StreamListener listener();
 
-    private final boolean deframeInTransportThread = false;
+    private final boolean deframeInTransportThread = true;
 
     private final Queue<InputStream> messageReadQueue = new LinkedList<InputStream>();
 
@@ -178,9 +178,16 @@ public abstract class AbstractStream implements Stream {
       //  new Exception().printStackTrace(System.out);
       //}
       System.out.println("Calling messagesAvailable " + client + " " + listener());
-      if (listener() != null) {
-        listener().messagesAvailable(producer);
-      }
+
+      // TODO(ericgribkoff) If we aren't deframing in transport thread, we need listener() to
+      // run the producer. So we can't just throw it away here - we have to queue it...which leads
+      // to the question: why should this be null? What test? Those using
+      // NettyClientTransportTest.EchoServerStreamListener, at least.
+      //if (listener() != null) {
+
+      // TODO(ericgribkoff) io.grpc.netty.NettyServerHandlerTest.streamErrorShouldNotCloseChannel()
+      // raises the question - should we catch exceptions here if deframing in application thread?
+      listener().messagesAvailable(producer);
     }
 
     /**
@@ -203,7 +210,12 @@ public abstract class AbstractStream implements Stream {
             new Runnable() {
               @Override
               public void run() {
-                deframer.close();
+                try {
+                  deframer.close();
+                } catch (Throwable t) {
+                  // TODO(ericgribkoff) Catch on trying to close?
+                  System.out.println("Error closing deframer");
+                }
               }
             }));
       } else {
@@ -211,7 +223,11 @@ public abstract class AbstractStream implements Stream {
             new Runnable() {
               @Override
               public void run() {
-                deframer.closeWhenComplete();
+                try {
+                  deframer.closeWhenComplete();
+                } catch (Throwable t) {
+                  System.out.println("Error closing deframer");
+                }
               }
             }));
       }
