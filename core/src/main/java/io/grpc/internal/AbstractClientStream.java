@@ -184,6 +184,7 @@ public abstract class AbstractClientStream extends AbstractStream
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
       super(maxMessageSize, statsTraceCtx);
       this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
+      client = true;
     }
 
     @VisibleForTesting
@@ -197,8 +198,8 @@ public abstract class AbstractClientStream extends AbstractStream
       return listener;
     }
 
-    // TODO(ericgribkoff) Improve this API
-    protected void deframerClosedNotThreadSafe() {
+    protected void runDeframerClosedTask() {
+      // TODO(ericgribkoff) Should this ever be null?
       if (deframerClosedTask != null) {
         deframerClosedTask.run();
       }
@@ -230,7 +231,7 @@ public abstract class AbstractClientStream extends AbstractStream
         }
 
         needToCloseFrame = false;
-        deframe(frame, false);
+        deframe(frame);
       } finally {
         if (needToCloseFrame) {
           frame.close();

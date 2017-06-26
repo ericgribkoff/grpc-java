@@ -231,7 +231,6 @@ class OkHttpClientStream extends AbstractClientStream {
       cancel(status, trailers);
     }
 
-    @GuardedBy("lock")
     @Override
     protected void deframeFailed(Throwable cause) {
       synchronized (lock) {
@@ -239,7 +238,6 @@ class OkHttpClientStream extends AbstractClientStream {
       }
     }
 
-    @GuardedBy("lock")
     @Override
     public void bytesRead(int processedBytes) {
       synchronized (lock) {
@@ -253,11 +251,10 @@ class OkHttpClientStream extends AbstractClientStream {
       }
     }
 
-    @GuardedBy("lock")
     @Override
     public void deframerClosed() {
       synchronized (lock) {
-        deframerClosedNotThreadSafe();
+        runDeframerClosedTask();
       }
     }
 

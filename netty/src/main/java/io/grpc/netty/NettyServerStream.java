@@ -168,6 +168,7 @@ class NettyServerStream extends AbstractServerStream {
     }
 
     @Override
+    // TODO(ericgribkoff) Need to make this accessible from MessageDeframer?
     protected void deframeFailed(final Throwable cause) {
       if (eventLoop.inEventLoop()) {
         log.log(Level.WARNING, "Exception processing message", cause);
@@ -183,6 +184,20 @@ class NettyServerStream extends AbstractServerStream {
             transportReportStatus(status);
             handler.getWriteQueue().enqueue(
                 new CancelServerStreamCommand(TransportState.this, status), true);
+          }
+        });
+      }
+    }
+
+    @Override
+    public void deframerClosed() {
+      if (eventLoop.inEventLoop()) {
+        runDeframerClosedTask();
+      } else {
+        eventLoop.execute(new Runnable() {
+          @Override
+          public void run() {
+            runDeframerClosedTask();
           }
         });
       }

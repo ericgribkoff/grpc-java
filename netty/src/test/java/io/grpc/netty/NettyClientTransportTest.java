@@ -553,6 +553,7 @@ public class NettyClientTransportTest {
 
     @Override
     public void messagesAvailable(MessageProducer producer) {
+      System.out.println("TestClientStreamListener messagesAvailable");
       if (producer.next() != null) {
         responseFuture.set(null);
       }
@@ -578,8 +579,11 @@ public class NettyClientTransportTest {
 
     @Override
     public void messagesAvailable(MessageProducer producer) {
+      System.out.println("EchoServerStreamListener messagesAvailable");
       InputStream message;
       while ((message = producer.next()) != null) {
+        System.out.println("echoing back message");
+        new Exception().printStackTrace(System.out);
         // Just echo back the message.
         stream.writeMessage(message);
         stream.flush();

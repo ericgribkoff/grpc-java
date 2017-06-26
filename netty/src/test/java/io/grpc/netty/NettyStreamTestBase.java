@@ -24,6 +24,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyLong;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
@@ -43,10 +44,12 @@ import io.netty.channel.EventLoop;
 import io.netty.handler.codec.http2.Http2Stream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
@@ -58,6 +61,7 @@ import org.mockito.stubbing.Answer;
 public abstract class NettyStreamTestBase<T extends Stream> {
   protected static final String MESSAGE = "hello world";
   protected static final int STREAM_ID = 1;
+  protected static final int TIMEOUT_MS = 1000;
 
   @Mock
   protected Channel channel;
@@ -86,6 +90,9 @@ public abstract class NettyStreamTestBase<T extends Stream> {
 
   @Mock
   protected WriteQueue writeQueue;
+
+  final BlockingQueue<InputStream> listenerMessageQueue =
+      new LinkedBlockingQueue<InputStream>();
 
   protected T stream;
 
@@ -129,13 +136,13 @@ public abstract class NettyStreamTestBase<T extends Stream> {
       ((NettyClientStream) stream).transportState()
           .transportDataReceived(messageFrame(MESSAGE), false);
     }
-    ArgumentCaptor<StreamListener.MessageProducer> producerCaptor
-        = ArgumentCaptor.forClass(StreamListener.MessageProducer.class);
-    verify(listener()).messagesAvailable(producerCaptor.capture());
+
+    verify(listener(), atLeastOnce()).messagesAvailable(any(StreamListener.MessageProducer.class));
+    InputStream message = listenerMessageQueue.poll(TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
     // Verify that inbound flow control window update has been disabled for the stream.
-    assertEquals(MESSAGE, NettyTestUtil.toString(producerCaptor.getValue().next()));
-    assertNull("no additional message expected", producerCaptor.getValue().next());
+    assertEquals(MESSAGE, NettyTestUtil.toString(message));
+    assertNull("no additional message expected", listenerMessageQueue.poll());
   }
 
   @Test

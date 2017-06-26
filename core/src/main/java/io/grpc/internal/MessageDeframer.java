@@ -23,7 +23,6 @@ import com.google.common.base.Preconditions;
 import io.grpc.Codec;
 import io.grpc.Decompressor;
 import io.grpc.Status;
-import io.grpc.internal.StreamListener.MessageProducer;
 import java.io.Closeable;
 import java.io.FilterInputStream;
 import java.io.IOException;
@@ -81,21 +80,13 @@ public class MessageDeframer implements Closeable {
   private State state = State.HEADER;
   private int requiredLength = HEADER_LENGTH;
   private boolean compressedFlag;
-  private boolean endOfStream;
   private CompositeReadableBuffer nextFrame;
   private CompositeReadableBuffer unprocessed = new CompositeReadableBuffer();
   private long pendingDeliveries;
-  private boolean deliveryStalled = true;
   private boolean inDelivery = false;
 
   private boolean closeWhenComplete = false;
   private volatile boolean stopDelivery = false;
-
-  public interface MessageInterceptor {
-    void messageRead(InputStream inputStream);
-  }
-
-  public MessageInterceptor messageInterceptor;
 
   /**
    * Create a deframer.
@@ -132,7 +123,7 @@ public class MessageDeframer implements Closeable {
 
   /**
    * Requests up to the given number of messages from the call to be delivered to
-   * {@link Listener#messagesAvailable(MessageProducer)}. No additional messages will be delivered.
+   * {@link Listener#messageRead(InputStream)}. No additional messages will be delivered.
    *
    * <p>If {@link #close()} has been called, this method will have no effect.
    *
@@ -151,38 +142,23 @@ public class MessageDeframer implements Closeable {
    * Adds the given data to this deframer and attempts delivery to the listener.
    *
    * @param data the raw data read from the remote endpoint. Must be non-null.
-   * @param endOfStream if {@code true}, indicates that {@code data} is the end of the stream from
-   *        the remote endpoint.  End of stream should not be used in the event of a transport
-   *        error, such as a stream reset.
-   * @throws IllegalStateException if {@link #close()} has been called previously or if
-   *         this method has previously been called with {@code endOfStream=true}.
+   * @throws IllegalStateException if {@link #close()} has been called previously.
    */
-  public void deframe(ReadableBuffer data, boolean endOfStream) {
+  public void deframe(ReadableBuffer data) {
     Preconditions.checkNotNull(data, "data");
     boolean needToCloseData = true;
     try {
       checkNotClosed();
-      Preconditions.checkState(!this.endOfStream, "Past end of stream");
 
       unprocessed.addBuffer(data);
       needToCloseData = false;
 
-      // Indicate that all of the data for this stream has been received.
-      this.endOfStream = endOfStream;
       deliver();
     } finally {
       if (needToCloseData) {
         data.close();
       }
     }
-  }
-
-  /**
-   * Indicates whether delivery is currently stalled, pending receipt of more data.  This means
-   * that no additional data can be delivered to the application.
-   */
-  public boolean isStalled() {
-    return deliveryStalled;
   }
 
   /** Close when any messages currently in unprocessed have been requested and delivered. */
@@ -211,6 +187,7 @@ public class MessageDeframer implements Closeable {
    * Closes this deframer and frees any resources. After this method is called, additional
    * calls will have no effect.
    */
+  // TODO(ericgribkoff) Recover "closing with stalled != true after end of stream" exception
   @Override
   public void close() {
     try {
@@ -348,7 +325,9 @@ public class MessageDeframer implements Closeable {
           .asRuntimeException();
     }
 
+    System.out.println("processing header");
     statsTraceCtx.inboundMessage();
+    System.out.println("called inboundMessage");
     // Continue reading the frame body.
     state = State.BODY;
   }
@@ -475,20 +454,4 @@ public class MessageDeframer implements Closeable {
       }
     }
   }
-
-//  private static class SingleMessageProducer implements StreamListener.MessageProducer {
-//    private InputStream message;
-//
-//    private SingleMessageProducer(InputStream message) {
-//      this.message = message;
-//    }
-//
-//    @Nullable
-//    @Override
-//    public InputStream next() {
-//      InputStream messageToReturn = message;
-//      message = null;
-//      return messageToReturn;
-//    }
-//  }
 }

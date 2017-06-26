@@ -177,7 +177,7 @@ public abstract class AbstractServerStream extends AbstractStream
     private final StatsTraceContext statsTraceCtx;
 
     private boolean endOfStream = false;
-    private Status statusToReport = null;
+    protected Runnable deframerClosedTask;
     private boolean deframerClosed = false;
 
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
@@ -215,7 +215,7 @@ public abstract class AbstractServerStream extends AbstractStream
     public void inboundDataReceived(ReadableBuffer frame, boolean endOfStream) {
       // Deframe the message. If a failure occurs, deframeFailed will be called.
       //      deframe(frame, endOfStream);
-      deframe(frame, false);
+      deframe(frame);
       if (endOfStream) {
         this.endOfStream = true;
         closeDeframer(false);
@@ -232,13 +232,18 @@ public abstract class AbstractServerStream extends AbstractStream
      *
      * @param status the error status. Must not be {@link Status#OK}.
      */
-    public final void transportReportStatus(Status status) {
+    public final void transportReportStatus(final Status status) {
       Preconditions.checkArgument(!status.isOk(), "status must not be OK");
       // Only close deframer here if we haven't already in response to "end of stream"
       if (deframerClosed) {
         closeListener(status);
       } else {
-        statusToReport = status;
+        deframerClosedTask = new Runnable() {
+          @Override
+          public void run() {
+            closeListener(status);
+          }
+        };
         closeDeframer(true);
       }
     }
@@ -252,20 +257,25 @@ public abstract class AbstractServerStream extends AbstractStream
       if (deframerClosed) {
         closeListener(Status.OK);
       } else {
-        statusToReport = Status.OK;
-        closeDeframer(true);
+        deframerClosedTask = new Runnable() {
+          @Override
+          public void run() {
+            closeListener(Status.OK);
+          }
+        };
+        closeDeframer(true); // TODO(ericgribkoff) No reason for this to have stopDelivery=true?
+        // transportReportStatus() can be called in response to user cancellation, so needs
+        // stopDelivery=true
       }
     }
 
-    @Override
-    // TODO(ericgribkoff) Make sure thread-safe, part of cleaning up AbstractClientStream API
-    public void deframerClosed() {
+    protected void runDeframerClosedTask() {
       deframerClosed = true;
       if (endOfStream) {
         listener.halfClosed();
       }
-      if (statusToReport != null) {
-        closeListener(statusToReport);
+      if (deframerClosedTask != null) {
+        deframerClosedTask.run();
       }
     }
 

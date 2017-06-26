@@ -280,14 +280,12 @@ class NettyClientStream extends AbstractClientStream {
     @Override
     public void deframerClosed() {
       if (eventLoop.inEventLoop()) {
-        if (deframerClosedTask != null) {
-          deframerClosedTask.run();
-        }
+        runDeframerClosedTask();
       } else {
         eventLoop.execute(new Runnable() {
           @Override
           public void run() {
-          deframerClosedNotThreadSafe();
+            runDeframerClosedTask();
           }
         });
       }

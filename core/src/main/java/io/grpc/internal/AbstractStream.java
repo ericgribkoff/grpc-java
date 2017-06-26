@@ -149,15 +149,23 @@ public abstract class AbstractStream implements Stream {
      */
     protected abstract StreamListener listener();
 
-    private final boolean deframeInTransportThread = true;
+    private final boolean deframeInTransportThread = false;
 
     private final Queue<InputStream> messageReadQueue = new LinkedList<InputStream>();
 
+    public boolean client = false;
+
     @Override
     public void messageRead(InputStream message) {
+      System.out.println("messageRead " + client);
       if (deframeInTransportThread) {
+        //if (!client) {
+        //  new Exception().printStackTrace(System.out);
+        //}
+        System.out.println("Calling messagesAvailable " + client);
         listener().messagesAvailable(new SingleMessageProducer(message));
       } else {
+        System.out.println("Queuing message " + client);
         messageReadQueue.add(message);
       }
     }
@@ -166,11 +174,17 @@ public abstract class AbstractStream implements Stream {
       if (deframeInTransportThread) {
         producer.initialize();
       }
-      listener().messagesAvailable(producer);
+      //if (!client) {
+      //  new Exception().printStackTrace(System.out);
+      //}
+      System.out.println("Calling messagesAvailable " + client + " " + listener());
+      if (listener() != null) {
+        listener().messagesAvailable(producer);
+      }
     }
 
     /**
-     * Called when a {@link #deframe(ReadableBuffer, boolean)} operation failed.
+     * Called when a {@link #deframe(ReadableBuffer)} operation failed.
      *
      * @param cause the actual failure
      */
@@ -181,6 +195,7 @@ public abstract class AbstractStream implements Stream {
      * method is called, additional calls will have no effect.
      */
     protected final void closeDeframer(boolean stopDelivery) {
+      System.out.println("closeDeframer " + client);
       if (stopDelivery) {
         deframer.stopDeliveryAndClose();
         // Schedule a call to close in case no current operations pick up the stopDelivery flag.
@@ -206,7 +221,8 @@ public abstract class AbstractStream implements Stream {
      * Called to parse a received frame and attempt delivery of any completed
      * messages. Must be called from the transport thread.
      */
-    protected final void deframe(final ReadableBuffer frame, final boolean endOfStream) {
+    protected final void deframe(final ReadableBuffer frame) {
+      System.out.println("deframe " + client);
       messagesAvailable(new InitializingMessageProducer(
           new Runnable() {
             @Override
@@ -216,7 +232,8 @@ public abstract class AbstractStream implements Stream {
                 return;
               }
               try {
-                deframer.deframe(frame, endOfStream);
+                System.out.println("Running deframe.deframe " + client);
+                deframer.deframe(frame);
               } catch (Throwable t) {
                 deframeFailed(t);
                 deframer.close(); // unrecoverable state
@@ -230,6 +247,7 @@ public abstract class AbstractStream implements Stream {
      * from the transport thread.
      */
     public final void requestMessagesFromDeframer(final int numMessages) {
+      System.out.println("request " + client);
       messagesAvailable(new InitializingMessageProducer(
           new Runnable() {
             @Override
@@ -337,7 +355,7 @@ public abstract class AbstractStream implements Stream {
       }
     }
 
-    private static class SingleMessageProducer implements StreamListener.MessageProducer {
+    public static class SingleMessageProducer implements StreamListener.MessageProducer {
       private InputStream message;
 
       private SingleMessageProducer(InputStream message) {
@@ -353,7 +371,6 @@ public abstract class AbstractStream implements Stream {
       }
     }
 
-    // TODO(ericgribkoff) Make sure this is okay as non-static inner class
     private class InitializingMessageProducer implements StreamListener.MessageProducer {
       private final Runnable runnable;
       private boolean initialized = false;

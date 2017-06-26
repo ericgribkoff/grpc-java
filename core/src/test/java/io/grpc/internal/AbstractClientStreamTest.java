@@ -37,7 +37,6 @@ import io.grpc.StreamTracer;
 import io.grpc.internal.AbstractClientStream.TransportState;
 import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
 import java.io.ByteArrayInputStream;
-import java.io.InputStream;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -46,7 +45,7 @@ import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
+import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
@@ -63,11 +62,21 @@ public class AbstractClientStreamTest {
 
   private final StatsTraceContext statsTraceCtx = StatsTraceContext.NOOP;
   @Mock private ClientStreamListener mockListener;
-  @Captor private ArgumentCaptor<Status> statusCaptor;
 
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
+
+    // Necessary when deframing in application thread.
+    doAnswer(new Answer<Void>() {
+      @Override
+      public Void answer(InvocationOnMock invocation) throws Throwable {
+        StreamListener.MessageProducer producer =
+            (StreamListener.MessageProducer) invocation.getArguments()[0];
+        while (producer.next() != null) {}
+        return null;
+      }
+    }).when(mockListener).messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
   }
 
   private final WritableBufferAllocator allocator = new WritableBufferAllocator() {
@@ -200,28 +209,13 @@ public class AbstractClientStreamTest {
 
   @Test
   public void rstStreamClosesStream() {
-    doAnswer(
-      new Answer<Void>() {
-        @Override
-        public Void answer(InvocationOnMock invocation) {
-          StreamListener.MessageProducer mp = (StreamListener.MessageProducer)
-              invocation.getArguments()[0];
-          InputStream message;
-          while ((message = mp.next()) != null) {
-          }
-          return null;
-        }
-      })
-      .when(mockListener)
-      .messagesAvailable(any(StreamListener.MessageProducer.class));
-
     AbstractClientStream stream = new BaseAbstractClientStream(allocator, statsTraceCtx);
     stream.start(mockListener);
     // The application will call request when waiting for a message, which will in turn call this
     // on the transport thread.
     stream.transportState().requestMessagesFromDeframer(1);
     // Send first byte of 2 byte message
-    stream.transportState().deframe(ReadableBuffers.wrap(new byte[] {0, 0, 0, 0, 2, 1}), false);
+    stream.transportState().deframe(ReadableBuffers.wrap(new byte[] {0, 0, 0, 0, 2, 1}));
     Status status = Status.INTERNAL;
     // Simulate getting a reset
     stream.transportState().transportReportStatus(status, false /*stop delivery*/, new Metadata());
@@ -338,7 +332,7 @@ public class AbstractClientStreamTest {
 
     @Override
     public void deframerClosed() {
-      deframerClosedNotThreadSafe();
+      runDeframerClosedTask();
     }
   }
 }

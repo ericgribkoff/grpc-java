@@ -17,10 +17,11 @@
 package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
@@ -39,6 +40,9 @@ import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Matchers;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 /**
  * Tests for {@link AbstractServerStream}.
@@ -67,6 +71,15 @@ public class AbstractServerStreamTest {
   @Test
   public void frameShouldBeIgnoredAfterDeframerClosed() {
     ServerStreamListener streamListener = mock(ServerStreamListener.class);
+    doAnswer(new Answer<Void>() {
+      @Override
+      public Void answer(InvocationOnMock invocation) throws Throwable {
+        StreamListener.MessageProducer producer =
+            (StreamListener.MessageProducer) invocation.getArguments()[0];
+        while (producer.next() != null) {}
+        return null;
+      }
+    }).when(streamListener).messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
     ReadableBuffer buffer = mock(ReadableBuffer.class);
 
     stream.transportState().setListener(streamListener);
@@ -76,7 +89,10 @@ public class AbstractServerStreamTest {
     stream.transportState().inboundDataReceived(buffer, true);
 
     verify(buffer).close();
-    verify(streamListener, times(0)).messagesAvailable(any(StreamListener.MessageProducer.class));
+    ArgumentCaptor<StreamListener.MessageProducer> producerCaptor =
+        ArgumentCaptor.forClass(StreamListener.MessageProducer.class);
+    verify(streamListener, times(3)).messagesAvailable(producerCaptor.capture());
+    assertNull(producerCaptor.getValue().next());
   }
 
   /**
@@ -127,16 +143,27 @@ public class AbstractServerStreamTest {
     state.setListener(null);
   }
 
-  @Test
-  public void messageRead_listenerCalled() {
-    final ServerStreamListener streamListener = mock(ServerStreamListener.class);
-    stream.transportState().setListener(streamListener);
-
-    // Normally called by a deframe event.
-    stream.transportState().messageRead(new ByteArrayInputStream(new byte[]{}));
-
-    verify(streamListener).messagesAvailable(isA(StreamListener.MessageProducer.class));
-  }
+  // TODO(ericgribkoff) This test is only valid if deframeInTransportThread=true, as otherwise the
+  // message is queued.
+  //  @Test
+  //  public void messageRead_listenerCalled() {
+  //    final ServerStreamListener streamListener = mock(ServerStreamListener.class);
+  //    doAnswer(new Answer<Void>() {
+  //      @Override
+  //      public Void answer(InvocationOnMock invocation) throws Throwable {
+  //        StreamListener.MessageProducer producer =
+  //            (StreamListener.MessageProducer) invocation.getArguments()[0];
+  //        while (producer.next() != null) {}
+  //        return null;
+  //      }
+  //    }).when(streamListener).messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
+  //    stream.transportState().setListener(streamListener);
+  //
+  //    // Normally called by a deframe event.
+  //    stream.transportState().messageRead(new ByteArrayInputStream(new byte[]{}));
+  //
+  //    verify(streamListener).messagesAvailable(isA(StreamListener.MessageProducer.class));
+  //  }
 
   @Test
   public void writeHeaders_failsOnNullHeaders() {
@@ -264,7 +291,9 @@ public class AbstractServerStreamTest {
 
       @Override
       public void bytesRead(int processedBytes) {}
+
+      @Override
+      public void deframerClosed() {}
     }
   }
 }
-
