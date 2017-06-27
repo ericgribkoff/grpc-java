@@ -1441,16 +1441,6 @@ public abstract class AbstractTransportTest {
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     ServerStream serverStream = serverStreamCreation.stream;
     ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
-    doAnswer(new Answer<Void>() {
-      @Override
-      public Void answer(InvocationOnMock invocation) throws Throwable {
-        StreamListener.MessageProducer producer =
-            (StreamListener.MessageProducer) invocation.getArguments()[0];
-        while (producer.next() != null) {}
-        return null;
-      }
-    }).when(mockServerStreamListener)
-        .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
 
     serverStream.close(Status.OK, new Metadata());
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
