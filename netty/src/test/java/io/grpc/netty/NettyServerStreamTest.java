@@ -80,20 +80,18 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     verify(listener()).onReady();
     reset(listener());
 
-    doAnswer(
-            new Answer<Void>() {
-              @Override
-              public Void answer(InvocationOnMock invocation) throws Throwable {
-                StreamListener.MessageProducer producer =
-                    (StreamListener.MessageProducer) invocation.getArguments()[0];
-                InputStream message;
-                while ((message = producer.next()) != null) {
-                  listenerMessageQueue.add(message);
-                }
-                return null;
-              }
-            })
-        .when(serverListener)
+    doAnswer(new Answer<Void>() {
+      @Override
+      public Void answer(InvocationOnMock invocation) throws Throwable {
+        StreamListener.MessageProducer producer =
+            (StreamListener.MessageProducer) invocation.getArguments()[0];
+        InputStream message;
+        while ((message = producer.next()) != null) {
+          listenerMessageQueue.add(message);
+        }
+        return null;
+      }
+    }).when(serverListener)
         .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
   }
 

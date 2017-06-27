@@ -17,7 +17,6 @@
 package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
@@ -26,7 +25,6 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import io.grpc.InternalStatus;
@@ -38,7 +36,6 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -80,18 +77,18 @@ public class AbstractServerStreamTest {
     final BlockingQueue<InputStream> streamListenerMessageQueue =
         new LinkedBlockingQueue<InputStream>();
     doAnswer(
-            new Answer<Void>() {
-              @Override
-              public Void answer(InvocationOnMock invocation) throws Throwable {
-                StreamListener.MessageProducer producer =
-                    (StreamListener.MessageProducer) invocation.getArguments()[0];
-                InputStream message;
-                while ((message = producer.next()) != null) {
-                  streamListenerMessageQueue.add(message);
-                }
-                return null;
-              }
-            })
+        new Answer<Void>() {
+          @Override
+          public Void answer(InvocationOnMock invocation) throws Throwable {
+            StreamListener.MessageProducer producer =
+                (StreamListener.MessageProducer) invocation.getArguments()[0];
+            InputStream message;
+            while ((message = producer.next()) != null) {
+              streamListenerMessageQueue.add(message);
+            }
+            return null;
+          }
+        })
         .when(streamListener)
         .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
     ReadableBuffer buffer = mock(ReadableBuffer.class);
