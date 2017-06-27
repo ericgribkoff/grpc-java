@@ -180,18 +180,18 @@ public abstract class AbstractTransportTest {
     callOptions = CallOptions.DEFAULT.withStreamTracerFactory(clientStreamTracerFactory);
 
     doAnswer(
-        new Answer<Void>() {
-          @Override
-          public Void answer(InvocationOnMock invocation) throws Throwable {
-            StreamListener.MessageProducer producer =
-                (StreamListener.MessageProducer) invocation.getArguments()[0];
-            InputStream message;
-            while ((message = producer.next()) != null) {
-              clientStreamMessageQueue.add(message);
-            }
-            return null;
-          }
-        })
+            new Answer<Void>() {
+              @Override
+              public Void answer(InvocationOnMock invocation) throws Throwable {
+                StreamListener.MessageProducer producer =
+                    (StreamListener.MessageProducer) invocation.getArguments()[0];
+                InputStream message;
+                while ((message = producer.next()) != null) {
+                  clientStreamMessageQueue.add(message);
+                }
+                return null;
+              }
+            })
         .when(mockClientStreamListener)
         .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
   }
@@ -540,15 +540,17 @@ public abstract class AbstractTransportTest {
       inOrder.verify(clientStreamTracerFactory).newClientStreamTracer(any(Metadata.class));
     }
     ClientStreamListener mockClientStreamListener2 = mock(ClientStreamListener.class);
-    doAnswer(new Answer<Void>() {
-      @Override
-      public Void answer(InvocationOnMock invocation) throws Throwable {
-        StreamListener.MessageProducer producer =
-            (StreamListener.MessageProducer) invocation.getArguments()[0];
-        while (producer.next() != null) {}
-        return null;
-      }
-    }).when(mockClientStreamListener2)
+    doAnswer(
+            new Answer<Void>() {
+              @Override
+              public Void answer(InvocationOnMock invocation) throws Throwable {
+                StreamListener.MessageProducer producer =
+                    (StreamListener.MessageProducer) invocation.getArguments()[0];
+                while (producer.next() != null) {}
+                return null;
+              }
+            })
+        .when(mockClientStreamListener2)
         .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
     stream2.start(mockClientStreamListener2);
     verify(mockClientStreamListener2, timeout(TIMEOUT_MS))
@@ -684,18 +686,20 @@ public abstract class AbstractTransportTest {
     ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
     final BlockingQueue<InputStream> serverStreamMessageQueue =
         new LinkedBlockingQueue<InputStream>();
-    doAnswer(new Answer<Void>() {
-      @Override
-      public Void answer(InvocationOnMock invocation) throws Throwable {
-        StreamListener.MessageProducer producer =
-            (StreamListener.MessageProducer) invocation.getArguments()[0];
-        InputStream message;
-        while ((message = producer.next()) != null) {
-          serverStreamMessageQueue.add(message);
-        }
-        return null;
-      }
-    }).when(mockServerStreamListener)
+    doAnswer(
+            new Answer<Void>() {
+              @Override
+              public Void answer(InvocationOnMock invocation) throws Throwable {
+                StreamListener.MessageProducer producer =
+                    (StreamListener.MessageProducer) invocation.getArguments()[0];
+                InputStream message;
+                while ((message = producer.next()) != null) {
+                  serverStreamMessageQueue.add(message);
+                }
+                return null;
+              }
+            })
+        .when(mockServerStreamListener)
         .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
 
     if (metricsExpected()) {
@@ -873,15 +877,17 @@ public abstract class AbstractTransportTest {
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     ServerStream serverStream = serverStreamCreation.stream;
     ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
-    doAnswer(new Answer<Void>() {
-      @Override
-      public Void answer(InvocationOnMock invocation) throws Throwable {
-        StreamListener.MessageProducer producer =
-            (StreamListener.MessageProducer) invocation.getArguments()[0];
-        while (producer.next() != null) {}
-        return null;
-      }
-    }).when(mockServerStreamListener)
+    doAnswer(
+            new Answer<Void>() {
+              @Override
+              public Void answer(InvocationOnMock invocation) throws Throwable {
+                StreamListener.MessageProducer producer =
+                    (StreamListener.MessageProducer) invocation.getArguments()[0];
+                while (producer.next() != null) {}
+                return null;
+              }
+            })
+        .when(mockServerStreamListener)
         .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
 
     serverStream.writeHeaders(new Metadata());
@@ -999,15 +1005,17 @@ public abstract class AbstractTransportTest {
     StreamCreation serverStreamCreation
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
-    doAnswer(new Answer<Void>() {
-      @Override
-      public Void answer(InvocationOnMock invocation) throws Throwable {
-        StreamListener.MessageProducer producer =
-            (StreamListener.MessageProducer) invocation.getArguments()[0];
-        while (producer.next() != null) {}
-        return null;
-      }
-    }).when(mockServerStreamListener)
+    doAnswer(
+            new Answer<Void>() {
+              @Override
+              public Void answer(InvocationOnMock invocation) throws Throwable {
+                StreamListener.MessageProducer producer =
+                    (StreamListener.MessageProducer) invocation.getArguments()[0];
+                while (producer.next() != null) {}
+                return null;
+              }
+            })
+        .when(mockServerStreamListener)
         .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
 
     Status status = Status.CANCELLED.withDescription("Nevermind").withCause(new Exception());
@@ -1065,8 +1073,8 @@ public abstract class AbstractTransportTest {
         InputStream message;
         while ((message = producer.next()) != null) {
           assertFalse("too many messages received", messageReceived);
-          assertEquals("foo", methodDescriptor.parseResponse(message));
           messageReceived = true;
+          assertEquals("foo", methodDescriptor.parseResponse(message));
           clientStream.cancel(status);
         }
       }
@@ -1177,18 +1185,20 @@ public abstract class AbstractTransportTest {
     ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
     final BlockingQueue<InputStream> serverStreamMessageQueue =
         new LinkedBlockingQueue<InputStream>();
-    doAnswer(new Answer<Void>() {
-      @Override
-      public Void answer(InvocationOnMock invocation) throws Throwable {
-        StreamListener.MessageProducer producer =
-            (StreamListener.MessageProducer) invocation.getArguments()[0];
-        InputStream message;
-        while ((message = producer.next()) != null) {
-          serverStreamMessageQueue.add(message);
-        }
-        return null;
-      }
-    }).when(mockServerStreamListener)
+    doAnswer(
+            new Answer<Void>() {
+              @Override
+              public Void answer(InvocationOnMock invocation) throws Throwable {
+                StreamListener.MessageProducer producer =
+                    (StreamListener.MessageProducer) invocation.getArguments()[0];
+                InputStream message;
+                while ((message = producer.next()) != null) {
+                  serverStreamMessageQueue.add(message);
+                }
+                return null;
+              }
+            })
+        .when(mockServerStreamListener)
         .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
 
     serverStream.writeHeaders(new Metadata());
@@ -1343,15 +1353,18 @@ public abstract class AbstractTransportTest {
     ClientStream clientStream =
         client.newStream(methodDescriptor, new Metadata(), callOptions);
     ClientStreamListener clientListener = mock(ClientStreamListener.class);
-    doAnswer(new Answer<Void>() {
-      @Override
-      public Void answer(InvocationOnMock invocation) throws Throwable {
-        StreamListener.MessageProducer producer =
-            (StreamListener.MessageProducer) invocation.getArguments()[0];
-        while (producer.next() != null) {}
-        return null;
-      }
-    }).when(clientListener).messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
+    doAnswer(
+            new Answer<Void>() {
+              @Override
+              public Void answer(InvocationOnMock invocation) throws Throwable {
+                StreamListener.MessageProducer producer =
+                    (StreamListener.MessageProducer) invocation.getArguments()[0];
+                while (producer.next() != null) {}
+                return null;
+              }
+            })
+        .when(clientListener)
+        .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
     clientStream.start(clientListener);
     StreamCreation server
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -1423,15 +1436,17 @@ public abstract class AbstractTransportTest {
     runIfNotNull(client.start(mock(ManagedClientTransport.Listener.class)));
     ClientStream clientStream = client.newStream(methodDescriptor, new Metadata(), callOptions);
     ClientStreamListener mockClientStreamListener = mock(ClientStreamListener.class);
-    doAnswer(new Answer<Void>() {
-      @Override
-      public Void answer(InvocationOnMock invocation) throws Throwable {
-        StreamListener.MessageProducer producer =
-            (StreamListener.MessageProducer) invocation.getArguments()[0];
-        while (producer.next() != null) {}
-        return null;
-      }
-    }).when(mockClientStreamListener)
+    doAnswer(
+            new Answer<Void>() {
+              @Override
+              public Void answer(InvocationOnMock invocation) throws Throwable {
+                StreamListener.MessageProducer producer =
+                    (StreamListener.MessageProducer) invocation.getArguments()[0];
+                while (producer.next() != null) {}
+                return null;
+              }
+            })
+        .when(mockClientStreamListener)
         .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
     clientStream.start(mockClientStreamListener);
 
@@ -1527,15 +1542,18 @@ public abstract class AbstractTransportTest {
     @Override
     public void streamCreated(ServerStream stream, String method, Metadata headers) {
       ServerStreamListener listener = mock(ServerStreamListener.class);
-      doAnswer(new Answer<Void>() {
-        @Override
-        public Void answer(InvocationOnMock invocation) throws Throwable {
-          StreamListener.MessageProducer producer =
-              (StreamListener.MessageProducer) invocation.getArguments()[0];
-          while (producer.next() != null) {}
-          return null;
-        }
-      }).when(listener).messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
+      doAnswer(
+              new Answer<Void>() {
+                @Override
+                public Void answer(InvocationOnMock invocation) throws Throwable {
+                  StreamListener.MessageProducer producer =
+                      (StreamListener.MessageProducer) invocation.getArguments()[0];
+                  while (producer.next() != null) {}
+                  return null;
+                }
+              })
+          .when(listener)
+          .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
       streams.add(new StreamCreation(stream, method, headers, listener));
       stream.setListener(listener);
     }

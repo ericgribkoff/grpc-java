@@ -79,18 +79,18 @@ public class AbstractServerStreamTest {
     final BlockingQueue<InputStream> streamListenerMessageQueue =
         new LinkedBlockingQueue<InputStream>();
     doAnswer(
-        new Answer<Void>() {
-          @Override
-          public Void answer(InvocationOnMock invocation) throws Throwable {
-            StreamListener.MessageProducer producer =
-                (StreamListener.MessageProducer) invocation.getArguments()[0];
-            InputStream message;
-            while ((message = producer.next()) != null) {
-              streamListenerMessageQueue.add(message);
-            }
-            return null;
-          }
-        })
+            new Answer<Void>() {
+              @Override
+              public Void answer(InvocationOnMock invocation) throws Throwable {
+                StreamListener.MessageProducer producer =
+                    (StreamListener.MessageProducer) invocation.getArguments()[0];
+                InputStream message;
+                while ((message = producer.next()) != null) {
+                  streamListenerMessageQueue.add(message);
+                }
+                return null;
+              }
+            })
         .when(streamListener)
         .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
     ReadableBuffer buffer = mock(ReadableBuffer.class);
@@ -159,18 +159,18 @@ public class AbstractServerStreamTest {
     final BlockingQueue<InputStream> streamListenerMessageQueue =
         new LinkedBlockingQueue<InputStream>();
     doAnswer(
-        new Answer<Void>() {
-          @Override
-          public Void answer(InvocationOnMock invocation) throws Throwable {
-            StreamListener.MessageProducer producer =
-                (StreamListener.MessageProducer) invocation.getArguments()[0];
-            InputStream message;
-            while ((message = producer.next()) != null) {
-              streamListenerMessageQueue.add(message);
-            }
-            return null;
-          }
-        })
+            new Answer<Void>() {
+              @Override
+              public Void answer(InvocationOnMock invocation) throws Throwable {
+                StreamListener.MessageProducer producer =
+                    (StreamListener.MessageProducer) invocation.getArguments()[0];
+                InputStream message;
+                while ((message = producer.next()) != null) {
+                  streamListenerMessageQueue.add(message);
+                }
+                return null;
+              }
+            })
         .when(streamListener)
         .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
     stream.transportState().setListener(streamListener);

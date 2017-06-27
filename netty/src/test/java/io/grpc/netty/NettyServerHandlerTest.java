@@ -158,18 +158,20 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     when(streamTracerFactory.newServerStreamTracer(anyString(), any(Metadata.class)))
         .thenReturn(streamTracer);
 
-    doAnswer(new Answer<Void>() {
-      @Override
-      public Void answer(InvocationOnMock invocation) throws Throwable {
-        StreamListener.MessageProducer producer =
-            (StreamListener.MessageProducer) invocation.getArguments()[0];
-        InputStream message;
-        while ((message = producer.next()) != null) {
-          streamListenerMessageQueue.add(message);
-        }
-        return null;
-      }
-    }).when(streamListener)
+    doAnswer(
+            new Answer<Void>() {
+              @Override
+              public Void answer(InvocationOnMock invocation) throws Throwable {
+                StreamListener.MessageProducer producer =
+                    (StreamListener.MessageProducer) invocation.getArguments()[0];
+                InputStream message;
+                while ((message = producer.next()) != null) {
+                  streamListenerMessageQueue.add(message);
+                }
+                return null;
+              }
+            })
+        .when(streamListener)
         .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
 
     initChannel(new GrpcHttp2ServerHeadersDecoder(GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE));

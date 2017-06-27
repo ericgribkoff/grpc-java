@@ -133,18 +133,20 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
 
-    doAnswer(new Answer<Void>() {
-      @Override
-      public Void answer(InvocationOnMock invocation) throws Throwable {
-        StreamListener.MessageProducer producer =
-            (StreamListener.MessageProducer) invocation.getArguments()[0];
-        InputStream message;
-        while ((message = producer.next()) != null) {
-          streamListenerMessageQueue.add(message);
-        }
-        return null;
-      }
-    }).when(streamListener)
+    doAnswer(
+            new Answer<Void>() {
+              @Override
+              public Void answer(InvocationOnMock invocation) throws Throwable {
+                StreamListener.MessageProducer producer =
+                    (StreamListener.MessageProducer) invocation.getArguments()[0];
+                InputStream message;
+                while ((message = producer.next()) != null) {
+                  streamListenerMessageQueue.add(message);
+                }
+                return null;
+              }
+            })
+        .when(streamListener)
         .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
 
     lifecycleManager = new ClientTransportLifecycleManager(listener);
