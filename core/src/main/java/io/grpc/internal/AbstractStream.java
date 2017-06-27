@@ -152,7 +152,7 @@ public abstract class AbstractStream implements Stream {
     }
 
     /**
-     * Called when a {@link #deframe(ReadableBuffer, boolean)} operation failed.
+     * Called when a {@link #deframe(ReadableBuffer)} operation failed.
      *
      * @param cause the actual failure
      */
@@ -162,30 +162,28 @@ public abstract class AbstractStream implements Stream {
      * Closes this deframer and frees any resources. After this method is called, additional calls
      * will have no effect.
      */
-    protected final void closeDeframer() {
-      deframer.close();
-    }
-
-    /**
-     * Indicates whether delivery is currently stalled, pending receipt of more data.
-     */
-    protected final boolean isDeframerStalled() {
-      return deframer.isStalled();
+    protected final void closeDeframer(boolean stopDelivery) {
+      if (stopDelivery) {
+        deframer.close();
+      } else {
+        deframer.closeWhenComplete();
+      }
     }
 
     /**
      * Called to parse a received frame and attempt delivery of any completed
      * messages. Must be called from the transport thread.
      */
-    protected final void deframe(ReadableBuffer frame, boolean endOfStream) {
+    protected final void deframe(ReadableBuffer frame) {
       if (deframer.isClosed()) {
         frame.close();
         return;
       }
       try {
-        deframer.deframe(frame, endOfStream);
+        deframer.deframe(frame);
       } catch (Throwable t) {
         deframeFailed(t);
+        deframer.close(); // unrecoverable state
       }
     }
 
@@ -201,6 +199,7 @@ public abstract class AbstractStream implements Stream {
         deframer.request(numMessages);
       } catch (Throwable t) {
         deframeFailed(t);
+        deframer.close(); // unrecoverable state
       }
     }
 

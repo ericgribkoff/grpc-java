@@ -173,7 +173,8 @@ public abstract class AbstractClientStream extends AbstractStream
     private boolean listenerClosed;
     private ClientStreamListener listener;
 
-    private Runnable deliveryStalledTask;
+    private boolean deframerClosed = false;
+    private Runnable deframerClosedTask;
 
     /**
      * Whether the stream is closed from the transport's perspective. This can differ from {@link
@@ -193,16 +194,12 @@ public abstract class AbstractClientStream extends AbstractStream
     }
 
     @Override
-    public final void deliveryStalled() {
-      if (deliveryStalledTask != null) {
-        deliveryStalledTask.run();
-        deliveryStalledTask = null;
+    public void deframerClosed() {
+      deframerClosed = true;
+      if (deframerClosedTask != null) {
+        deframerClosedTask.run();
+        deframerClosedTask = null;
       }
-    }
-
-    @Override
-    public final void endOfStream() {
-      deliveryStalled();
     }
 
     @Override
@@ -236,7 +233,7 @@ public abstract class AbstractClientStream extends AbstractStream
         }
 
         needToCloseFrame = false;
-        deframe(frame, false);
+        deframe(frame);
       } finally {
         if (needToCloseFrame) {
           frame.close();
@@ -284,18 +281,18 @@ public abstract class AbstractClientStream extends AbstractStream
       statusReported = true;
       onStreamDeallocated();
 
-      // If not stopping delivery, then we must wait until the deframer is stalled (i.e., it has no
-      // complete messages to deliver).
-      if (stopDelivery || isDeframerStalled()) {
-        deliveryStalledTask = null;
+      if (deframerClosed) {
+        deframerClosedTask = null;
         closeListener(status, trailers);
       } else {
-        deliveryStalledTask = new Runnable() {
-          @Override
-          public void run() {
-            closeListener(status, trailers);
-          }
-        };
+        deframerClosedTask =
+            new Runnable() {
+              @Override
+              public void run() {
+                closeListener(status, trailers);
+              }
+            };
+        closeDeframer(stopDelivery);
       }
     }
 
@@ -307,7 +304,6 @@ public abstract class AbstractClientStream extends AbstractStream
     private void closeListener(Status status, Metadata trailers) {
       if (!listenerClosed) {
         listenerClosed = true;
-        closeDeframer();
         statsTraceCtx.streamClosed(status);
         listener().closed(status, trailers);
       }
