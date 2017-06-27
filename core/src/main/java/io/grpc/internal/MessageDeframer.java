@@ -32,8 +32,8 @@ import javax.annotation.concurrent.NotThreadSafe;
 /**
  * Deframer for GRPC frames.
  *
- * <p>This class is not thread-safe. All calls to public methods should be made in the transport
- * thread.
+ * <p>This class is not thread-safe. Unless otherwise stated, all calls to public methods should be
+ * made in the deframing thread.
  */
 @NotThreadSafe
 public class MessageDeframer implements Closeable {
@@ -42,7 +42,7 @@ public class MessageDeframer implements Closeable {
   private static final int RESERVED_MASK = 0xFE;
 
   /**
-   * A listener of deframing events.
+   * A listener of deframing events. These methods will be invoked from the deframing thread.
    */
   public interface Listener {
 
@@ -86,6 +86,8 @@ public class MessageDeframer implements Closeable {
   private boolean inDelivery = false;
 
   private boolean closeWhenComplete = false;
+  private volatile boolean stopDelivery = false;
+
 
   /**
    * Create a deframer.
@@ -161,7 +163,7 @@ public class MessageDeframer implements Closeable {
     }
   }
 
-  /** Close when any messages currently in unprocessed have been requested and delivered. */
+  /** Close when any messages currently queued have been requested and delivered. */
   public void closeWhenComplete() {
     if (unprocessed == null) {
       return;
@@ -172,6 +174,16 @@ public class MessageDeframer implements Closeable {
     } else {
       closeWhenComplete = true;
     }
+  }
+
+  /**
+   * Sets a flag to interrupt delivery of any currently queued messages. This may be invoked outside
+   * of the deframing thread, and must be followed by a call to {@link #close()} in the deframing
+   * thread. Without a subsequent call to {@link #close()}, the deframer may hang waiting for
+   * additional messages before noticing that the {@code stopDelivery} flag has been set.
+   */
+  public void stopDelivery() {
+    stopDelivery = true;
   }
 
   /**
@@ -205,7 +217,7 @@ public class MessageDeframer implements Closeable {
   }
 
   /**
-   * Throws if this deframer has already been closed.
+   * Throws if this deframer has already been closed or scheduled to close.
    */
   private void checkNotClosedOrScheduledToClose() {
     Preconditions.checkState(!isClosed(), "MessageDeframer is already closed");
@@ -224,7 +236,7 @@ public class MessageDeframer implements Closeable {
     inDelivery = true;
     try {
       // Process the uncompressed bytes.
-      while (pendingDeliveries > 0 && readRequiredBytes()) {
+      while (!stopDelivery && pendingDeliveries > 0 && readRequiredBytes()) {
         switch (state) {
           case HEADER:
             processHeader();
@@ -240,6 +252,11 @@ public class MessageDeframer implements Closeable {
           default:
             throw new AssertionError("Invalid state: " + state);
         }
+      }
+
+      if (stopDelivery) {
+        close();
+        return;
       }
 
       /*

@@ -24,6 +24,8 @@ import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
 import java.io.InputStream;
+import java.util.LinkedList;
+import java.util.Queue;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
@@ -32,6 +34,7 @@ import javax.annotation.concurrent.GuardedBy;
  * application thread.
  */
 public abstract class AbstractStream implements Stream {
+
   /** The framer to use for sending messages. */
   protected abstract Framer framer();
 
@@ -108,10 +111,14 @@ public abstract class AbstractStream implements Stream {
      */
     @VisibleForTesting
     public static final int DEFAULT_ONREADY_THRESHOLD = 32 * 1024;
+    private static final boolean DEFRAME_IN_APPLICATION_THREAD = false;
 
     private final MessageDeframer deframer;
     private final Object onReadyLock = new Object();
     private final StatsTraceContext statsTraceCtx;
+    /** Queue for messages returned by the deframer when deframing in the application thread. */
+    private final Queue<InputStream> messageReadQueue = new LinkedList<InputStream>();
+
     /**
      * The number of bytes currently queued, waiting to be sent. When this falls below
      * DEFAULT_ONREADY_THRESHOLD, {@link StreamListener#onReady()} will be called.
@@ -148,7 +155,21 @@ public abstract class AbstractStream implements Stream {
 
     @Override
     public void messageRead(InputStream is) {
-      listener().messagesAvailable(new SingleMessageProducer(is));
+      if (DEFRAME_IN_APPLICATION_THREAD) {
+        messageReadQueue.add(is);
+      } else {
+        listener().messagesAvailable(new SingleMessageProducer(is));
+      }
+    }
+
+    private void messagesAvailable(InitializingMessageProducer producer) {
+      if (DEFRAME_IN_APPLICATION_THREAD) {
+        // TODO(ericgribkoff) catch exceptions here when deframing in application thread?
+        // See io.grpc.netty.NettyServerHandlerTest.streamErrorShouldNotCloseChannel()
+        listener().messagesAvailable(producer);
+      } else {
+        producer.initialize();
+      }
     }
 
     /**
@@ -159,48 +180,85 @@ public abstract class AbstractStream implements Stream {
     protected abstract void deframeFailed(Throwable cause);
 
     /**
-     * Closes this deframer and frees any resources. After this method is called, additional calls
+     * Closes the deframer and frees any resources. After this method is called, additional calls
      * will have no effect.
+     *
+     * <p>When {@code stopDelivery} is false, the deframer will wait to close until any already
+     * queued messages have been delivered.
+     *
+     * <p>The deframer will invoke {@link #deframerClosed()} upon closing.
+     *
+     * @param stopDelivery interrupt pending deliveries and close immediately
      */
     protected final void closeDeframer(boolean stopDelivery) {
       if (stopDelivery) {
-        deframer.close();
+        deframer.stopDelivery();
+        // Schedule close() in case no current operations pick up the stopDelivery flag.
+        messagesAvailable(
+            new InitializingMessageProducer(
+                new Runnable() {
+                  @Override
+                  public void run() {
+                    deframer.close();
+                  }
+                }));
       } else {
-        deframer.closeWhenComplete();
+        messagesAvailable(
+            new InitializingMessageProducer(
+                new Runnable() {
+                  @Override
+                  public void run() {
+                    deframer.closeWhenComplete();
+                  }
+                }));
       }
     }
 
     /**
-     * Called to parse a received frame and attempt delivery of any completed
-     * messages. Must be called from the transport thread.
+     * Called to parse a received frame and attempt delivery of any completed messages. Must be
+     * called from the transport thread.
      */
-    protected final void deframe(ReadableBuffer frame) {
-      if (deframer.isClosed()) {
-        frame.close();
-        return;
-      }
-      try {
-        deframer.deframe(frame);
-      } catch (Throwable t) {
-        deframeFailed(t);
-        deframer.close(); // unrecoverable state
-      }
+    protected final void deframe(final ReadableBuffer frame) {
+      messagesAvailable(
+          new InitializingMessageProducer(
+              new Runnable() {
+                @Override
+                public void run() {
+                  if (deframer.isClosed()) {
+                    frame.close();
+                    return;
+                  }
+                  try {
+                    deframer.deframe(frame);
+                  } catch (Throwable t) {
+                    deframeFailed(t);
+                    deframer.close(); // unrecoverable state
+                  }
+                }
+              }));
     }
 
     /**
-     * Called to request the given number of messages from the deframer. Must be called
-     * from the transport thread.
+     * Called to request the given number of messages from the deframer. Must be called from the
+     * transport thread.
      */
-    public final void requestMessagesFromDeframer(int numMessages) {
-      if (deframer.isClosed()) {
-        return;
-      }
-      try {
-        deframer.request(numMessages);
-      } catch (Throwable t) {
-        deframeFailed(t);
-        deframer.close(); // unrecoverable state
-      }
+    public final void requestMessagesFromDeframer(final int numMessages) {
+      messagesAvailable(
+          new InitializingMessageProducer(
+              new Runnable() {
+                @Override
+                public void run() {
+                  if (deframer.isClosed()) {
+                    return;
+                  }
+                  try {
+                    deframer.request(numMessages);
+                  } catch (Throwable t) {
+                    deframeFailed(t);
+                    deframer.close(); // unrecoverable state
+                  }
+                }
+              }));
     }
 
     public final StatsTraceContext getStatsTraceContext() {
@@ -306,6 +364,29 @@ public abstract class AbstractStream implements Stream {
         InputStream messageToReturn = message;
         message = null;
         return messageToReturn;
+      }
+    }
+
+    private class InitializingMessageProducer implements StreamListener.MessageProducer {
+      private final Runnable runnable;
+      private boolean initialized = false;
+
+      private InitializingMessageProducer(Runnable runnable) {
+        this.runnable = runnable;
+      }
+
+      private void initialize() {
+        if (!initialized) {
+          runnable.run();
+          initialized = true;
+        }
+      }
+
+      @Nullable
+      @Override
+      public InputStream next() {
+        initialize();
+        return messageReadQueue.poll();
       }
     }
   }

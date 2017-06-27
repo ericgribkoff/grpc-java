@@ -199,8 +199,11 @@ public abstract class AbstractServerStream extends AbstractStream
       super.onStreamAllocated();
     }
 
-    @Override
-    public void deframerClosed() {
+    /**
+     * Called by subclasses when {@link #deframerClosed()} is called. It is up to the subclass to
+     * ensure this is invoked from the transport thread.
+     */
+    protected void runDeframerClosedTask() {
       deframerClosed = true;
       if (endOfStream) {
         listener.halfClosed();

@@ -174,7 +174,7 @@ public abstract class AbstractClientStream extends AbstractStream
     private ClientStreamListener listener;
 
     private boolean deframerClosed = false;
-    private Runnable deframerClosedTask;
+    protected Runnable deframerClosedTask;
 
     /**
      * Whether the stream is closed from the transport's perspective. This can differ from {@link
@@ -193,8 +193,11 @@ public abstract class AbstractClientStream extends AbstractStream
       this.listener = Preconditions.checkNotNull(listener, "listener");
     }
 
-    @Override
-    public void deframerClosed() {
+    /**
+     * Called by subclasses when {@link #deframerClosed()} is called. It is up to the subclass to
+     * ensure this is invoked from the transport thread.
+     */
+    protected void runDeframerClosedTask() {
       deframerClosed = true;
       if (deframerClosedTask != null) {
         deframerClosedTask.run();
