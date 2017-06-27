@@ -37,6 +37,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.EventLoop;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.util.AsciiString;
@@ -190,13 +191,15 @@ class NettyClientStream extends AbstractClientStream {
   public abstract static class TransportState extends Http2ClientStreamTransportState
       implements StreamIdHolder {
     private final NettyClientHandler handler;
+    private final EventLoop eventLoop;
     private int id;
     private Http2Stream http2Stream;
 
-    public TransportState(NettyClientHandler handler, int maxMessageSize,
+    public TransportState(NettyClientHandler handler, EventLoop eventLoop, int maxMessageSize,
         StatsTraceContext statsTraceCtx) {
       super(maxMessageSize, statsTraceCtx);
       this.handler = checkNotNull(handler, "handler");
+      this.eventLoop = checkNotNull(eventLoop, "eventLoop");
     }
 
     @Override
@@ -239,17 +242,27 @@ class NettyClientStream extends AbstractClientStream {
 
     @Override
     protected void http2ProcessingFailed(Status status, Metadata trailers) {
-      transportReportStatus(status, false, trailers);
+      transportReportStatus(status, true, trailers);
       handler.getWriteQueue().enqueue(new CancelClientStreamCommand(this, status), true);
     }
 
     @Override
-    public void bytesRead(int processedBytes) {
+    public void runOnTransportThread(final Runnable r) {
+      if (eventLoop.inEventLoop()) {
+        r.run();
+      } else {
+        eventLoop.execute(r);
+      }
+    }
+
+    @Override
+    public void bytesRead(final int processedBytes) {
       handler.returnProcessedBytes(http2Stream, processedBytes);
       handler.getWriteQueue().scheduleFlush();
     }
 
-    protected void deframeFailed(Throwable cause) {
+    @Override
+    public void deframeFailed(final Throwable cause) {
       http2ProcessingFailed(Status.fromThrowable(cause), new Metadata());
     }
 

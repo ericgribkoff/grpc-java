@@ -28,6 +28,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.EventLoop;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Stream;
 import java.util.logging.Level;
@@ -140,22 +141,33 @@ class NettyServerStream extends AbstractServerStream {
       implements StreamIdHolder {
     private final Http2Stream http2Stream;
     private final NettyServerHandler handler;
+    private final EventLoop eventLoop;
 
-    public TransportState(NettyServerHandler handler, Http2Stream http2Stream, int maxMessageSize,
-        StatsTraceContext statsTraceCtx) {
+    public TransportState(NettyServerHandler handler, EventLoop eventLoop, Http2Stream http2Stream,
+        int maxMessageSize, StatsTraceContext statsTraceCtx) {
       super(maxMessageSize, statsTraceCtx);
       this.http2Stream = checkNotNull(http2Stream, "http2Stream");
       this.handler = checkNotNull(handler, "handler");
+      this.eventLoop = eventLoop;
     }
 
     @Override
-    public void bytesRead(int processedBytes) {
+    public void runOnTransportThread(final Runnable r) {
+      if (eventLoop.inEventLoop()) {
+        r.run();
+      } else {
+        eventLoop.execute(r);
+      }
+    }
+
+    @Override
+    public void bytesRead(final int processedBytes) {
       handler.returnProcessedBytes(http2Stream, processedBytes);
       handler.getWriteQueue().scheduleFlush();
     }
 
     @Override
-    protected void deframeFailed(Throwable cause) {
+    public void deframeFailed(final Throwable cause) {
       log.log(Level.WARNING, "Exception processing message", cause);
       Status status = Status.fromThrowable(cause);
       transportReportStatus(status);

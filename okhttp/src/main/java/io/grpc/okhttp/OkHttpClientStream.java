@@ -231,14 +231,14 @@ class OkHttpClientStream extends AbstractClientStream {
       cancel(status, trailers);
     }
 
-    @GuardedBy("lock")
     @Override
-    protected void deframeFailed(Throwable cause) {
+    @GuardedBy("lock")
+    public void deframeFailed(Throwable cause) {
       http2ProcessingFailed(Status.fromThrowable(cause), new Metadata());
     }
 
-    @GuardedBy("lock")
     @Override
+    @GuardedBy("lock")
     public void bytesRead(int processedBytes) {
       processedWindow -= processedBytes;
       if (processedWindow <= WINDOW_UPDATE_THRESHOLD) {
@@ -249,6 +249,21 @@ class OkHttpClientStream extends AbstractClientStream {
       }
     }
 
+    @Override
+    @GuardedBy("lock")
+    public void deframerClosed(boolean hasPartialMessageIgnored) {
+      onEndOfStream();
+      super.deframerClosed(hasPartialMessageIgnored);
+    }
+
+    @Override
+    @GuardedBy("lock")
+    public void runOnTransportThread(final Runnable r) {
+      synchronized (lock) {
+        r.run();
+      }
+    }
+
     /**
      * Must be called with holding the transport lock.
      */
@@ -256,7 +271,6 @@ class OkHttpClientStream extends AbstractClientStream {
     public void transportHeadersReceived(List<Header> headers, boolean endOfStream) {
       if (endOfStream) {
         transportTrailersReceived(Utils.convertTrailers(headers));
-        onEndOfStream();
       } else {
         transportHeadersReceived(Utils.convertHeaders(headers));
       }
@@ -278,9 +292,6 @@ class OkHttpClientStream extends AbstractClientStream {
         return;
       }
       super.transportDataReceived(new OkHttpReadableBuffer(frame), endOfStream);
-      if (endOfStream) {
-        onEndOfStream();
-      }
     }
 
     @GuardedBy("lock")
@@ -293,7 +304,6 @@ class OkHttpClientStream extends AbstractClientStream {
         transport.finishStream(id(), null, null, null);
       }
     }
-
 
     @GuardedBy("lock")
     private void cancel(Status reason, Metadata trailers) {

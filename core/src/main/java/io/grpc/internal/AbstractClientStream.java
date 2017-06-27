@@ -174,7 +174,7 @@ public abstract class AbstractClientStream extends AbstractStream
     private ClientStreamListener listener;
 
     private boolean deframerClosed = false;
-    private Runnable deframerClosedTask;
+    protected Runnable deframerClosedTask;
 
     /**
      * Whether the stream is closed from the transport's perspective. This can differ from {@link
