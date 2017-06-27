@@ -253,7 +253,6 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
       } catch (Throwable e) {
         t = e;
       } finally {
-        // TODO(ericgribkoff) Audit this.
         if (t != null) {
           // TODO(carl-mastrangelo): Maybe log e here.
           MoreThrowables.throwIfUnchecked(t);

@@ -104,8 +104,8 @@ import org.mockito.stubbing.Answer;
 @RunWith(JUnit4.class)
 public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHandler> {
 
-  private static final int TIMEOUT_MS = 1000;
   private static final int STREAM_ID = 3;
+  private static final int TIMEOUT_MS = 1000;
 
   @Mock
   private ServerStreamListener streamListener;

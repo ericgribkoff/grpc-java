@@ -487,7 +487,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
               }
             }
           } catch (Throwable t) {
-            // TODO(ericgribkoff) Audit this for deframing failures
             Status status =
                 Status.CANCELLED.withCause(t).withDescription("Failed to read message.");
             stream.cancel(status);

@@ -110,9 +110,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
         StreamListener.MessageProducer producer =
             (StreamListener.MessageProducer) invocation.getArguments()[0];
         InputStream message;
-        System.out.println("doAnswer invoked");
         while ((message = producer.next()) != null) {
-          System.out.println("got a message");
           listenerMessageQueue.add(message);
         }
         return null;
