@@ -176,6 +176,10 @@ public abstract class AbstractServerStream extends AbstractStream
     private ServerStreamListener listener;
     private final StatsTraceContext statsTraceCtx;
 
+    private boolean endOfStream = false;
+    protected Runnable deframerClosedTask;
+    private boolean deframerClosed = false;
+
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
       super(maxMessageSize, statsTraceCtx);
       this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
@@ -196,15 +200,6 @@ public abstract class AbstractServerStream extends AbstractStream
     }
 
     @Override
-    public void deliveryStalled() {}
-
-    @Override
-    public void endOfStream() {
-      closeDeframer();
-      listener().halfClosed();
-    }
-
-    @Override
     protected ServerStreamListener listener() {
       return listener;
     }
@@ -218,8 +213,14 @@ public abstract class AbstractServerStream extends AbstractStream
      * @param endOfStream {@code true} if no more data will be received on the stream.
      */
     public void inboundDataReceived(ReadableBuffer frame, boolean endOfStream) {
+      // TODO(ericgribkoff) Decide if it's appropriate to throw here
+      //Preconditions.checkState(!this.endOfStream, "Past end of stream");
       // Deframe the message. If a failure occurs, deframeFailed will be called.
-      deframe(frame, endOfStream);
+      deframe(frame);
+      if (endOfStream) {
+        this.endOfStream = true;
+        closeDeframer(false);
+      }
     }
 
     /**
@@ -232,9 +233,21 @@ public abstract class AbstractServerStream extends AbstractStream
      *
      * @param status the error status. Must not be {@link Status#OK}.
      */
-    public final void transportReportStatus(Status status) {
+    public final void transportReportStatus(final Status status) {
       Preconditions.checkArgument(!status.isOk(), "status must not be OK");
-      closeListener(status);
+      // Only close deframer here if we haven't already in response to "end of stream"
+      if (deframerClosed) {
+        closeListener(status);
+      } else {
+        deframerClosedTask =
+            new Runnable() {
+              @Override
+              public void run() {
+                closeListener(status);
+              }
+            };
+        closeDeframer(true);
+      }
     }
 
     /**
@@ -243,7 +256,28 @@ public abstract class AbstractServerStream extends AbstractStream
      * #transportReportStatus}.
      */
     public void complete() {
-      closeListener(Status.OK);
+      if (deframerClosed) {
+        closeListener(Status.OK);
+      } else {
+        deframerClosedTask =
+            new Runnable() {
+              @Override
+              public void run() {
+                closeListener(Status.OK);
+              }
+            };
+        closeDeframer(true);
+      }
+    }
+
+    protected void runDeframerClosedTask() {
+      deframerClosed = true;
+      if (endOfStream) {
+        listener.halfClosed();
+      }
+      if (deframerClosedTask != null) {
+        deframerClosedTask.run();
+      }
     }
 
     /**
@@ -257,7 +291,6 @@ public abstract class AbstractServerStream extends AbstractStream
         }
         listenerClosed = true;
         onStreamDeallocated();
-        closeDeframer();
         listener().closed(newStatus);
       }
     }
