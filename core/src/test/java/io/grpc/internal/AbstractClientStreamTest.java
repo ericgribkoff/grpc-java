@@ -49,7 +49,7 @@ import org.mockito.MockitoAnnotations;
 
 /**
  * Test for {@link AbstractClientStream}.  This class tries to test functionality in
- * AbstractClientStream2, but not in any super classes.
+ * AbstractClientStream, but not in any super classes.
  */
 @RunWith(JUnit4.class)
 public class AbstractClientStreamTest {

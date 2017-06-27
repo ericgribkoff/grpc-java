@@ -20,6 +20,7 @@ import static com.google.common.base.Charsets.US_ASCII;
 import static io.grpc.netty.NettyTestUtil.messageFrame;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyLong;
@@ -43,10 +44,11 @@ import io.netty.handler.codec.http2.Http2Stream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
@@ -58,6 +60,7 @@ import org.mockito.stubbing.Answer;
 public abstract class NettyStreamTestBase<T extends Stream> {
   protected static final String MESSAGE = "hello world";
   protected static final int STREAM_ID = 1;
+  protected static final int TIMEOUT_MS = 1000;
 
   @Mock
   protected Channel channel;
@@ -86,6 +89,9 @@ public abstract class NettyStreamTestBase<T extends Stream> {
 
   @Mock
   protected WriteQueue writeQueue;
+
+  final BlockingQueue<InputStream> listenerMessageQueue =
+      new LinkedBlockingQueue<InputStream>();
 
   protected T stream;
 
@@ -129,11 +135,12 @@ public abstract class NettyStreamTestBase<T extends Stream> {
       ((NettyClientStream) stream).transportState()
           .transportDataReceived(messageFrame(MESSAGE), false);
     }
-    ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
-    verify(listener()).messageRead(captor.capture());
+
+    InputStream message = listenerMessageQueue.poll(TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
     // Verify that inbound flow control window update has been disabled for the stream.
-    assertEquals(MESSAGE, NettyTestUtil.toString(captor.getValue()));
+    assertEquals(MESSAGE, NettyTestUtil.toString(message));
+    assertNull("no additional message expected", listenerMessageQueue.poll());
   }
 
   @Test

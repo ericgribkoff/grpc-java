@@ -80,6 +80,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.annotation.Nullable;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -455,7 +456,7 @@ public class ServerImplTest {
     assertEquals("context added by tracer", SERVER_TRACER_ADDED_KEY.get(callContext));
 
     String order = "Lots of pizza, please";
-    streamListener.messageRead(STRING_MARSHALLER.stream(order));
+    streamListener.messagesAvailable(new SingleMessageProducer(STRING_MARSHALLER.stream(order)));
     assertEquals(1, executor.runDueTasks());
     verify(callListener).onMessage(order);
 
@@ -849,7 +850,8 @@ public class ServerImplTest {
     assertEquals(1, executor.runDueTasks());
     assertTrue(onReadyCalled.get());
 
-    streamListener.messageRead(new ByteArrayInputStream(new byte[0]));
+    streamListener
+        .messagesAvailable(new SingleMessageProducer(new ByteArrayInputStream(new byte[0])));
     assertEquals(1, executor.runDueTasks());
     assertTrue(onMessageCalled.get());
 
@@ -1037,9 +1039,10 @@ public class ServerImplTest {
     listener.setListener(mockListener);
 
     Throwable expectedT = new AssertionError();
-    doThrow(expectedT).when(mockListener).messageRead(any(InputStream.class));
+    doThrow(expectedT).when(mockListener)
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
     // Closing the InputStream is done by the delegated listener (generally ServerCallImpl)
-    listener.messageRead(mock(InputStream.class));
+    listener.messagesAvailable(mock(StreamListener.MessageProducer.class));
     try {
       executor.runDueTasks();
       fail("Expected exception");
@@ -1061,9 +1064,10 @@ public class ServerImplTest {
     listener.setListener(mockListener);
 
     Throwable expectedT = new RuntimeException();
-    doThrow(expectedT).when(mockListener).messageRead(any(InputStream.class));
+    doThrow(expectedT).when(mockListener)
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
     // Closing the InputStream is done by the delegated listener (generally ServerCallImpl)
-    listener.messageRead(mock(InputStream.class));
+    listener.messagesAvailable(mock(StreamListener.MessageProducer.class));
     try {
       executor.runDueTasks();
       fail("Expected exception");
@@ -1247,6 +1251,22 @@ public class ServerImplTest {
     @Override
     public LogId getLogId() {
       throw new UnsupportedOperationException();
+    }
+  }
+
+  private static class SingleMessageProducer implements StreamListener.MessageProducer {
+    private InputStream message;
+
+    private SingleMessageProducer(InputStream message) {
+      this.message = message;
+    }
+
+    @Nullable
+    @Override
+    public InputStream next() {
+      InputStream messageToReturn = message;
+      message = null;
+      return messageToReturn;
     }
   }
 }

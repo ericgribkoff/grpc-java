@@ -25,6 +25,8 @@ import static io.grpc.netty.Utils.STATUS_OK;
 import static io.netty.util.CharsetUtil.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
@@ -48,6 +50,7 @@ import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.StreamListener;
 import io.grpc.netty.WriteQueue.QueuedCommand;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -59,10 +62,13 @@ import io.netty.util.AsciiString;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.util.concurrent.TimeUnit;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
@@ -90,6 +96,29 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
       .setResponseMarshaller(marshaller)
       .build();
 
+
+  /** Set up for test. */
+  @Before
+  @Override
+  public void setUp() {
+    super.setUp();
+
+    doAnswer(
+          new Answer<Void>() {
+            @Override
+            public Void answer(InvocationOnMock invocation) throws Throwable {
+              StreamListener.MessageProducer producer =
+                  (StreamListener.MessageProducer) invocation.getArguments()[0];
+              InputStream message;
+              while ((message = producer.next()) != null) {
+                listenerMessageQueue.add(message);
+              }
+              return null;
+            }
+          })
+      .when(listener)
+      .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
+  }
 
   @Override
   protected ClientStreamListener listener() {
@@ -311,7 +340,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream().transportState().transportHeadersReceived(grpcResponseTrailers(Status.INTERNAL), true);
 
     // Verify that the first was delivered.
-    verify(listener).messageRead(any(InputStream.class));
+    assertNotNull("message expected", listenerMessageQueue.poll(TIMEOUT_MS, TimeUnit.MILLISECONDS));
+    assertNull("no additional message expected", listenerMessageQueue.poll());
 
     // Now set the error status.
     Metadata trailers = Utils.convertTrailers(grpcResponseTrailers(Status.CANCELLED));
@@ -321,12 +351,12 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream().request(1);
 
     // Verify that the listener was only notified of the first message, not the second.
-    verify(listener).messageRead(any(InputStream.class));
+    assertNull("no additional message expected", listenerMessageQueue.poll());
     verify(listener).closed(eq(Status.CANCELLED), eq(trailers));
   }
 
   @Test
-  public void dataFrameWithEosShouldDeframeAndThenFail() {
+  public void dataFrameWithEosShouldDeframeAndThenFail() throws Exception {
     stream().transportState().setId(STREAM_ID);
     stream().request(1);
 
@@ -337,7 +367,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream().transportState().transportDataReceived(simpleGrpcFrame(), true);
 
     // Verify that the message was delivered.
-    verify(listener).messageRead(any(InputStream.class));
+    assertNotNull("message expected", listenerMessageQueue.poll(TIMEOUT_MS, TimeUnit.MILLISECONDS));
+    assertNull("no additional message expected", listenerMessageQueue.poll());
 
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener).closed(captor.capture(), any(Metadata.class));
