@@ -716,8 +716,6 @@ public abstract class AbstractTransportTest {
     }
 
     clientStream.flush();
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS).atLeastOnce())
-        .messagesAvailable(any(StreamListener.MessageProducer.class));
     InputStream message = serverStreamMessageQueue.poll(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     assertEquals("Hello!", methodDescriptor.parseRequest(message));
     message.close();

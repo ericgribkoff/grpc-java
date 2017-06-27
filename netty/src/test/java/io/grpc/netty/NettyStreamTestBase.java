@@ -24,7 +24,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyLong;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
@@ -137,7 +136,6 @@ public abstract class NettyStreamTestBase<T extends Stream> {
           .transportDataReceived(messageFrame(MESSAGE), false);
     }
 
-    verify(listener(), atLeastOnce()).messagesAvailable(any(StreamListener.MessageProducer.class));
     InputStream message = listenerMessageQueue.poll(TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
     // Verify that inbound flow control window update has been disabled for the stream.

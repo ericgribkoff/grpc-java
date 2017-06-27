@@ -36,7 +36,6 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.notNull;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -302,8 +301,6 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     // Create a data frame and then trigger the handler to read it.
     ByteBuf frame = grpcDataFrame(3, false, contentAsArray());
     channelRead(frame);
-    verify(streamListener, atLeastOnce())
-        .messagesAvailable(any(StreamListener.MessageProducer.class));
     InputStream message = streamListenerMessageQueue.poll(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     assertArrayEquals(ByteBufUtil.getBytes(content()), ByteStreams.toByteArray(message));
     message.close();

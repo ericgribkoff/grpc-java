@@ -33,7 +33,6 @@ import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -339,8 +338,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream().transportState().transportHeadersReceived(grpcResponseTrailers(Status.INTERNAL), true);
 
     // Verify that the first was delivered.
-    verify(listener, atLeastOnce()).messagesAvailable(any(StreamListener.MessageProducer.class));
-    assertNotNull("message excepted", listenerMessageQueue.poll(TIMEOUT_MS, TimeUnit.MILLISECONDS));
+    assertNotNull("message expected", listenerMessageQueue.poll(TIMEOUT_MS, TimeUnit.MILLISECONDS));
     assertNull("no additional message expected", listenerMessageQueue.poll());
 
     // Now set the error status.
@@ -367,8 +365,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream().transportState().transportDataReceived(simpleGrpcFrame(), true);
 
     // Verify that the message was delivered.
-    verify(listener, atLeastOnce()).messagesAvailable(any(StreamListener.MessageProducer.class));
-    assertNotNull("message excepted", listenerMessageQueue.poll(TIMEOUT_MS, TimeUnit.MILLISECONDS));
+    assertNotNull("message expected", listenerMessageQueue.poll(TIMEOUT_MS, TimeUnit.MILLISECONDS));
     assertNull("no additional message expected", listenerMessageQueue.poll());
 
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
