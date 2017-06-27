@@ -325,9 +325,7 @@ public class MessageDeframer implements Closeable {
           .asRuntimeException();
     }
 
-    System.out.println("processing header");
     statsTraceCtx.inboundMessage();
-    System.out.println("called inboundMessage");
     // Continue reading the frame body.
     state = State.BODY;
   }

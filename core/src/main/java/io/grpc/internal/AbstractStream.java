@@ -148,23 +148,15 @@ public abstract class AbstractStream implements Stream {
      */
     protected abstract StreamListener listener();
 
-    private final boolean deframeInTransportThread = true;
+    private final boolean deframeInTransportThread = false;
 
     private final Queue<InputStream> messageReadQueue = new LinkedList<InputStream>();
 
-    public boolean client = false;
-
     @Override
     public void messageRead(InputStream message) {
-      System.out.println("messageRead " + client);
       if (deframeInTransportThread) {
-        //if (!client) {
-        //  new Exception().printStackTrace(System.out);
-        //}
-        System.out.println("Calling messagesAvailable " + client);
         listener().messagesAvailable(new SingleMessageProducer(message));
       } else {
-        System.out.println("Queuing message " + client);
         messageReadQueue.add(message);
       }
     }
@@ -173,17 +165,6 @@ public abstract class AbstractStream implements Stream {
       if (deframeInTransportThread) {
         producer.initialize();
       }
-      //if (!client) {
-      //  new Exception().printStackTrace(System.out);
-      //}
-      System.out.println("Calling messagesAvailable " + client + " " + listener());
-
-      // TODO(ericgribkoff) If we aren't deframing in transport thread, we need listener() to
-      // run the producer. So we can't just throw it away here - we have to queue it...which leads
-      // to the question: why should this be null? What test? Those using
-      // NettyClientTransportTest.EchoServerStreamListener, at least.
-      //if (listener() != null) {
-
       // TODO(ericgribkoff) io.grpc.netty.NettyServerHandlerTest.streamErrorShouldNotCloseChannel()
       // raises the question - should we catch exceptions here if deframing in application thread?
       listener().messagesAvailable(producer);
@@ -197,87 +178,88 @@ public abstract class AbstractStream implements Stream {
     protected abstract void deframeFailed(Throwable cause);
 
     /**
-     * TODO(ericgribkoff) Update. Closes this deframer and frees any resources. After this
-     * method is called, additional calls will have no effect.
+     * TODO(ericgribkoff) Update. Closes this deframer and frees any resources. After this method is
+     * called, additional calls will have no effect.
      */
     protected final void closeDeframer(boolean stopDelivery) {
-      System.out.println("closeDeframer " + client);
       if (stopDelivery) {
         deframer.stopDeliveryAndClose();
         // Schedule a call to close in case no current operations pick up the stopDelivery flag.
-        messagesAvailable(new InitializingMessageProducer(
-            new Runnable() {
-              @Override
-              public void run() {
-                try {
-                  deframer.close();
-                } catch (Throwable t) {
-                  // TODO(ericgribkoff) Catch on trying to close?
-                  System.out.println("Error closing deframer");
-                }
-              }
-            }));
+        messagesAvailable(
+            new InitializingMessageProducer(
+                new Runnable() {
+                  @Override
+                  public void run() {
+                    try {
+                      deframer.close();
+                    } catch (Throwable t) {
+                      // TODO(ericgribkoff) Catch on trying to close?
+                      System.out.println("Error closing deframer");
+                    }
+                  }
+                }));
       } else {
-        messagesAvailable(new InitializingMessageProducer(
-            new Runnable() {
-              @Override
-              public void run() {
-                try {
-                  deframer.closeWhenComplete();
-                } catch (Throwable t) {
-                  System.out.println("Error closing deframer");
-                }
-              }
-            }));
+        messagesAvailable(
+            new InitializingMessageProducer(
+                new Runnable() {
+                  @Override
+                  public void run() {
+                    try {
+                      deframer.closeWhenComplete();
+                    } catch (Throwable t) {
+                      // TODO(ericgribkoff) Catch on trying to close?
+                      System.out.println("Error closing deframer");
+                    }
+                  }
+                }));
       }
     }
 
     /**
-     * Called to parse a received frame and attempt delivery of any completed
-     * messages. Must be called from the transport thread.
+     * Called to parse a received frame and attempt delivery of any completed messages. Must be
+     * called from the transport thread.
      */
     protected final void deframe(final ReadableBuffer frame) {
-      System.out.println("deframe " + client);
-      messagesAvailable(new InitializingMessageProducer(
-          new Runnable() {
-            @Override
-            public void run() {
-              if (deframer.isClosed()) {
-                frame.close();
-                return;
-              }
-              try {
-                System.out.println("Running deframe.deframe " + client);
-                deframer.deframe(frame);
-              } catch (Throwable t) {
-                deframeFailed(t);
-                deframer.close(); // unrecoverable state
-              }
-            }
-          }));
+      messagesAvailable(
+          new InitializingMessageProducer(
+              new Runnable() {
+                @Override
+                public void run() {
+                  if (deframer.isClosed()) {
+                    frame.close();
+                    return;
+                  }
+                  try {
+                    deframer.deframe(frame);
+                  } catch (Throwable t) {
+                    deframeFailed(t);
+                    deframer.close(); // unrecoverable state
+                  }
+                }
+              }));
     }
 
     /**
-     * Called to request the given number of messages from the deframer. Must be called
-     * from the transport thread.
+     * Called to request the given number of messages from the deframer. Must be called from the
+     * transport thread.
      */
     public final void requestMessagesFromDeframer(final int numMessages) {
-      System.out.println("request " + client);
-      messagesAvailable(new InitializingMessageProducer(
-          new Runnable() {
-            @Override
-            public void run() {
-              if (deframer.isClosed()) {
-                return;
-              }
-              try {
-                deframer.request(numMessages);
-              } catch (Throwable t) {
-                deframeFailed(t);
-                deframer.close(); // unrecoverable state
-              }
-            }
-          }));
+      messagesAvailable(
+          new InitializingMessageProducer(
+              new Runnable() {
+                @Override
+                public void run() {
+                  if (deframer.isClosed()) {
+                    return;
+                  }
+                  try {
+                    deframer.request(numMessages);
+                  } catch (Throwable t) {
+                    deframeFailed(t);
+                    deframer.close(); // unrecoverable state
+                  }
+                }
+              }));
     }
 
     public final StatsTraceContext getStatsTraceContext() {

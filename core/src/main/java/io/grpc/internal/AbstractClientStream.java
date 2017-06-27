@@ -184,7 +184,6 @@ public abstract class AbstractClientStream extends AbstractStream
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
       super(maxMessageSize, statsTraceCtx);
       this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
-      client = true;
     }
 
     @VisibleForTesting
