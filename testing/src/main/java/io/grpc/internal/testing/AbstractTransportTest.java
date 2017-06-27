@@ -179,18 +179,20 @@ public abstract class AbstractTransportTest {
         .thenReturn(serverStreamTracer);
     callOptions = CallOptions.DEFAULT.withStreamTracerFactory(clientStreamTracerFactory);
 
-    doAnswer(new Answer<Void>() {
-      @Override
-      public Void answer(InvocationOnMock invocation) throws Throwable {
-        StreamListener.MessageProducer producer =
-            (StreamListener.MessageProducer) invocation.getArguments()[0];
-        InputStream message;
-        while ((message = producer.next()) != null) {
-          clientStreamMessageQueue.add(message);
-        }
-        return null;
-      }
-    }).when(mockClientStreamListener)
+    doAnswer(
+            new Answer<Void>() {
+              @Override
+              public Void answer(InvocationOnMock invocation) throws Throwable {
+                StreamListener.MessageProducer producer =
+                    (StreamListener.MessageProducer) invocation.getArguments()[0];
+                InputStream message;
+                while ((message = producer.next()) != null) {
+                  clientStreamMessageQueue.add(message);
+                }
+                return null;
+              }
+            })
+        .when(mockClientStreamListener)
         .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
   }
 

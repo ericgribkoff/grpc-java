@@ -17,6 +17,7 @@
 package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
@@ -34,6 +35,10 @@ import io.grpc.Status;
 import io.grpc.internal.AbstractServerStream.TransportState;
 import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -50,6 +55,7 @@ import org.mockito.stubbing.Answer;
 @RunWith(JUnit4.class)
 public class AbstractServerStreamTest {
   private static final int MAX_MESSAGE_SIZE = 100;
+  private static final int TIMEOUT_MS = 1000;
 
   @Rule public final ExpectedException thrown = ExpectedException.none();
 
@@ -69,17 +75,25 @@ public class AbstractServerStreamTest {
    * Test for issue https://github.com/grpc/grpc-java/issues/1795
    */
   @Test
-  public void frameShouldBeIgnoredAfterDeframerClosed() {
+  public void frameShouldBeIgnoredAfterDeframerClosed() throws Exception {
     ServerStreamListener streamListener = mock(ServerStreamListener.class);
-    doAnswer(new Answer<Void>() {
-      @Override
-      public Void answer(InvocationOnMock invocation) throws Throwable {
-        StreamListener.MessageProducer producer =
-            (StreamListener.MessageProducer) invocation.getArguments()[0];
-        while (producer.next() != null) {}
-        return null;
-      }
-    }).when(streamListener).messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
+    final BlockingQueue<InputStream> streamListenerMessageQueue =
+        new LinkedBlockingQueue<InputStream>();
+    doAnswer(
+            new Answer<Void>() {
+              @Override
+              public Void answer(InvocationOnMock invocation) throws Throwable {
+                StreamListener.MessageProducer producer =
+                    (StreamListener.MessageProducer) invocation.getArguments()[0];
+                InputStream message;
+                while ((message = producer.next()) != null) {
+                  streamListenerMessageQueue.add(message);
+                }
+                return null;
+              }
+            })
+        .when(streamListener)
+        .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
     ReadableBuffer buffer = mock(ReadableBuffer.class);
 
     stream.transportState().setListener(streamListener);
@@ -89,10 +103,7 @@ public class AbstractServerStreamTest {
     stream.transportState().inboundDataReceived(buffer, true);
 
     verify(buffer).close();
-    ArgumentCaptor<StreamListener.MessageProducer> producerCaptor =
-        ArgumentCaptor.forClass(StreamListener.MessageProducer.class);
-    verify(streamListener, times(3)).messagesAvailable(producerCaptor.capture());
-    assertNull(producerCaptor.getValue().next());
+    assertNull("no additional message expected", streamListenerMessageQueue.poll());
   }
 
   /**
