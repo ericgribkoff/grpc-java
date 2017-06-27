@@ -197,8 +197,8 @@ public abstract class AbstractClientStream extends AbstractStream
       return listener;
     }
 
-    protected void runDeframerClosedTask() {
-      // TODO(ericgribkoff) Should this ever be null?
+    @Override
+    public void deframerClosed() {
       if (deframerClosedTask != null) {
         deframerClosedTask.run();
       }

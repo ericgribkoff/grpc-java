@@ -270,7 +270,8 @@ public abstract class AbstractServerStream extends AbstractStream
       }
     }
 
-    protected void runDeframerClosedTask() {
+    @Override
+    public void deframerClosed() {
       deframerClosed = true;
       if (endOfStream) {
         listener.halfClosed();
