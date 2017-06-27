@@ -249,7 +249,6 @@ class NettyClientStream extends AbstractClientStream {
       handler.getWriteQueue().scheduleFlush();
     }
 
-    @Override
     protected void deframeFailed(Throwable cause) {
       http2ProcessingFailed(Status.fromThrowable(cause), new Metadata());
     }
