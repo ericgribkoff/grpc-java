@@ -37,6 +37,7 @@ import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.StreamListener;
 import java.io.InputStream;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -47,6 +48,7 @@ import java.util.concurrent.Executor;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.CheckReturnValue;
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -250,7 +252,8 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       @GuardedBy("this")
       private int clientRequested;
       @GuardedBy("this")
-      private ArrayDeque<InputStream> clientReceiveQueue = new ArrayDeque<InputStream>();
+      private ArrayDeque<StreamListener.MessageProducer> clientReceiveQueue =
+          new ArrayDeque<StreamListener.MessageProducer>();
       @GuardedBy("this")
       private Status clientNotifyStatus;
       @GuardedBy("this")
@@ -294,7 +297,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
         clientRequested += numMessages;
         while (clientRequested > 0 && !clientReceiveQueue.isEmpty()) {
           clientRequested--;
-          clientStreamListener.messageRead(clientReceiveQueue.poll());
+          clientStreamListener.messagesAvailable(clientReceiveQueue.poll());
         }
         // Attempt being reentrant-safe
         if (closed) {
@@ -317,11 +320,12 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
         if (closed) {
           return;
         }
+        StreamListener.MessageProducer producer = new SingleMessageProducer(message);
         if (clientRequested > 0) {
           clientRequested--;
-          clientStreamListener.messageRead(message);
+          clientStreamListener.messagesAvailable(producer);
         } else {
-          clientReceiveQueue.add(message);
+          clientReceiveQueue.add(producer);
         }
       }
 
@@ -378,12 +382,15 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
           return false;
         }
         closed = true;
-        InputStream stream;
-        while ((stream = clientReceiveQueue.poll()) != null) {
-          try {
-            stream.close();
-          } catch (Throwable t) {
-            log.log(Level.WARNING, "Exception closing stream", t);
+        StreamListener.MessageProducer producer;
+        while ((producer = clientReceiveQueue.poll()) != null) {
+          InputStream message;
+          while ((message = producer.next()) != null) {
+            try {
+              message.close();
+            } catch (Throwable t) {
+              log.log(Level.WARNING, "Exception closing stream", t);
+            }
           }
         }
         clientStreamListener.closed(status, new Metadata());
@@ -392,7 +399,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
 
       @Override
       public void setMessageCompression(boolean enable) {
-         // noop
+        // noop
       }
 
       @Override
@@ -425,7 +432,8 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       @GuardedBy("this")
       private int serverRequested;
       @GuardedBy("this")
-      private ArrayDeque<InputStream> serverReceiveQueue = new ArrayDeque<InputStream>();
+      private ArrayDeque<StreamListener.MessageProducer> serverReceiveQueue =
+          new ArrayDeque<StreamListener.MessageProducer>();
       @GuardedBy("this")
       private boolean serverNotifyHalfClose;
       // Only is intended to prevent double-close when server closes.
@@ -462,7 +470,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
         serverRequested += numMessages;
         while (serverRequested > 0 && !serverReceiveQueue.isEmpty()) {
           serverRequested--;
-          serverStreamListener.messageRead(serverReceiveQueue.poll());
+          serverStreamListener.messagesAvailable(serverReceiveQueue.poll());
         }
         if (serverReceiveQueue.isEmpty() && serverNotifyHalfClose) {
           serverNotifyHalfClose = false;
@@ -481,11 +489,12 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
         if (closed) {
           return;
         }
+        StreamListener.MessageProducer producer = new SingleMessageProducer(message);
         if (serverRequested > 0) {
           serverRequested--;
-          serverStreamListener.messageRead(message);
+          serverStreamListener.messagesAvailable(producer);
         } else {
-          serverReceiveQueue.add(message);
+          serverReceiveQueue.add(producer);
         }
       }
 
@@ -515,12 +524,16 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
           return false;
         }
         closed = true;
-        InputStream stream;
-        while ((stream = serverReceiveQueue.poll()) != null) {
-          try {
-            stream.close();
-          } catch (Throwable t) {
-            log.log(Level.WARNING, "Exception closing stream", t);
+
+        StreamListener.MessageProducer producer;
+        while ((producer = serverReceiveQueue.poll()) != null) {
+          InputStream message;
+          while ((message = producer.next()) != null) {
+            try {
+              message.close();
+            } catch (Throwable t) {
+              log.log(Level.WARNING, "Exception closing stream", t);
+            }
           }
         }
         serverStreamListener.closed(reason);
@@ -593,5 +606,21 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
     return Status
         .fromCodeValue(status.getCode().value())
         .withDescription(status.getDescription());
+  }
+
+  private static class SingleMessageProducer implements StreamListener.MessageProducer {
+    private InputStream message;
+
+    private SingleMessageProducer(InputStream message) {
+      this.message = message;
+    }
+
+    @Nullable
+    @Override
+    public InputStream next() {
+      InputStream messageToReturn = message;
+      message = null;
+      return messageToReturn;
+    }
   }
 }

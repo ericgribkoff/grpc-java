@@ -39,8 +39,12 @@ import io.grpc.Status;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
+
+  private static final Logger log = Logger.getLogger(ServerCallImpl.class.getName());
 
   @VisibleForTesting
   static String TOO_MANY_RESPONSES = "Too many responses";
@@ -237,26 +241,36 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
 
     @SuppressWarnings("Finally") // The code avoids suppressing the exception thrown from try
     @Override
-    public void messageRead(final InputStream message) {
+    public void messagesAvailable(final MessageProducer producer) {
+      InputStream message;
       Throwable t = null;
       try {
-        if (call.cancelled) {
-          return;
+        while ((message = producer.next()) != null) {
+          if (call.cancelled) {
+            return;
+          }
+          try {
+            listener.onMessage(call.method.parseRequest(message));
+          } finally {
+            message.close();
+          }
         }
-        listener.onMessage(call.method.parseRequest(message));
       } catch (Throwable e) {
         t = e;
-      } finally {
-        try {
-          message.close();
-        } catch (IOException e) {
-          throw new RuntimeException(e);
-        } finally {
-          if (t != null) {
-            // TODO(carl-mastrangelo): Maybe log e here.
-            MoreThrowables.throwIfUnchecked(t);
-            throw new RuntimeException(t);
+        // Close any remaining messages
+        while ((message = producer.next()) != null) {
+          try {
+            message.close();
+          } catch (IOException ioException) {
+            // just log additional exceptions as we are already going to throw
+            log.log(Level.WARNING, "Exception closing stream", ioException);
           }
+        }
+      } finally {
+        if (t != null) {
+          // TODO(carl-mastrangelo): Maybe log e here.
+          MoreThrowables.throwIfUnchecked(t);
+          throw new RuntimeException(t);
         }
       }
     }

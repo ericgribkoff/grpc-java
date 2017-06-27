@@ -45,6 +45,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Executor;
@@ -466,7 +467,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     }
 
     @Override
-    public void messageRead(final InputStream message) {
+    public void messagesAvailable(final MessageProducer producer) {
       class MessageRead extends ContextRunnable {
         MessageRead() {
           super(context);
@@ -474,16 +475,28 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
 
         @Override
         public final void runInContext() {
+          InputStream message;
           try {
-            if (closed) {
-              return;
-            }
-            try {
-              observer.onMessage(method.parseResponse(message));
-            } finally {
-              message.close();
+            while ((message = producer.next()) != null) {
+              if (closed) {
+                return;
+              }
+              try {
+                observer.onMessage(method.parseResponse(message));
+              } finally {
+                message.close();
+              }
             }
           } catch (Throwable t) {
+            // Close any remaining messages
+            while ((message = producer.next()) != null) {
+              try {
+                message.close();
+              } catch (IOException ioException) {
+                // just log additional exceptions as we are already cleaning up
+                log.log(Level.WARNING, "Exception closing stream", ioException);
+              }
+            }
             Status status =
                 Status.CANCELLED.withCause(t).withDescription("Failed to read message.");
             stream.cancel(status);

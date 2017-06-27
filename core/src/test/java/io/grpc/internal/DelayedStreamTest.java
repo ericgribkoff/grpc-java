@@ -36,6 +36,7 @@ import io.grpc.Attributes.Key;
 import io.grpc.Codec;
 import io.grpc.Metadata;
 import io.grpc.Status;
+import io.grpc.internal.testing.SingleMessageProducer;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import org.junit.Before;
@@ -303,6 +304,8 @@ public class DelayedStreamTest {
     final Metadata headers = new Metadata();
     final InputStream message1 = mock(InputStream.class);
     final InputStream message2 = mock(InputStream.class);
+    final SingleMessageProducer producer1 = new SingleMessageProducer(message1);
+    final SingleMessageProducer producer2 = new SingleMessageProducer(message2);
     final Metadata trailers = new Metadata();
     final Status status = Status.UNKNOWN.withDescription("unique status");
 
@@ -313,9 +316,9 @@ public class DelayedStreamTest {
       public void start(ClientStreamListener passedListener) {
         passedListener.onReady();
         passedListener.headersRead(headers);
-        passedListener.messageRead(message1);
+        passedListener.messagesAvailable(producer1);
         passedListener.onReady();
-        passedListener.messageRead(message2);
+        passedListener.messagesAvailable(producer2);
         passedListener.closed(status, trailers);
 
         verifyNoMoreInteractions(listener);
@@ -323,9 +326,9 @@ public class DelayedStreamTest {
     });
     inOrder.verify(listener).onReady();
     inOrder.verify(listener).headersRead(headers);
-    inOrder.verify(listener).messageRead(message1);
+    inOrder.verify(listener).messagesAvailable(producer1);
     inOrder.verify(listener).onReady();
-    inOrder.verify(listener).messageRead(message2);
+    inOrder.verify(listener).messagesAvailable(producer2);
     inOrder.verify(listener).closed(status, trailers);
   }
 
@@ -333,6 +336,7 @@ public class DelayedStreamTest {
   public void listener_noQueued() {
     final Metadata headers = new Metadata();
     final InputStream message = mock(InputStream.class);
+    final SingleMessageProducer producer = new SingleMessageProducer(message);
     final Metadata trailers = new Metadata();
     final Status status = Status.UNKNOWN.withDescription("unique status");
 
@@ -344,10 +348,9 @@ public class DelayedStreamTest {
     verify(listener).onReady();
     delayedListener.headersRead(headers);
     verify(listener).headersRead(headers);
-    delayedListener.messageRead(message);
-    verify(listener).messageRead(message);
+    delayedListener.messagesAvailable(producer);
+    verify(listener).messagesAvailable(producer);
     delayedListener.closed(status, trailers);
     verify(listener).closed(status, trailers);
   }
-
 }
