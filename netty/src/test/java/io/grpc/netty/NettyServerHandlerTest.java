@@ -42,6 +42,7 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -64,6 +65,7 @@ import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.StreamListener;
 import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2ServerHeadersDecoder;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
@@ -82,14 +84,19 @@ import io.netty.util.AsciiString;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 /**
  * Unit tests for {@link NettyServerHandler}.
@@ -97,6 +104,7 @@ import org.mockito.MockitoAnnotations;
 @RunWith(JUnit4.class)
 public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHandler> {
 
+  private static final int TIMEOUT_MS = 1000;
   private static final int STREAM_ID = 3;
 
   @Mock
@@ -110,6 +118,9 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   private NettyServerStream stream;
   private KeepAliveManager spyKeepAliveManager;
+
+  final BlockingQueue<InputStream> streamListenerMessageQueue =
+      new LinkedBlockingQueue<InputStream>();
 
   private int flowControlWindow = DEFAULT_WINDOW_SIZE;
   private int maxConcurrentStreams = Integer.MAX_VALUE;
@@ -146,6 +157,20 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     MockitoAnnotations.initMocks(this);
     when(streamTracerFactory.newServerStreamTracer(anyString(), any(Metadata.class)))
         .thenReturn(streamTracer);
+
+    doAnswer(new Answer<Void>() {
+      @Override
+      public Void answer(InvocationOnMock invocation) throws Throwable {
+        StreamListener.MessageProducer producer =
+            (StreamListener.MessageProducer) invocation.getArguments()[0];
+        InputStream message;
+        while ((message = producer.next()) != null) {
+          streamListenerMessageQueue.add(message);
+        }
+        return null;
+      }
+    }).when(streamListener)
+        .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
 
     initChannel(new GrpcHttp2ServerHeadersDecoder(GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE));
 
@@ -206,10 +231,12 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     // Create a data frame and then trigger the handler to read it.
     ByteBuf frame = grpcDataFrame(STREAM_ID, endStream, contentAsArray());
     channelRead(frame);
-    ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
-    verify(streamListener).messageRead(captor.capture());
-    assertArrayEquals(ByteBufUtil.getBytes(content()), ByteStreams.toByteArray(captor.getValue()));
-    captor.getValue().close();
+    verify(streamListener, atLeastOnce())
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
+    InputStream message = streamListenerMessageQueue.poll(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    assertArrayEquals(ByteBufUtil.getBytes(content()), ByteStreams.toByteArray(message));
+    message.close();
+    assertNull("no additional message expected", streamListenerMessageQueue.poll());
 
     if (endStream) {
       verify(streamListener).halfClosed();
@@ -225,9 +252,12 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     stream.request(1);
 
     channelRead(emptyGrpcFrame(STREAM_ID, true));
-    ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
-    verify(streamListener).messageRead(captor.capture());
-    assertArrayEquals(new byte[0], ByteStreams.toByteArray(captor.getValue()));
+
+    verify(streamListener, atLeastOnce())
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
+    InputStream message = streamListenerMessageQueue.poll(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    assertArrayEquals(new byte[0], ByteStreams.toByteArray(message));
+    assertNull("no additional message expected", streamListenerMessageQueue.poll());
     verify(streamListener).halfClosed();
     verify(streamListener, atLeastOnce()).onReady();
     verifyNoMoreInteractions(streamListener);
@@ -239,9 +269,9 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     createStream();
 
     channelRead(rstStreamFrame(STREAM_ID, (int) Http2Error.CANCEL.code()));
-    verify(streamListener, never()).messageRead(any(InputStream.class));
     verify(streamListener).closed(Status.CANCELLED);
     verify(streamListener, atLeastOnce()).onReady();
+    assertNull("no messages expected", streamListenerMessageQueue.poll());
     verifyNoMoreInteractions(streamListener);
   }
 
@@ -254,7 +284,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     // When a DATA frame is read, throw an exception. It will be converted into an
     // Http2StreamException.
     RuntimeException e = new RuntimeException("Fake Exception");
-    doThrow(e).when(streamListener).messageRead(any(InputStream.class));
+    doThrow(e).when(streamListener).messagesAvailable(any(StreamListener.MessageProducer.class));
 
     // Read a DATA frame to trigger the exception.
     channelRead(emptyGrpcFrame(STREAM_ID, true));

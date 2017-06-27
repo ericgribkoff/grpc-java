@@ -466,7 +466,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     }
 
     @Override
-    public void messageRead(final InputStream message) {
+    public void messagesAvailable(final MessageProducer producer) {
       class MessageRead extends ContextRunnable {
         MessageRead() {
           super(context);
@@ -474,16 +474,20 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
 
         @Override
         public final void runInContext() {
+          InputStream message;
           try {
-            if (closed) {
-              return;
-            }
-            try {
-              observer.onMessage(method.parseResponse(message));
-            } finally {
-              message.close();
+            while ((message = producer.next()) != null) {
+              if (closed) {
+                return;
+              }
+              try {
+                observer.onMessage(method.parseResponse(message));
+              } finally {
+                message.close();
+              }
             }
           } catch (Throwable t) {
+            // TODO(ericgribkoff) Audit this for deframing failures
             Status status =
                 Status.CANCELLED.withCause(t).withDescription("Failed to read message.");
             stream.cancel(status);
