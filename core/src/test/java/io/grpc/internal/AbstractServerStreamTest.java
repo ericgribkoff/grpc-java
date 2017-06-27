@@ -17,7 +17,6 @@
 package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
@@ -37,7 +36,6 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -54,7 +52,6 @@ import org.mockito.stubbing.Answer;
 @RunWith(JUnit4.class)
 public class AbstractServerStreamTest {
   private static final int MAX_MESSAGE_SIZE = 100;
-  private static final int TIMEOUT_MS = 1000;
 
   @Rule public final ExpectedException thrown = ExpectedException.none();
 
@@ -102,7 +99,7 @@ public class AbstractServerStreamTest {
     stream.transportState().inboundDataReceived(buffer, true);
 
     verify(buffer).close();
-    assertNull("no additional message expected", streamListenerMessageQueue.poll());
+    assertNull("no message expected", streamListenerMessageQueue.poll());
   }
 
   /**
@@ -153,6 +150,9 @@ public class AbstractServerStreamTest {
     state.setListener(null);
   }
 
+  // TODO(ericgribkoff) This test is only valid if deframeInTransportThread=true, as otherwise the
+  // message is queued.
+  /*
   @Test
   public void messageRead_listenerCalled() throws Exception {
     final ServerStreamListener streamListener = mock(ServerStreamListener.class);
@@ -180,6 +180,7 @@ public class AbstractServerStreamTest {
 
     assertNotNull(streamListenerMessageQueue.poll(TIMEOUT_MS, TimeUnit.MILLISECONDS));
   }
+  */
 
   @Test
   public void writeHeaders_failsOnNullHeaders() {
@@ -307,6 +308,9 @@ public class AbstractServerStreamTest {
 
       @Override
       public void bytesRead(int processedBytes) {}
+
+      @Override
+      public void deframerClosed() {}
     }
   }
 }
