@@ -313,6 +313,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   private void startStream(OkHttpClientStream stream) {
     Preconditions.checkState(
         stream.id() == OkHttpClientStream.ABSENT_ID, "StreamId already assigned");
+    System.out.println("starting stream with nextStreamId " + nextStreamId);
     streams.put(nextStreamId, stream);
     setInUse();
     stream.transportState().start(nextStreamId);
@@ -666,6 +667,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
 
   private void startGoAway(int lastKnownStreamId, ErrorCode errorCode, Status status) {
     synchronized (lock) {
+      System.out.println("Starting GoAway, lastKnownStreamId " + lastKnownStreamId);
       if (goAwayStatus == null) {
         goAwayStatus = status;
         listener.transportShutdown(status);
@@ -713,14 +715,19 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   void finishStream(int streamId, @Nullable Status status, @Nullable ErrorCode errorCode,
       @Nullable Metadata trailers) {
     synchronized (lock) {
+      System.out.println("in finishStream, streamId " + streamId + " status " + status);
+      new Exception().printStackTrace(System.out);
       OkHttpClientStream stream = streams.remove(streamId);
+      System.out.println("stream: " + stream);
       if (stream != null) {
+        System.out.println("stream != null");
         if (errorCode != null) {
           frameWriter.rstStream(streamId, ErrorCode.CANCEL);
         }
         if (status != null) {
           boolean isCancelled = (status.getCode() == Code.CANCELLED
               || status.getCode() == Code.DEADLINE_EXCEEDED);
+          System.out.println("isCancelled " + isCancelled);
           stream.transportState().transportReportStatus(status, isCancelled,
               trailers != null ? trailers : new Metadata());
         }

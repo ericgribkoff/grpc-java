@@ -24,6 +24,8 @@ import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
 import java.io.InputStream;
+import java.util.LinkedList;
+import java.util.Queue;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
@@ -146,9 +148,28 @@ public abstract class AbstractStream implements Stream {
      */
     protected abstract StreamListener listener();
 
+    private final boolean deframeInTransportThread = false;
+
+    private final Queue<InputStream> messageReadQueue = new LinkedList<InputStream>();
+
+    public boolean client;
+
     @Override
-    public void messageRead(InputStream is) {
-      listener().messagesAvailable(new SingleMessageProducer(is));
+    public void messageRead(InputStream message) {
+      if (deframeInTransportThread) {
+        listener().messagesAvailable(new SingleMessageProducer(message));
+      } else {
+        messageReadQueue.add(message);
+      }
+    }
+
+    private void messagesAvailable(InitializingMessageProducer producer) {
+      if (deframeInTransportThread) {
+        producer.initialize();
+      }
+      // TODO(ericgribkoff) io.grpc.netty.NettyServerHandlerTest.streamErrorShouldNotCloseChannel()
+      // raises the question - should we catch exceptions here if deframing in application thread?
+      listener().messagesAvailable(producer);
     }
 
     /**
@@ -159,49 +180,92 @@ public abstract class AbstractStream implements Stream {
     protected abstract void deframeFailed(Throwable cause);
 
     /**
-     * Closes this deframer and frees any resources. After this method is called, additional calls
-     * will have no effect.
+     * TODO(ericgribkoff) Update. Closes this deframer and frees any resources. After this method is
+     * called, additional calls will have no effect.
      */
     protected final void closeDeframer(boolean stopDelivery) {
+      System.out.println("closeDeframer " + client);
       if (stopDelivery) {
         deframer.stopDelivery();
-        deframer.close();
+        // Schedule a call to close in case no current operations pick up the stopDelivery flag.
+        messagesAvailable(
+            new InitializingMessageProducer(
+                new Runnable() {
+                  @Override
+                  public void run() {
+                    try {
+                      deframer.close();
+                    } catch (Throwable t) {
+                      // TODO(ericgribkoff) Catch on trying to close?
+                      System.out.println("Error closing deframer");
+                    }
+                  }
+                }));
       } else {
-        deframer.closeWhenComplete();
+        messagesAvailable(
+            new InitializingMessageProducer(
+                new Runnable() {
+                  @Override
+                  public void run() {
+                    try {
+                      deframer.closeWhenComplete();
+                    } catch (Throwable t) {
+                      // TODO(ericgribkoff) Catch on trying to close?
+                      System.out.println("Error closing deframer");
+                    }
+                  }
+                }));
       }
     }
 
     /**
-     * Called to parse a received frame and attempt delivery of any completed
-     * messages. Must be called from the transport thread.
+     * Called to parse a received frame and attempt delivery of any completed messages. Must be
+     * called from the transport thread.
      */
-    protected final void deframe(ReadableBuffer frame) {
-      if (deframer.isClosed()) {
-        frame.close();
-        return;
-      }
-      try {
-        deframer.deframe(frame);
-      } catch (Throwable t) {
-        deframeFailed(t);
-        deframer.close(); // unrecoverable state
-      }
+    protected final void deframe(final ReadableBuffer frame) {
+      System.out.println("deframe " + client);
+      messagesAvailable(
+          new InitializingMessageProducer(
+              new Runnable() {
+                @Override
+                public void run() {
+                  if (deframer.isClosed()) {
+                    frame.close();
+                    return;
+                  }
+                  try {
+                    deframer.deframe(frame);
+                  } catch (Throwable t) {
+                    System.out.println("deframe failed");
+                    deframeFailed(t);
+                    deframer.close(); // unrecoverable state
+                  }
+                }
+              }));
     }
 
     /**
-     * Called to request the given number of messages from the deframer. Must be called
-     * from the transport thread.
+     * Called to request the given number of messages from the deframer. Must be called from the
+     * transport thread.
      */
-    public final void requestMessagesFromDeframer(int numMessages) {
-      if (deframer.isClosed()) {
-        return;
-      }
-      try {
-        deframer.request(numMessages);
-      } catch (Throwable t) {
-        deframeFailed(t);
-        deframer.close(); // unrecoverable state
-      }
+    public final void requestMessagesFromDeframer(final int numMessages) {
+      System.out.println("requestMessagesFromDeframer " + client);
+      messagesAvailable(
+          new InitializingMessageProducer(
+              new Runnable() {
+                @Override
+                public void run() {
+                  if (deframer.isClosed()) {
+                    return;
+                  }
+                  try {
+                    deframer.request(numMessages);
+                  } catch (Throwable t) {
+                    deframeFailed(t);
+                    deframer.close(); // unrecoverable state
+                  }
+                }
+              }));
     }
 
     public final StatsTraceContext getStatsTraceContext() {
@@ -307,6 +371,29 @@ public abstract class AbstractStream implements Stream {
         InputStream messageToReturn = message;
         message = null;
         return messageToReturn;
+      }
+    }
+
+    private class InitializingMessageProducer implements StreamListener.MessageProducer {
+      private final Runnable runnable;
+      private boolean initialized = false;
+
+      private InitializingMessageProducer(Runnable runnable) {
+        this.runnable = runnable;
+      }
+
+      private void initialize() {
+        if (!initialized) {
+          runnable.run();
+          initialized = true;
+        }
+      }
+
+      @Nullable
+      @Override
+      public InputStream next() {
+        initialize();
+        return messageReadQueue.poll();
       }
     }
   }

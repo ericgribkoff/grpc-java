@@ -513,6 +513,7 @@ public final class ClientCalls {
         StatusRuntimeException e = (StatusRuntimeException) last;
         throw e.getStatus().asRuntimeException(e.getTrailers());
       }
+      System.out.println("returning from hasNext() " + Thread.currentThread().getId());
       return last != this;
     }
 
@@ -551,6 +552,8 @@ public final class ClientCalls {
 
       @Override
       public void onClose(Status status, Metadata trailers) {
+        System.out.println("onClose called");
+        new Exception().printStackTrace(System.out);
         Preconditions.checkState(!done, "ClientCall already closed");
         if (status.isOk()) {
           buffer.add(BlockingResponseStream.this);

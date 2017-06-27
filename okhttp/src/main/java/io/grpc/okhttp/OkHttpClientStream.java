@@ -231,21 +231,31 @@ class OkHttpClientStream extends AbstractClientStream {
       cancel(status, trailers);
     }
 
-    @GuardedBy("lock")
     @Override
     protected void deframeFailed(Throwable cause) {
-      http2ProcessingFailed(Status.fromThrowable(cause), new Metadata());
+      synchronized (lock) {
+        System.out.println("handling deframe failed " + Thread.currentThread().getId());
+        http2ProcessingFailed(Status.fromThrowable(cause), new Metadata());
+      }
     }
 
-    @GuardedBy("lock")
     @Override
     public void bytesRead(int processedBytes) {
-      processedWindow -= processedBytes;
-      if (processedWindow <= WINDOW_UPDATE_THRESHOLD) {
-        int delta = Utils.DEFAULT_WINDOW_SIZE - processedWindow;
-        window += delta;
-        processedWindow += delta;
-        frameWriter.windowUpdate(id(), delta);
+      synchronized (lock) {
+        processedWindow -= processedBytes;
+        if (processedWindow <= WINDOW_UPDATE_THRESHOLD) {
+          int delta = Utils.DEFAULT_WINDOW_SIZE - processedWindow;
+          window += delta;
+          processedWindow += delta;
+          frameWriter.windowUpdate(id(), delta);
+        }
+      }
+    }
+
+    @Override
+    public void deframerClosed() {
+      synchronized (lock) {
+        runDeframerClosedTask();
       }
     }
 
@@ -294,14 +304,15 @@ class OkHttpClientStream extends AbstractClientStream {
       }
     }
 
-
     @GuardedBy("lock")
     private void cancel(Status reason, Metadata trailers) {
+      System.out.println("in cancel. cancelSent: " + cancelSent);
       if (cancelSent) {
         return;
       }
       cancelSent = true;
       if (pendingData != null) {
+        System.out.println("pendingData != null");
         // stream is pending.
         transport.removePendingStream(OkHttpClientStream.this);
         // release holding data, so they can be GCed or returned to pool earlier.
@@ -312,6 +323,7 @@ class OkHttpClientStream extends AbstractClientStream {
         pendingData = null;
         transportReportStatus(reason, true, trailers != null ? trailers : new Metadata());
       } else {
+        System.out.println("pendingData = null");
         // If pendingData is null, start must have already been called, which means synStream has
         // been called as well.
         transport.finishStream(id(), reason, ErrorCode.CANCEL, trailers);

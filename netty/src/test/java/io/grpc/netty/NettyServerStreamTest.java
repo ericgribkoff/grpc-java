@@ -167,6 +167,8 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     stream().transportState().complete();
 
     verify(serverListener).closed(Status.OK);
+    verify(serverListener, atLeastOnce())
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
     assertNull("no message expected", listenerMessageQueue.poll());
     verifyZeroInteractions(serverListener);
   }
@@ -195,6 +197,8 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     // Sending complete. Listener gets closed()
     stream().transportState().complete();
     verify(serverListener).closed(Status.OK);
+    verify(serverListener, atLeastOnce())
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
     assertNull("no message expected", listenerMessageQueue.poll());
     verifyZeroInteractions(serverListener);
   }
@@ -215,6 +219,8 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
 
     // Server closes. Status sent
     stream().close(Status.OK, trailers);
+    verify(serverListener, atLeastOnce())
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
     assertNull("no message expected", listenerMessageQueue.poll());
     verifyNoMoreInteractions(serverListener);
 
@@ -241,6 +247,8 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     verify(serverListener).closed(same(status));
     verify(channel, never()).writeAndFlush(any(SendResponseHeadersCommand.class));
     verify(channel, never()).writeAndFlush(any(SendGrpcFrameCommand.class));
+    verify(serverListener, atLeastOnce())
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
     assertNull("no message expected", listenerMessageQueue.poll());
     verifyNoMoreInteractions(serverListener);
   }
@@ -255,6 +263,8 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     // Abort from the transport layer
     stream().transportState().transportReportStatus(status);
     verify(serverListener).closed(same(status));
+    verify(serverListener, atLeastOnce())
+        .messagesAvailable(any(StreamListener.MessageProducer.class));
     assertNull("no message expected", listenerMessageQueue.poll());
     verifyNoMoreInteractions(serverListener);
   }
@@ -302,7 +312,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     when(writeQueue.enqueue(any(QueuedCommand.class), anyBoolean())).thenReturn(future);
     StatsTraceContext statsTraceCtx = StatsTraceContext.NOOP;
     NettyServerStream.TransportState state = new NettyServerStream.TransportState(
-        handler, http2Stream, DEFAULT_MAX_MESSAGE_SIZE, statsTraceCtx);
+        handler, channel.eventLoop(), http2Stream, DEFAULT_MAX_MESSAGE_SIZE, statsTraceCtx);
     NettyServerStream stream = new NettyServerStream(channel, state, Attributes.EMPTY,
         "test-authority", statsTraceCtx);
     stream.transportState().setListener(serverListener);

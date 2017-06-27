@@ -922,7 +922,7 @@ public abstract class AbstractInteropTest {
     StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
         .addResponseParameters(ResponseParameters.newBuilder().setSize(1))
         .build();
-    int size = blockingStub.streamingOutputCall(request).next().getSerializedSize();
+    int size = 5; //blockingStub.streamingOutputCall(request).next().getSerializedSize();
 
     TestServiceGrpc.TestServiceBlockingStub stub =
         blockingStub.withMaxInboundMessageSize(size - 1);
@@ -931,6 +931,7 @@ public abstract class AbstractInteropTest {
       stub.streamingOutputCall(request).next();
       fail();
     } catch (StatusRuntimeException ex) {
+      ex.printStackTrace(System.out);
       Status s = ex.getStatus();
       assertThat(s.getCode()).named(s.toString()).isEqualTo(Status.Code.RESOURCE_EXHAUSTED);
       assertThat(Throwables.getStackTraceAsString(ex)).contains("exceeds maximum");
