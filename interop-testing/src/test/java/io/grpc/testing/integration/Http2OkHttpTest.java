@@ -69,7 +69,7 @@ public class Http2OkHttpTest extends AbstractInteropTest {
       startStaticServer(NettyServerBuilder.forPort(0)
           .flowControlWindow(65 * 1024)
           .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
-          .sslContext(null /*contextBuilder.build()*/));
+          .sslContext(contextBuilder.build()));
     } catch (IOException ex) {
       throw new RuntimeException(ex);
     }
@@ -84,20 +84,19 @@ public class Http2OkHttpTest extends AbstractInteropTest {
   protected ManagedChannel createChannel() {
     OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("::1", getPort())
         .maxInboundMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
-        .usePlaintext(true);
-//        .connectionSpec(new ConnectionSpec.Builder(OkHttpChannelBuilder.DEFAULT_CONNECTION_SPEC)
-//            .cipherSuites(TestUtils.preferredTestCiphers().toArray(new String[0]))
-//            .tlsVersions(ConnectionSpec.MODERN_TLS.tlsVersions().toArray(new TlsVersion[0]))
-//            .build())
-//        .overrideAuthority(GrpcUtil.authorityFromHostAndPort(
-//            TestUtils.TEST_SERVER_HOST, getPort()));
+        .connectionSpec(new ConnectionSpec.Builder(OkHttpChannelBuilder.DEFAULT_CONNECTION_SPEC)
+            .cipherSuites(TestUtils.preferredTestCiphers().toArray(new String[0]))
+            .tlsVersions(ConnectionSpec.MODERN_TLS.tlsVersions().toArray(new TlsVersion[0]))
+            .build())
+        .overrideAuthority(GrpcUtil.authorityFromHostAndPort(
+            TestUtils.TEST_SERVER_HOST, getPort()));
     io.grpc.internal.TestingAccessor.setStatsContextFactory(builder, getClientStatsFactory());
-//    try {
-//      builder.sslSocketFactory(TestUtils.newSslSocketFactoryForCa(Platform.get().getProvider(),
-//              TestUtils.loadCert("ca.pem")));
-//    } catch (Exception e) {
-//      throw new RuntimeException(e);
-//    }
+    try {
+      builder.sslSocketFactory(TestUtils.newSslSocketFactoryForCa(Platform.get().getProvider(),
+              TestUtils.loadCert("ca.pem")));
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
     return builder.build();
   }
 

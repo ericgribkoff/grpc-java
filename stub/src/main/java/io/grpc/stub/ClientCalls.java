@@ -554,6 +554,7 @@ public final class ClientCalls {
       public void onClose(Status status, Metadata trailers) {
         System.out.println("onClose called");
         new Exception().printStackTrace(System.out);
+        System.out.println("status: " + status);
         Preconditions.checkState(!done, "ClientCall already closed");
         if (status.isOk()) {
           buffer.add(BlockingResponseStream.this);

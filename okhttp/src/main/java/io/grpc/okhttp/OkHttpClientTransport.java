@@ -34,7 +34,6 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
-import io.grpc.Status.Code;
 import io.grpc.StatusException;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
@@ -725,10 +724,12 @@ class OkHttpClientTransport implements ConnectionClientTransport {
           frameWriter.rstStream(streamId, ErrorCode.CANCEL);
         }
         if (status != null) {
-          boolean isCancelled = (status.getCode() == Code.CANCELLED
-              || status.getCode() == Code.DEADLINE_EXCEEDED);
-          System.out.println("isCancelled " + isCancelled);
-          stream.transportState().transportReportStatus(status, isCancelled,
+          //          boolean isCancelled = (status.getCode() == Code.CANCELLED
+          //              || status.getCode() == Code.DEADLINE_EXCEEDED);
+          //          System.out.println("isCancelled " + isCancelled);
+          // TODO(ericgribkoff) Verify this is correct behavior. maxInboundSize_tooBig fails
+          // to report the deframing failed exception with the old isCancelled logic.
+          stream.transportState().transportReportStatus(status, true,
               trailers != null ? trailers : new Metadata());
         }
         if (!startPendingStreams()) {

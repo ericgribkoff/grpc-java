@@ -148,7 +148,7 @@ public abstract class AbstractStream implements Stream {
      */
     protected abstract StreamListener listener();
 
-    private final boolean deframeInTransportThread = false;
+    private final boolean deframeInTransportThread = true;
 
     private final Queue<InputStream> messageReadQueue = new LinkedList<InputStream>();
 

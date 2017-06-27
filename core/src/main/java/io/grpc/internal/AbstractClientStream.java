@@ -269,6 +269,7 @@ public abstract class AbstractClientStream extends AbstractStream
      */
     public final void transportReportStatus(final Status status, boolean stopDelivery,
         final Metadata trailers) {
+      System.out.println("transportReportStatus with statusReported=" + statusReported);
       Preconditions.checkNotNull(status, "status");
       Preconditions.checkNotNull(trailers, "trailers");
       // If stopDelivery, we continue in case previous invocation is waiting for stall

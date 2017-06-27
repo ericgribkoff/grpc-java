@@ -255,6 +255,7 @@ class OkHttpClientStream extends AbstractClientStream {
     @Override
     public void deframerClosed() {
       synchronized (lock) {
+        onEndOfStream();
         runDeframerClosedTask();
       }
     }
@@ -266,7 +267,7 @@ class OkHttpClientStream extends AbstractClientStream {
     public void transportHeadersReceived(List<Header> headers, boolean endOfStream) {
       if (endOfStream) {
         transportTrailersReceived(Utils.convertTrailers(headers));
-        onEndOfStream();
+        //onEndOfStream();
       } else {
         transportHeadersReceived(Utils.convertHeaders(headers));
       }
@@ -288,9 +289,9 @@ class OkHttpClientStream extends AbstractClientStream {
         return;
       }
       super.transportDataReceived(new OkHttpReadableBuffer(frame), endOfStream);
-      if (endOfStream) {
-        onEndOfStream();
-      }
+      //      if (endOfStream) {
+      //        onEndOfStream();
+      //      }
     }
 
     @GuardedBy("lock")
