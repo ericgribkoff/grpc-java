@@ -4,7 +4,7 @@ cd grpc-java/docker/android-interop-testing
 docker build -t android_interop_test .
 
 export SERVICE_KEY=~/android-interopsServiceAccountKey.json
-docker run --interactive \
+docker run --interactive --rm \
   --volume=$SERVICE_KEY:/serviceAccountKey.json:ro \
   android_interop_test \
       /bin/bash -c "gcloud auth activate-service-account --key-file=/serviceAccountKey.json; \
