@@ -14,12 +14,12 @@ docker run --interactive --rm \
   --volume=$SERVICE_KEY:/serviceAccountKey.json:ro \
   $DOCKER_IMAGE \
       /bin/bash -c "gcloud auth activate-service-account --key-file=/serviceAccountKey.json; \
-      gcloud config set project grpc-testing; exit 0"
-#      gcloud firebase test android run \
-#        --type instrumentation \
-#        --app /grpc-java/android-interop-testing/app/build/outputs/apk/app-debug.apk \
-#        --test /grpc-java/android-interop-testing/app/build/outputs/apk/app-debug-androidTest.apk \
-#        --device model=Nexus6,version=21,locale=en,orientation=portrait"
+      gcloud config set project grpc-testing; \
+      gcloud firebase test android run \
+        --type instrumentation \
+        --app /grpc-java/android-interop-testing/app/build/outputs/apk/app-debug.apk \
+        --test /grpc-java/android-interop-testing/app/build/outputs/apk/app-debug-androidTest.apk \
+        --device model=Nexus6,version=21,locale=en,orientation=portrait"
 TEST_STATUS=$?
 docker rmi $DOCKER_IMAGE
 exit $TEST_STATUS
