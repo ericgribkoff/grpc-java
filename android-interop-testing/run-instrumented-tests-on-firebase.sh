@@ -14,7 +14,7 @@ docker run --interactive --rm \
   --volume=$SERVICE_KEY:/serviceAccountKey.json:ro \
   $DOCKER_IMAGE \
       /bin/bash -c "gcloud auth activate-service-account --key-file=/serviceAccountKey.json; \
-      gcloud config set project grpc-testing; exit 1"
+      gcloud config set project grpc-testing; exit 0"
 #      gcloud firebase test android run \
 #        --type instrumentation \
 #        --app /grpc-java/android-interop-testing/app/build/outputs/apk/app-debug.apk \
