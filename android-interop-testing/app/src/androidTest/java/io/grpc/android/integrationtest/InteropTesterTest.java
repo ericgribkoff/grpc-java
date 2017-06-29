@@ -47,6 +47,6 @@ public class InteropTesterTest {
             false)
         .execute();
     String result = resultFuture.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
-    assertEquals(result, InteropTester.SUCCESS_MESSAGE);
+    assertEquals(result + " failed", InteropTester.SUCCESS_MESSAGE);
   }
 }
