@@ -28,6 +28,9 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.TextView;
+import com.google.android.gms.common.GooglePlayServicesNotAvailableException;
+import com.google.android.gms.common.GooglePlayServicesRepairableException;
+import com.google.android.gms.common.GooglePlayServicesUtil;
 import com.google.android.gms.security.ProviderInstaller;
 import java.util.LinkedList;
 import java.util.List;
@@ -56,9 +59,29 @@ public class TesterActivity extends AppCompatActivity
     resultText = (TextView) findViewById(R.id.grpc_response_text);
     getCheckBox = (CheckBox) findViewById(R.id.get_checkbox);
 
-    ProviderInstaller.installIfNeededAsync(this, this);
-    // Disable buttons until the security provider installing finishes.
-    enableButtons(false);
+//    ProviderInstaller.installIfNeededAsync(this, this);
+    try {
+      ProviderInstaller.installIfNeeded(getApplicationContext());
+    } catch (GooglePlayServicesRepairableException e) {
+
+      // Indicates that Google Play services is out of date, disabled, etc.
+
+      // Prompt the user to install/update/enable Google Play services.
+      GooglePlayServicesUtil.showErrorNotification(
+          e.getConnectionStatusCode(), getApplicationContext());
+
+      return;
+
+    } catch (GooglePlayServicesNotAvailableException e) {
+      // Indicates a non-recoverable error; the ProviderInstaller is not able
+      // to install an up-to-date Provider.
+      Log.e("grpc", "Can't install");
+      return;
+    }
+
+//
+//    // Disable buttons until the security provider installing finishes.
+    enableButtons(true);
   }
 
   public void startEmptyUnary(View view) {
