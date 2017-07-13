@@ -137,7 +137,7 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
 
 
   public void shutdown() {
-    channel.shutdown();
+    //channel.shutdown();
   }
 
   public void runTest(String testCase) throws Exception {

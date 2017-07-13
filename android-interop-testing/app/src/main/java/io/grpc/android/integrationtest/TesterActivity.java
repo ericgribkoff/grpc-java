@@ -32,8 +32,10 @@ import com.google.android.gms.common.GooglePlayServicesNotAvailableException;
 import com.google.android.gms.common.GooglePlayServicesRepairableException;
 import com.google.android.gms.common.GooglePlayServicesUtil;
 import com.google.android.gms.security.ProviderInstaller;
+import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
+import io.grpc.ManagedChannel;
 
 public class TesterActivity extends AppCompatActivity
     implements ProviderInstaller.ProviderInstallListener {
@@ -42,6 +44,7 @@ public class TesterActivity extends AppCompatActivity
   private EditText portEdit;
   private TextView resultText;
   private CheckBox getCheckBox;
+  private ManagedChannel mChannel;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -118,10 +121,30 @@ public class TesterActivity extends AppCompatActivity
     String portStr = portEdit.getText().toString();
     int port = TextUtils.isEmpty(portStr) ? 8080 : Integer.valueOf(portStr);
 
+    try {
+      String loggingConfig =
+          "handlers=java.util.logging.ConsoleHandler\n"
+              + "io.grpc.level=FINE\n"
+              + "java.util.logging.ConsoleHandler.level=FINE\n"
+              + "java.util.logging.ConsoleHandler.formatter=java.util.logging.SimpleFormatter";
+      java.util.logging.LogManager.getLogManager()
+          .readConfiguration(
+              new java.io.ByteArrayInputStream(
+                  loggingConfig.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+
+    } catch (IOException e) {
+      Log.e(InteropTester.LOG_TAG, "Failed to enable logging");
+    }
+
+    if (mChannel == null) {
+      Log.e(InteropTester.LOG_TAG, "Creating channel");
+      mChannel = TesterOkHttpChannelBuilder.build("grpc-test.sandbox.googleapis.com", 443, null,
+          true, null/*getResources().openRawResource(R.raw.ca)*/, null);
+    }
+
     // TODO (madongfly) support server_host_override, useTls and useTestCa in the App UI.
     new InteropTester(testCase,
-        TesterOkHttpChannelBuilder.build("216.239.32.254", 443, "grpc-test.sandbox.googleapis.com", true,
-            null/*getResources().openRawResource(R.raw.ca)*/, null),
+        mChannel,
         new InteropTester.TestListener() {
           @Override public void onPreTest() {
             resultText.setText("Testing...");
