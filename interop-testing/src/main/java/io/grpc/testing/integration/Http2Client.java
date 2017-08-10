@@ -78,6 +78,8 @@ public final class Http2Client {
     }
   }
 
+  private final int timeoutSeconds = 5;
+
   private String serverHost = "localhost";
   private int serverPort = 8080;
   private String testCase = Http2TestCases.RST_AFTER_DATA.name();
@@ -138,8 +140,14 @@ public final class Http2Client {
 
   private void setUp() {
     channel = createChannel();
-    blockingStub = TestServiceGrpc.newBlockingStub(channel).withWaitForReady();
-    asyncStub = TestServiceGrpc.newStub(channel).withWaitForReady();
+    blockingStub =
+        TestServiceGrpc.newBlockingStub(channel)
+            .withWaitForReady()
+            .withDeadlineAfter(timeoutSeconds, TimeUnit.SECONDS);
+    asyncStub =
+        TestServiceGrpc.newStub(channel)
+            .withWaitForReady()
+            .withDeadlineAfter(timeoutSeconds, TimeUnit.SECONDS);
   }
 
   private void shutdown() {
@@ -199,8 +207,6 @@ public final class Http2Client {
   }
 
   private class Tester {
-    private final int timeoutSeconds = 5;
-
     private final int responseSize = 314159;
     private final int payloadSize = 271828;
     private final SimpleRequest simpleRequest = SimpleRequest.newBuilder()
@@ -227,32 +233,28 @@ public final class Http2Client {
       // Use async stub to verify data is received.
       RstStreamObserver responseObserver = new RstStreamObserver();
       asyncStub.unaryCall(simpleRequest, responseObserver);
-      if (!responseObserver.awaitCompletion(timeoutSeconds, TimeUnit.SECONDS)) {
-        throw new AssertionError("Operation timed out");
-      }
-      if (responseObserver.getResponses().size() != 1) {
-        throw new AssertionError("Expected one response");
-      }
+      responseObserver.awaitCompletion(timeoutSeconds + 1, TimeUnit.SECONDS);
       if (responseObserver.getError() == null) {
         throw new AssertionError("Expected call to fail");
       }
       assertRstStreamReceived(Status.fromThrowable(responseObserver.getError()));
+      if (responseObserver.getResponses().size() != 1) {
+        throw new AssertionError("Expected one response");
+      }
     }
 
     private void rstDuringData() throws Exception {
       // Use async stub to verify no data is received.
       RstStreamObserver responseObserver = new RstStreamObserver();
       asyncStub.unaryCall(simpleRequest, responseObserver);
-      if (!responseObserver.awaitCompletion(timeoutSeconds, TimeUnit.SECONDS)) {
-        throw new AssertionError("Operation timed out");
-      }
-      if (responseObserver.getResponses().size() != 0) {
-        throw new AssertionError("Expected zero responses");
-      }
+      responseObserver.awaitCompletion(timeoutSeconds + 1, TimeUnit.SECONDS);
       if (responseObserver.getError() == null) {
         throw new AssertionError("Expected call to fail");
       }
       assertRstStreamReceived(Status.fromThrowable(responseObserver.getError()));
+      if (responseObserver.getResponses().size() != 0) {
+        throw new AssertionError("Expected zero responses");
+      }
     }
 
     private void goAway() throws Exception {
@@ -277,7 +279,7 @@ public final class Http2Client {
         workerFutures.add(threadpool.submit(new MaxStreamsWorker(i, simpleRequest)));
       }
       ListenableFuture<?> f = Futures.allAsList(workerFutures);
-      f.get(timeoutSeconds, TimeUnit.SECONDS);
+      f.get(timeoutSeconds + 1, TimeUnit.SECONDS);
     }
 
     private class RstStreamObserver implements StreamObserver<SimpleResponse> {
@@ -328,7 +330,8 @@ public final class Http2Client {
         Thread.currentThread().setName("thread:" + threadNum);
         try {
           TestServiceGrpc.TestServiceBlockingStub blockingStub =
-              TestServiceGrpc.newBlockingStub(channel);
+              TestServiceGrpc.newBlockingStub(channel)
+                  .withDeadlineAfter(timeoutSeconds, TimeUnit.SECONDS);
           assertResponseEquals(blockingStub.unaryCall(simpleRequest), goldenResponse);
         } catch (Exception e) {
           throw new RuntimeException(e);
