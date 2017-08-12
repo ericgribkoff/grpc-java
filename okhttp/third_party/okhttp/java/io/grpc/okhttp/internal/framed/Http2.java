@@ -202,6 +202,11 @@ public final class Http2 implements Variant {
 
       List<Header> headerBlock = readHeaderBlock(length, padding, flags, streamId);
 
+      logger.info("Incoming headers:");
+      for (Header h : headerBlock) {
+        logger.info(h.toString());
+      }
+
       handler.headers(false, endStream, streamId, -1, headerBlock, HeadersMode.HTTP_20_HEADERS);
     }
 
@@ -254,6 +259,7 @@ public final class Http2 implements Variant {
       if (length != 4) throw ioException("TYPE_RST_STREAM length: %d != 4", length);
       if (streamId == 0) throw ioException("TYPE_RST_STREAM streamId == 0");
       int errorCodeInt = source.readInt();
+      logger.info("Reset stream received with error code " + errorCodeInt);
       io.grpc.okhttp.internal.framed.ErrorCode errorCode = io.grpc.okhttp.internal.framed.ErrorCode.fromHttp2(errorCodeInt);
       if (errorCode == null) {
         throw ioException("TYPE_RST_STREAM unexpected error code: %d", errorCodeInt);
@@ -341,6 +347,8 @@ public final class Http2 implements Variant {
       if (streamId != 0) throw ioException("TYPE_GOAWAY streamId != 0");
       int lastStreamId = source.readInt();
       int errorCodeInt = source.readInt();
+      logger.info("Received GOAWAY with last stream id " + lastStreamId + " and error code "
+          + errorCodeInt);
       int opaqueDataLength = length - 8;
       io.grpc.okhttp.internal.framed.ErrorCode errorCode = io.grpc.okhttp.internal.framed.ErrorCode.fromHttp2(errorCodeInt);
       if (errorCode == null) {
@@ -446,6 +454,14 @@ public final class Http2 implements Variant {
 
     void headers(boolean outFinished, int streamId, List<Header> headerBlock) throws IOException {
       if (closed) throw new IOException("closed");
+
+      logger.info("Outgoing headers:");
+      for (Header h : headerBlock) {
+        logger.info(h.toString());
+      }
+      logger.info("outFinished: " + outFinished);
+      new Exception().printStackTrace(System.out);
+
       hpackWriter.writeHeaders(headerBlock);
 
       long byteCount = hpackBuffer.size();
@@ -473,6 +489,8 @@ public final class Http2 implements Variant {
       if (closed) throw new IOException("closed");
       if (errorCode.httpCode == -1) throw new IllegalArgumentException();
 
+      logger.info("Sending RST_STREAM for stream id " + streamId + " with error code "
+          + errorCode.httpCode);
       int length = 4;
       byte type = TYPE_RST_STREAM;
       byte flags = FLAG_NONE;
@@ -536,6 +554,8 @@ public final class Http2 implements Variant {
         byte[] debugData) throws IOException {
       if (closed) throw new IOException("closed");
       if (errorCode.httpCode == -1) throw illegalArgument("errorCode.httpCode == -1");
+      logger.info("Sending GO_AWAY for stream id " + lastGoodStreamId + " with error code "
+          + errorCode.httpCode);
       int length = 8 + debugData.length;
       byte type = TYPE_GOAWAY;
       byte flags = FLAG_NONE;

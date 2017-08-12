@@ -64,6 +64,11 @@ abstract class PartialForwardingServerCall<ReqT, RespT> extends ServerCall<ReqT,
   }
 
   @Override
+  public void setStreamCompression(String compressor) {
+    delegate().setStreamCompression(compressor);
+  }
+
+  @Override
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1779")
   public Attributes getAttributes() {
     return delegate().getAttributes();

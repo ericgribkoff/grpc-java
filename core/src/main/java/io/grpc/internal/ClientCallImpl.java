@@ -22,6 +22,8 @@ import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static io.grpc.Contexts.statusFromCancelled;
 import static io.grpc.Status.DEADLINE_EXCEEDED;
+import static io.grpc.internal.GrpcUtil.CONTENT_ACCEPT_ENCODING_KEY;
+import static io.grpc.internal.GrpcUtil.CONTENT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
@@ -134,12 +136,15 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     if (compressor != Codec.Identity.NONE) {
       headers.put(MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
     }
+    headers.discardAll(CONTENT_ENCODING_KEY);
 
     headers.discardAll(MESSAGE_ACCEPT_ENCODING_KEY);
+    headers.discardAll(CONTENT_ACCEPT_ENCODING_KEY);
     byte[] advertisedEncodings =
         InternalDecompressorRegistry.getRawAdvertisedMessageEncodings(decompressorRegistry);
     if (advertisedEncodings.length != 0) {
       headers.put(MESSAGE_ACCEPT_ENCODING_KEY, advertisedEncodings);
+      headers.put(CONTENT_ACCEPT_ENCODING_KEY, advertisedEncodings);
     }
   }
 

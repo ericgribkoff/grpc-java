@@ -61,6 +61,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
   private boolean sendHeadersCalled;
   private boolean closeCalled;
   private Compressor compressor;
+  private Compressor streamCompressor;
   private boolean messageSent;
 
   ServerCallImpl(ServerStream stream, MethodDescriptor<ReqT, RespT> method,
@@ -155,6 +156,15 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
 
     compressor = compressorRegistry.lookupCompressor(compressorName);
     checkArgument(compressor != null, "Unable to find compressor by name %s", compressorName);
+  }
+
+  @Override
+  public void setStreamCompression(String compressorName) {
+    // Added here to give a better error message.
+    checkState(!sendHeadersCalled, "sendHeaders has been called");
+
+    streamCompressor = compressorRegistry.lookupCompressor(compressorName);
+    checkArgument(streamCompressor != null, "Unable to find compressor by name %s", compressorName);
   }
 
   @Override

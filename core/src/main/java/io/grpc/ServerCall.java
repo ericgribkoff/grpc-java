@@ -188,6 +188,11 @@ public abstract class ServerCall<ReqT, RespT> {
     // noop
   }
 
+  /** Set full-stream compression for this call. */
+  public void setStreamCompression(String compressor) {
+    // noop
+  }
+
   /**
    * Returns properties of a single call.
    *

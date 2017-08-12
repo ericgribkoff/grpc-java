@@ -16,6 +16,9 @@
 
 package io.grpc.testing.integration;
 
+import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_SPLITTER;
+import static io.grpc.internal.GrpcUtil.CONTENT_ACCEPT_ENCODING_KEY;
+
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Queues;
 import com.google.protobuf.ByteString;
@@ -26,6 +29,7 @@ import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.Status;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.LogExceptionRunnable;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
@@ -500,6 +504,12 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
           ServerCall<ReqT, RespT> call,
           final Metadata requestHeaders,
           ServerCallHandler<ReqT, RespT> next) {
+        byte[] acceptEncoding = requestHeaders.get(CONTENT_ACCEPT_ENCODING_KEY);
+        List<String> acceptedEncodingsList = ACCEPT_ENCODING_SPLITTER.splitToList(
+            new String(acceptEncoding, GrpcUtil.US_ASCII));
+        if (acceptedEncodingsList.contains("gzip")) {
+          call.setStreamCompression("gzip");
+        }
         return next.startCall(new SimpleForwardingServerCall<ReqT, RespT>(call) {
               @Override
               public void sendHeaders(Metadata responseHeaders) {
