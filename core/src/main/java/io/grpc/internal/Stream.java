@@ -77,4 +77,10 @@ public interface Stream {
    * but may not have any effect if compression is not enabled on the call.
    */
   void setMessageCompression(boolean enable);
+
+  /**
+   * Enables full-stream compression, if an encoding type has been negotiation. If true, the per-
+   * message compression setting is ignored. Defaults to false.
+   */
+  void setStreamCompression(boolean enable);
 }

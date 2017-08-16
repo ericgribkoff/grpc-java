@@ -20,6 +20,8 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_SPLITTER;
+import static io.grpc.internal.GrpcUtil.CONTENT_ACCEPT_ENCODING_KEY;
+import static io.grpc.internal.GrpcUtil.CONTENT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 
@@ -52,6 +54,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
   private final ServerStream stream;
   private final MethodDescriptor<ReqT, RespT> method;
   private final Context.CancellableContext context;
+  private final byte[] contentAcceptEncoding;
   private final byte[] messageAcceptEncoding;
   private final DecompressorRegistry decompressorRegistry;
   private final CompressorRegistry compressorRegistry;
@@ -61,7 +64,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
   private boolean sendHeadersCalled;
   private boolean closeCalled;
   private Compressor compressor;
-  private Compressor streamCompressor;
+  private boolean streamCompression = false;
   private boolean messageSent;
 
   ServerCallImpl(ServerStream stream, MethodDescriptor<ReqT, RespT> method,
@@ -70,6 +73,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
     this.stream = stream;
     this.method = method;
     this.context = context;
+    this.contentAcceptEncoding = inboundHeaders.get(CONTENT_ACCEPT_ENCODING_KEY);
     this.messageAcceptEncoding = inboundHeaders.get(MESSAGE_ACCEPT_ENCODING_KEY);
     this.decompressorRegistry = decompressorRegistry;
     this.compressorRegistry = compressorRegistry;
@@ -85,27 +89,56 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
     checkState(!sendHeadersCalled, "sendHeaders has already been called");
     checkState(!closeCalled, "call is closed");
 
-    headers.discardAll(MESSAGE_ENCODING_KEY);
-    if (compressor == null) {
+    System.out.println("streamCompression = " + streamCompression);
+    headers.discardAll(CONTENT_ENCODING_KEY);
+    if (!streamCompression || compressor == null) {
       compressor = Codec.Identity.NONE;
     } else {
-      if (messageAcceptEncoding != null) {
-        // TODO(carl-mastrangelo): remove the string allocation.
+      if (contentAcceptEncoding != null) {
         List<String> acceptedEncodingsList = ACCEPT_ENCODING_SPLITTER.splitToList(
-            new String(messageAcceptEncoding, GrpcUtil.US_ASCII));
+            new String(contentAcceptEncoding, GrpcUtil.US_ASCII));
         if (!acceptedEncodingsList.contains(compressor.getMessageEncoding())) {
           // resort to using no compression.
           compressor = Codec.Identity.NONE;
+        } else {
+          streamCompression = true;
         }
       } else {
         compressor = Codec.Identity.NONE;
       }
     }
 
-    // Always put compressor, even if it's identity.
-    headers.put(MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
+    headers.discardAll(MESSAGE_ENCODING_KEY);
+    if (!streamCompression) {
+      // full-stream compression supersedes per-message compression
+      if (compressor == null) {
+        compressor = Codec.Identity.NONE;
+      } else {
+        if (messageAcceptEncoding != null) {
+          // TODO(carl-mastrangelo): remove the string allocation.
+          List<String> acceptedEncodingsList = ACCEPT_ENCODING_SPLITTER.splitToList(
+              new String(messageAcceptEncoding, GrpcUtil.US_ASCII));
+          if (!acceptedEncodingsList.contains(compressor.getMessageEncoding())) {
+            // resort to using no compression.
+            compressor = Codec.Identity.NONE;
+          }
+        } else {
+          compressor = Codec.Identity.NONE;
+        }
+      }
+    }
+
+    // Always put compressors, even if they're identity.
+    if (streamCompression) {
+      headers.put(CONTENT_ENCODING_KEY, compressor.getMessageEncoding());
+      headers.put(MESSAGE_ENCODING_KEY, Codec.Identity.NONE.getMessageEncoding());
+    } else {
+      headers.put(CONTENT_ENCODING_KEY, Codec.Identity.NONE.getMessageEncoding());
+      headers.put(MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
+    }
 
     stream.setCompressor(compressor);
+    stream.setStreamCompression(streamCompression);
 
     headers.discardAll(MESSAGE_ACCEPT_ENCODING_KEY);
     byte[] advertisedEncodings =
@@ -151,6 +184,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
 
   @Override
   public void setCompression(String compressorName) {
+    System.out.println("setCompression called");
     // Added here to give a better error message.
     checkState(!sendHeadersCalled, "sendHeaders has been called");
 
@@ -159,13 +193,21 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
   }
 
   @Override
-  public void setStreamCompression(String compressorName) {
-    // Added here to give a better error message.
-    checkState(!sendHeadersCalled, "sendHeaders has been called");
-
-    streamCompressor = compressorRegistry.lookupCompressor(compressorName);
-    checkArgument(streamCompressor != null, "Unable to find compressor by name %s", compressorName);
+  public void setStreamCompression(boolean enable) {
+    System.out.println("setting stream compression = " + enable);
+    this.streamCompression = enable;
+    stream.setStreamCompression(enable);
   }
+
+  //  @Override
+  //  public void setStreamCompression(String compressorName) {
+  //    // Added here to give a better error message.
+  //    checkState(!sendHeadersCalled, "sendHeaders has been called");
+  //
+  //    streamCompressor = compressorRegistry.lookupCompressor(compressorName);
+  //    checkArgument(streamCompressor != null,
+  //        "Unable to find compressor by name %s", compressorName);
+  //  }
 
   @Override
   public boolean isReady() {

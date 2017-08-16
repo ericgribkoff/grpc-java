@@ -70,6 +70,7 @@ public class MessageFramer implements Framer {
   private WritableBuffer buffer;
   private Compressor compressor = Codec.Identity.NONE;
   private boolean messageCompression = true;
+  private boolean streamCompression = false;
   private final OutputStreamAdapter outputStreamAdapter = new OutputStreamAdapter();
   private final byte[] headerScratch = new byte[HEADER_LENGTH];
   private final WritableBufferAllocator bufferAllocator;

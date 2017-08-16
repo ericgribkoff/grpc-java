@@ -504,13 +504,15 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
           ServerCall<ReqT, RespT> call,
           final Metadata requestHeaders,
           ServerCallHandler<ReqT, RespT> next) {
-        byte[] acceptEncoding = requestHeaders.get(CONTENT_ACCEPT_ENCODING_KEY);
-        List<String> acceptedEncodingsList = ACCEPT_ENCODING_SPLITTER.splitToList(
-            new String(acceptEncoding, GrpcUtil.US_ASCII));
-        if (acceptedEncodingsList.contains("gzip")) {
-          System.out.println("gzip stream compression accepted");
-          call.setStreamCompression("gzip");
-        }
+        //        byte[] acceptEncoding = requestHeaders.get(CONTENT_ACCEPT_ENCODING_KEY);
+        //        List<String> acceptedEncodingsList = ACCEPT_ENCODING_SPLITTER.splitToList(
+        //            new String(acceptEncoding, GrpcUtil.US_ASCII));
+        //        if (acceptedEncodingsList.contains("gzip")) {
+        //          System.out.println("gzip stream compression accepted");
+        System.out.println("Calling setStreamCompression(true)");
+        call.setStreamCompression(true);
+        call.setCompression("gzip");
+        //        }
         return next.startCall(new SimpleForwardingServerCall<ReqT, RespT>(call) {
               @Override
               public void sendHeaders(Metadata responseHeaders) {

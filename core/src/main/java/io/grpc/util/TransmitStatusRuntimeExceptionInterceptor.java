@@ -224,15 +224,15 @@ public final class TransmitStatusRuntimeExceptionInterceptor implements ServerIn
       });
     }
 
-    @Override
-    public void setStreamCompression(final String compressor) {
-      serializingExecutor.execute(new Runnable() {
-        @Override
-        public void run() {
-          SerializingServerCall.super.setStreamCompression(compressor);
-        }
-      });
-    }
+    //    @Override
+    //    public void setStreamCompression(final String compressor) {
+    //      serializingExecutor.execute(new Runnable() {
+    //        @Override
+    //        public void run() {
+    //          SerializingServerCall.super.setStreamCompression(compressor);
+    //        }
+    //      });
+    //    }
 
     @Override
     public Attributes getAttributes() {

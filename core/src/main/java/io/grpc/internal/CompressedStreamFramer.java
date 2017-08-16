@@ -20,6 +20,7 @@ import io.grpc.Compressor;
 import java.io.InputStream;
 import javax.annotation.Nullable;
 
+// TODO(ericgribkoff) Remove - we only need to wrap MessageFramer.Sink
 /** A compressed stream framer. */
 public class CompressedStreamFramer implements Framer, MessageFramer.Sink {
   private final MessageFramer.Sink savedSink;

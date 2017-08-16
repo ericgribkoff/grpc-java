@@ -239,6 +239,15 @@ public abstract class ClientCall<ReqT, RespT> {
   }
 
   /**
+   * Enables full-stream compression, if an encoding type has been negotiated.  If no message
+   * encoding has been negotiated, this is a no-op. By default full-stream compression is disabled.
+   */
+  @ExperimentalApi
+  public void setStreamCompression(boolean enabled) {
+    // noop
+  }
+
+  /**
    * Returns additional properties of the call. May only be called after {@link Listener#onHeaders}
    * or {@link Listener#onClose}. If called prematurely, the implementation may throw {@code
    * IllegalStateException} or return abitrary {@code Attributes}.

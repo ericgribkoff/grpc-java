@@ -175,6 +175,15 @@ public abstract class ServerCall<ReqT, RespT> {
   }
 
   /**
+   * Enables full-stream compression, if an encoding type has been negotiated.  If no message
+   * encoding has been negotiated, this is a no-op. By default full-stream compression is disabled.
+   */
+  @ExperimentalApi
+  public void setStreamCompression(boolean enabled) {
+    // noop
+  }
+
+  /**
    * Sets the compression algorithm for this call.  If the server does not support the compression
    * algorithm, the call will fail.  This method may only be called before {@link #sendHeaders}.
    * The compressor to use will be looked up in the {@link CompressorRegistry}.  Default gRPC
@@ -188,10 +197,10 @@ public abstract class ServerCall<ReqT, RespT> {
     // noop
   }
 
-  /** Set full-stream compression for this call. */
-  public void setStreamCompression(String compressor) {
-    // noop
-  }
+  //  /** Set full-stream compression for this call. */
+  //  public void setStreamCompression(String compressor) {
+  //    // noop
+  //  }
 
   /**
    * Returns properties of a single call.

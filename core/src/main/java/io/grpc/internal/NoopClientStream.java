@@ -65,6 +65,11 @@ public class NoopClientStream implements ClientStream {
   }
 
   @Override
+  public void setStreamCompression(boolean enable) {
+    // noop
+  }
+
+  @Override
   public void setCompressor(Compressor compressor) {}
 
   @Override

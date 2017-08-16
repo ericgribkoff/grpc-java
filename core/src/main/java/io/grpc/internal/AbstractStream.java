@@ -45,6 +45,14 @@ public abstract class AbstractStream implements Stream {
     framer().setMessageCompression(enable);
   }
 
+
+  protected boolean streamCompression;
+
+  @Override
+  public final void setStreamCompression(boolean enable) {
+    this.streamCompression = enable;
+  }
+
   @Override
   public final void writeMessage(InputStream message) {
     checkNotNull(message, "message");

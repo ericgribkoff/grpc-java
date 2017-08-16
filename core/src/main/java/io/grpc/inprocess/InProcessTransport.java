@@ -409,6 +409,11 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       }
 
       @Override
+      public void setStreamCompression(boolean enable) {
+        // noop
+      }
+
+      @Override
       public void setCompressor(Compressor compressor) {}
 
       @Override
@@ -560,6 +565,9 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
 
       @Override
       public void setMessageCompression(boolean enable) {}
+
+      @Override
+      public void setStreamCompression(boolean enable) {}
 
       @Override
       public void setAuthority(String string) {

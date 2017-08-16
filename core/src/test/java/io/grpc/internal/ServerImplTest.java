@@ -453,6 +453,7 @@ public class ServerImplTest {
     call.sendHeaders(responseHeaders);
     verify(stream).writeHeaders(responseHeaders);
     verify(stream).setCompressor(isA(Compressor.class));
+    verify(stream).setStreamCompression(isA(Boolean.class));
 
     call.sendMessage(314);
     ArgumentCaptor<InputStream> inputCaptor = ArgumentCaptor.forClass(InputStream.class);

@@ -411,6 +411,13 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
   }
 
   @Override
+  public void setStreamCompression(boolean enabled) {
+    checkState(stream != null, "Not started");
+    stream.setStreamCompression(enabled);
+  }
+
+
+  @Override
   public boolean isReady() {
     return stream.isReady();
   }

@@ -74,7 +74,22 @@ public abstract class AbstractServerStream extends AbstractStream
     void cancel(Status status);
   }
 
+  private class CompressingSink implements MessageFramer.Sink {
+    private final MessageFramer.Sink savedSink;
+
+    private CompressingSink(MessageFramer.Sink sink) {
+      this.savedSink = sink;
+    }
+
+    @Override
+    public void deliverFrame(@Nullable WritableBuffer frame, boolean endOfStream, boolean flush) {
+      System.out.println("I can buffer this by just wrapping sink! ? " + streamCompression);
+      savedSink.deliverFrame(frame, endOfStream, flush);
+    }
+  }
+
   private final Framer framer;
+  private final MessageFramer.Sink framerSink;
   private final StatsTraceContext statsTraceCtx;
   private boolean outboundClosed;
   private boolean headersSent;
@@ -82,11 +97,13 @@ public abstract class AbstractServerStream extends AbstractStream
   protected AbstractServerStream(WritableBufferAllocator bufferAllocator,
       StatsTraceContext statsTraceCtx, boolean fullStreamCompression) {
     this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
-    if (fullStreamCompression) {
-      framer = new CompressedStreamFramer(this, bufferAllocator, statsTraceCtx);
-    } else {
-      framer = new MessageFramer(this, bufferAllocator, statsTraceCtx);
-    }
+
+    //    if (fullStreamCompression) {
+    //      framer = new CompressedStreamFramer(this, bufferAllocator, statsTraceCtx);
+    //    } else {
+    this.framerSink = new CompressingSink(this);
+    framer = new MessageFramer(framerSink, bufferAllocator, statsTraceCtx);
+    //    }
   }
 
   @Override

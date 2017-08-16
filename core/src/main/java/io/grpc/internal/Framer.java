@@ -40,7 +40,7 @@ public interface Framer {
   /** Closes, without flush. */
   void dispose();
 
-  /** Enable or disable compression. */
+  /** Enable or disable per-message compression. */
   Framer setMessageCompression(boolean enable);
 
   /** Set the compressor used for compression. */
