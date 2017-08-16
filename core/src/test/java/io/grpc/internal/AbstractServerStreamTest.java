@@ -335,7 +335,7 @@ public class AbstractServerStreamTest {
 
     protected AbstractServerStreamBase(WritableBufferAllocator bufferAllocator, Sink sink,
         AbstractServerStream.TransportState state) {
-      super(bufferAllocator, StatsTraceContext.NOOP);
+      super(bufferAllocator, StatsTraceContext.NOOP, false);
       this.sink = sink;
       this.state = state;
     }

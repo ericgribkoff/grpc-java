@@ -508,6 +508,7 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
         List<String> acceptedEncodingsList = ACCEPT_ENCODING_SPLITTER.splitToList(
             new String(acceptEncoding, GrpcUtil.US_ASCII));
         if (acceptedEncodingsList.contains("gzip")) {
+          System.out.println("gzip stream compression accepted");
           call.setStreamCompression("gzip");
         }
         return next.startCall(new SimpleForwardingServerCall<ReqT, RespT>(call) {

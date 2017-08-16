@@ -74,15 +74,19 @@ public abstract class AbstractServerStream extends AbstractStream
     void cancel(Status status);
   }
 
-  private final MessageFramer framer;
+  private final Framer framer;
   private final StatsTraceContext statsTraceCtx;
   private boolean outboundClosed;
   private boolean headersSent;
 
   protected AbstractServerStream(WritableBufferAllocator bufferAllocator,
-      StatsTraceContext statsTraceCtx) {
+      StatsTraceContext statsTraceCtx, boolean fullStreamCompression) {
     this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
-    framer = new MessageFramer(this, bufferAllocator, statsTraceCtx);
+    if (fullStreamCompression) {
+      framer = new CompressedStreamFramer(this, bufferAllocator, statsTraceCtx);
+    } else {
+      framer = new MessageFramer(this, bufferAllocator, statsTraceCtx);
+    }
   }
 
   @Override
@@ -95,7 +99,7 @@ public abstract class AbstractServerStream extends AbstractStream
   protected abstract Sink abstractServerStreamSink();
 
   @Override
-  protected final MessageFramer framer() {
+  protected final Framer framer() {
     return framer;
   }
 

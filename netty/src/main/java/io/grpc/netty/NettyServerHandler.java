@@ -18,6 +18,8 @@ package io.grpc.netty;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_SPLITTER;
+import static io.grpc.internal.GrpcUtil.CONTENT_ACCEPT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.SERVER_KEEPALIVE_TIME_NANOS_DISABLED;
 import static io.grpc.netty.NettyServerBuilder.MAX_CONNECTION_AGE_NANOS_DISABLED;
 import static io.grpc.netty.NettyServerBuilder.MAX_CONNECTION_IDLE_NANOS_DISABLED;
@@ -356,8 +358,17 @@ class NettyServerHandler extends AbstractNettyHandler {
       NettyServerStream.TransportState state = new NettyServerStream.TransportState(
           this, ctx.channel().eventLoop(), http2Stream, maxMessageSize, statsTraceCtx);
       String authority = getOrUpdateAuthority((AsciiString)headers.authority());
+
+      boolean fullStreamCompression = false;
+      byte[] acceptEncoding = metadata.get(CONTENT_ACCEPT_ENCODING_KEY);
+      if (acceptEncoding != null) {
+        List<String> acceptedEncodingsList = ACCEPT_ENCODING_SPLITTER.splitToList(
+            new String(acceptEncoding, GrpcUtil.US_ASCII));
+        fullStreamCompression = acceptedEncodingsList.contains("gzip");
+      }
+
       NettyServerStream stream = new NettyServerStream(ctx.channel(), state, attributes,
-          authority, statsTraceCtx);
+          authority, statsTraceCtx, fullStreamCompression);
       transportListener.streamCreated(stream, method, metadata);
       state.onStreamAllocated();
       http2Stream.setProperty(streamKey, state);

@@ -49,8 +49,8 @@ class NettyServerStream extends AbstractServerStream {
   private final String authority;
 
   public NettyServerStream(Channel channel, TransportState state, Attributes transportAttrs,
-      String authority, StatsTraceContext statsTraceCtx) {
-    super(new NettyWritableBufferAllocator(channel.alloc()), statsTraceCtx);
+      String authority, StatsTraceContext statsTraceCtx, boolean fullStreamCompression) {
+    super(new NettyWritableBufferAllocator(channel.alloc()), statsTraceCtx, fullStreamCompression);
     this.state = checkNotNull(state, "transportState");
     this.channel = checkNotNull(channel, "channel");
     this.writeQueue = state.handler.getWriteQueue();
