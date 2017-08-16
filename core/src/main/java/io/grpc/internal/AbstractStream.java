@@ -47,6 +47,7 @@ public abstract class AbstractStream implements Stream {
 
 
   protected boolean streamCompression;
+  protected Compressor compressor;
 
   @Override
   public final void setStreamCompression(boolean enable) {
@@ -78,6 +79,7 @@ public abstract class AbstractStream implements Stream {
 
   @Override
   public final void setCompressor(Compressor compressor) {
+    this.compressor = compressor;
     framer().setCompressor(checkNotNull(compressor, "compressor"));
   }
 

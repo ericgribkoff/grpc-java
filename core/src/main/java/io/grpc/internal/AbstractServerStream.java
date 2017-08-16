@@ -22,6 +22,10 @@ import io.grpc.Decompressor;
 import io.grpc.InternalStatus;
 import io.grpc.Metadata;
 import io.grpc.Status;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
 import javax.annotation.Nullable;
 
 /**
@@ -76,15 +80,82 @@ public abstract class AbstractServerStream extends AbstractStream
 
   private class CompressingSink implements MessageFramer.Sink {
     private final MessageFramer.Sink savedSink;
+    private final WritableBufferAllocator bufferAllocator;
+    private final List<WritableBuffer> buffers = new ArrayList<WritableBuffer>();
 
-    private CompressingSink(MessageFramer.Sink sink) {
+    private CompressingSink(MessageFramer.Sink sink, WritableBufferAllocator bufferAllocator) {
       this.savedSink = sink;
+      this.bufferAllocator = bufferAllocator;
     }
 
     @Override
     public void deliverFrame(@Nullable WritableBuffer frame, boolean endOfStream, boolean flush) {
       System.out.println("I can buffer this by just wrapping sink! ? " + streamCompression);
-      savedSink.deliverFrame(frame, endOfStream, flush);
+      if (streamCompression) {
+        if (endOfStream) {
+          compressor.compress(buffers);
+          savedSink.deliverFrame(compressedFrames, endOfStream, flush);
+        } else {
+          buffers.add(frame);
+        }
+      } else {
+        savedSink.deliverFrame(frame, endOfStream, flush);
+      }
+    }
+
+    /**
+     * Produce a collection of {@link WritableBuffer} instances from the data written to an
+     * {@link OutputStream}.
+     */
+    private final class BufferChainOutputStream extends OutputStream {
+      private final List<WritableBuffer> bufferList = new ArrayList<WritableBuffer>();
+      private WritableBuffer current;
+
+      /**
+       * This is slow, don't call it.  If you care about write overhead, use a BufferedOutputStream.
+       * Better yet, you can use your own single byte buffer and call
+       * {@link #write(byte[], int, int)}.
+       */
+      @Override
+      public void write(int b) throws IOException {
+        if (current != null && current.writableBytes() > 0) {
+          current.write((byte)b);
+          return;
+        }
+        byte[] singleByte = new byte[]{(byte)b};
+        write(singleByte, 0, 1);
+      }
+
+      @Override
+      public void write(byte[] b, int off, int len) {
+        if (current == null) {
+          // Request len bytes initially from the allocator, it may give us more.
+          current = bufferAllocator.allocate(len);
+          bufferList.add(current);
+        }
+        while (len > 0) {
+          int canWrite = Math.min(len, current.writableBytes());
+          if (canWrite == 0) {
+            // Assume message is twice as large as previous assumption if were still not done,
+            // the allocator may allocate more or less than this amount.
+            int needed = Math.max(len, current.readableBytes() * 2);
+            current = bufferAllocator.allocate(needed);
+            bufferList.add(current);
+          } else {
+            current.write(b, off, canWrite);
+            off += canWrite;
+            len -= canWrite;
+          }
+        }
+      }
+
+      private int readableBytes() {
+        int readable = 0;
+        for (WritableBuffer writableBuffer : bufferList) {
+          readable += writableBuffer.readableBytes();
+        }
+        return readable;
+      }
     }
   }
 
@@ -101,7 +172,7 @@ public abstract class AbstractServerStream extends AbstractStream
     //    if (fullStreamCompression) {
     //      framer = new CompressedStreamFramer(this, bufferAllocator, statsTraceCtx);
     //    } else {
-    this.framerSink = new CompressingSink(this);
+    this.framerSink = new CompressingSink(this, bufferAllocator);
     framer = new MessageFramer(framerSink, bufferAllocator, statsTraceCtx);
     //    }
   }
