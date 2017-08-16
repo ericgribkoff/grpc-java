@@ -16,6 +16,8 @@
 
 package io.grpc.internal;
 
+import java.io.OutputStream;
+
 /**
  * An interface for a byte buffer that can only be written to.
  * {@link WritableBuffer}s are a generic way to transfer bytes to

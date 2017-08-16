@@ -31,6 +31,8 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.EventLoop;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Stream;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -56,6 +58,15 @@ class NettyServerStream extends AbstractServerStream {
     this.writeQueue = state.handler.getWriteQueue();
     this.attributes = checkNotNull(transportAttrs);
     this.authority = authority;
+  }
+
+  @Override
+  protected void readBytesFromBufferToStream(WritableBuffer buffer, OutputStream os)
+      throws IOException {
+    if (buffer != null) {
+      ByteBuf bytebuf = ((NettyWritableBuffer) buffer).bytebuf();
+      bytebuf.readBytes(os, bytebuf.readableBytes());
+    }
   }
 
   @Override

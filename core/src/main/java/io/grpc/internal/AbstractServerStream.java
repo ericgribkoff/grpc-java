@@ -24,6 +24,7 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.WriteAbortedException;
 import java.util.ArrayList;
 import java.util.List;
 import javax.annotation.Nullable;
@@ -92,14 +93,66 @@ public abstract class AbstractServerStream extends AbstractStream
     public void deliverFrame(@Nullable WritableBuffer frame, boolean endOfStream, boolean flush) {
       System.out.println("I can buffer this by just wrapping sink! ? " + streamCompression);
       if (streamCompression) {
+        buffers.add(frame);
         if (endOfStream) {
-          compressor.compress(buffers);
-          savedSink.deliverFrame(compressedFrames, endOfStream, flush);
-        } else {
-          buffers.add(frame);
+          try {
+            // This is wrong - it compresses before writing to buffers, so the sizes won't be right
+            // Need to *write* to the compressed stream.
+            BufferChainOutputStream bufferChain = new BufferChainOutputStream();
+            OutputStream compressedStream = compressor.compress(bufferChain);
+            //compressor.compress(new UnchainedOutputStream(buffers));
+            for (WritableBuffer buffer : buffers) {
+              // This is highly likely to fail if the buffers haven't been written to...but they are
+              // written in MessageFramer.
+              readBytesFromBufferToStream(buffer, compressedStream);
+            }
+            for (WritableBuffer buffer : bufferChain.bufferList) {
+              savedSink.deliverFrame(buffer, false, false);
+            }
+            savedSink.deliverFrame(null, endOfStream, flush);
+          } catch (IOException e) {
+            System.out.println("Failed to compress stream");
+          }
         }
       } else {
         savedSink.deliverFrame(frame, endOfStream, flush);
+      }
+    }
+
+    private final class UnchainedOutputStream extends OutputStream {
+      private final List<WritableBuffer> bufferList;
+      private WritableBuffer current;
+      private int currentIndex;
+
+      private UnchainedOutputStream(List<WritableBuffer> bufferList) {
+        this.bufferList = bufferList;
+        currentIndex = 0;
+        current = bufferList.get(currentIndex);
+      }
+
+      @Override
+      public void write(int b) throws IOException {
+        if (current != null && current.writableBytes() > 0) {
+          current.write((byte)b);
+          return;
+        }
+        byte[] singleByte = new byte[]{(byte)b};
+        write(singleByte, 0, 1);
+      }
+
+      @Override
+      public void write(byte[] b, int off, int len) {
+        while (len > 0) {
+          int canWrite = Math.min(len, current.writableBytes());
+          if (canWrite == 0) {
+            currentIndex++;
+            current = bufferList.get(currentIndex);
+          } else {
+            current.write(b, off, canWrite);
+            off += canWrite;
+            len -= canWrite;
+          }
+        }
       }
     }
 
@@ -164,6 +217,9 @@ public abstract class AbstractServerStream extends AbstractStream
   private final StatsTraceContext statsTraceCtx;
   private boolean outboundClosed;
   private boolean headersSent;
+
+  protected abstract void readBytesFromBufferToStream(WritableBuffer buffer, OutputStream stream)
+      throws IOException;
 
   protected AbstractServerStream(WritableBufferAllocator bufferAllocator,
       StatsTraceContext statsTraceCtx, boolean fullStreamCompression) {
