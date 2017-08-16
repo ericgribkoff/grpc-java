@@ -99,13 +99,14 @@ public abstract class AbstractServerStream extends AbstractStream
             // This is wrong - it compresses before writing to buffers, so the sizes won't be right
             // Need to *write* to the compressed stream.
             BufferChainOutputStream bufferChain = new BufferChainOutputStream();
-            OutputStream compressedStream = compressor.compress(bufferChain);
+            OutputStream compressingStream = compressor.compress(bufferChain);
             //compressor.compress(new UnchainedOutputStream(buffers));
             for (WritableBuffer buffer : buffers) {
               // This is highly likely to fail if the buffers haven't been written to...but they are
               // written in MessageFramer.
-              readBytesFromBufferToStream(buffer, compressedStream);
+              readBytesFromBufferToStream(buffer, compressingStream);
             }
+            compressingStream.close();
             for (WritableBuffer buffer : bufferChain.bufferList) {
               savedSink.deliverFrame(buffer, false, false);
             }

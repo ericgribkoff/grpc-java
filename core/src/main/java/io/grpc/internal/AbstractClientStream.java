@@ -16,16 +16,19 @@
 
 package io.grpc.internal;
 
+import static io.grpc.internal.GrpcUtil.CONTENT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.io.ByteStreams;
 import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.Status;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -187,6 +190,8 @@ public abstract class AbstractClientStream extends AbstractStream
     private boolean deframerClosed = false;
     private Runnable deframerClosedTask;
 
+    private Decompressor streamDecompressor;
+
     /**
      * Whether the stream is closed from the transport's perspective. This can differ from {@link
      * #listenerClosed} because there may still be messages buffered to deliver to the application.
@@ -234,16 +239,30 @@ public abstract class AbstractClientStream extends AbstractStream
       statsTraceCtx.clientInboundHeaders();
 
       Decompressor decompressor = Codec.Identity.NONE;
-      String encoding = headers.get(MESSAGE_ENCODING_KEY);
-      if (encoding != null) {
-        decompressor = decompressorRegistry.lookupDecompressor(encoding);
+      String streamEncoding = headers.get(CONTENT_ENCODING_KEY);
+      if (streamEncoding != null) {
+        // Ignore per-message encoding if this is set
+        // TODO What if it's identity?
+        decompressor = decompressorRegistry.lookupDecompressor(streamEncoding);
         if (decompressor == null) {
           deframeFailed(Status.INTERNAL.withDescription(
-              String.format("Can't find decompressor for %s", encoding)).asRuntimeException());
+              String.format("Can't find decompressor for %s", streamEncoding))
+              .asRuntimeException());
           return;
         }
+        streamDecompressor = decompressor;
+      } else {
+        String encoding = headers.get(MESSAGE_ENCODING_KEY);
+        if (encoding != null) {
+          decompressor = decompressorRegistry.lookupDecompressor(encoding);
+          if (decompressor == null) {
+            deframeFailed(Status.INTERNAL.withDescription(
+                String.format("Can't find decompressor for %s", encoding)).asRuntimeException());
+            return;
+          }
+        }
+        setDecompressor(decompressor);
       }
-      setDecompressor(decompressor);
 
       listener().headersRead(headers);
     }
@@ -262,8 +281,20 @@ public abstract class AbstractClientStream extends AbstractStream
           return;
         }
 
-        needToCloseFrame = false;
-        deframe(frame);
+        if (streamDecompressor != null) {
+          try {
+            InputStream unlimitedStream =
+                streamDecompressor.decompress(ReadableBuffers.openStream(frame, true));
+            deframe(ReadableBuffers.wrap(ByteStreams.toByteArray(unlimitedStream)));
+          } catch (IOException e) {
+            // TODO handle this
+            System.out.println("Failed to decompress inbound data");
+            e.printStackTrace(System.out);
+          }
+        } else {
+          needToCloseFrame = false;
+          deframe(frame);
+        }
       } finally {
         if (needToCloseFrame) {
           frame.close();
