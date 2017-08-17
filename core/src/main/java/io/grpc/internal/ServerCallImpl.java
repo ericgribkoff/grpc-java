@@ -91,6 +91,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
 
     System.out.println("streamCompression = " + streamCompression);
     headers.discardAll(CONTENT_ENCODING_KEY);
+    System.out.println("compressor: " + compressor);
     if (!streamCompression || compressor == null) {
       compressor = Codec.Identity.NONE;
     } else {
@@ -185,6 +186,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
   @Override
   public void setCompression(String compressorName) {
     System.out.println("setCompression called");
+    new Exception().printStackTrace();
     // Added here to give a better error message.
     checkState(!sendHeadersCalled, "sendHeaders has been called");
 

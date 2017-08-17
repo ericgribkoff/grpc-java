@@ -332,6 +332,7 @@ public class TestServiceClient {
         return builder.build();
       } else {
         OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress(serverHost, serverPort);
+        builder.maxInboundMessageSize(31415911);
         if (serverHostOverride != null) {
           // Force the hostname to match the cert the server uses.
           builder.overrideAuthority(

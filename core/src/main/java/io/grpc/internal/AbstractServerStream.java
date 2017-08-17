@@ -91,7 +91,8 @@ public abstract class AbstractServerStream extends AbstractStream
 
     @Override
     public void deliverFrame(@Nullable WritableBuffer frame, boolean endOfStream, boolean flush) {
-      System.out.println("I can buffer this by just wrapping sink! ? " + streamCompression);
+//      System.out.println("I can buffer this by just wrapping sink! ? " + streamCompression);
+//      System.out.println("With compressor " + compressor);
       if (streamCompression) {
         buffers.add(frame);
         if (endOfStream) {
@@ -113,6 +114,7 @@ public abstract class AbstractServerStream extends AbstractStream
             savedSink.deliverFrame(null, endOfStream, flush);
           } catch (IOException e) {
             System.out.println("Failed to compress stream");
+            e.printStackTrace(System.out);
           }
         }
       } else {

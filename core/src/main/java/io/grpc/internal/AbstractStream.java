@@ -52,6 +52,9 @@ public abstract class AbstractStream implements Stream {
   @Override
   public final void setStreamCompression(boolean enable) {
     this.streamCompression = enable;
+    if (streamCompression) {
+      setMessageCompression(false);
+    }
   }
 
   @Override
@@ -115,7 +118,7 @@ public abstract class AbstractStream implements Stream {
     public static final int DEFAULT_ONREADY_THRESHOLD = 32 * 1024;
     private static final boolean DEFRAME_IN_APPLICATION_THREAD = false;
 
-    private final Deframer deframer;
+    protected final Deframer deframer;
     private final Object onReadyLock = new Object();
     private final StatsTraceContext statsTraceCtx;
 

@@ -92,19 +92,19 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
     ServerCallStreamObserver<SimpleResponse> obs =
         (ServerCallStreamObserver<SimpleResponse>) responseObserver;
     SimpleResponse.Builder responseBuilder = SimpleResponse.newBuilder();
-    try {
-      if (req.hasResponseCompressed() && req.getResponseCompressed().getValue()) {
-        obs.setCompression("gzip");
-      } else {
-        obs.setCompression("identity");
-      }
-    } catch (IllegalArgumentException e) {
-      obs.onError(Status.UNIMPLEMENTED
-          .withDescription("compression not supported.")
-          .withCause(e)
-          .asRuntimeException());
-      return;
-    }
+    //    try {
+    //      if (req.hasResponseCompressed() && req.getResponseCompressed().getValue()) {
+    //        obs.setCompression("gzip");
+    //      } else {
+    //        obs.setCompression("identity");
+    //      }
+    //    } catch (IllegalArgumentException e) {
+    //      obs.onError(Status.UNIMPLEMENTED
+    //          .withDescription("compression not supported.")
+    //          .withCause(e)
+    //          .asRuntimeException());
+    //      return;
+    //    }
 
     if (req.getResponseSize() != 0) {
       boolean compressable = compressableResponse(req.getResponseType());
@@ -511,6 +511,7 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
         //          System.out.println("gzip stream compression accepted");
         System.out.println("Calling setStreamCompression(true)");
         call.setStreamCompression(true);
+        System.out.println("call class: " + call);
         call.setCompression("gzip");
         //        }
         return next.startCall(new SimpleForwardingServerCall<ReqT, RespT>(call) {

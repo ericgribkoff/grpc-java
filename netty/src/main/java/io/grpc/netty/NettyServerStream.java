@@ -18,7 +18,9 @@ package io.grpc.netty;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.io.ByteStreams;
 import io.grpc.Attributes;
+import io.grpc.Codec;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.AbstractServerStream;
@@ -31,8 +33,12 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.EventLoop;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Stream;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.Arrays;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -65,8 +71,36 @@ class NettyServerStream extends AbstractServerStream {
       throws IOException {
     if (buffer != null) {
       ByteBuf bytebuf = ((NettyWritableBuffer) buffer).bytebuf();
+      System.out.println("Readable bytes: " + bytebuf.readableBytes());
+      byte[] rawBytes = new byte[bytebuf.readableBytes()];
+      bytebuf.readBytes(rawBytes);
+      System.out.println("Raw bytes:" + bytesToHex(rawBytes));
+      bytebuf.resetReaderIndex();
+      System.out.println("Readable bytes: " + bytebuf.readableBytes());
       bytebuf.readBytes(os, bytebuf.readableBytes());
+
+      Codec gzip = new Codec.Gzip();
+      ByteArrayOutputStream byteOs = new ByteArrayOutputStream(rawBytes.length);
+      OutputStream compressedOs = gzip.compress(byteOs);
+      compressedOs.write(rawBytes);
+      compressedOs.close();
+      System.out.println("Compressed bytes: " + bytesToHex(byteOs.toByteArray()));
+
+      System.out.println("Uncompressed bytes: " + bytesToHex(
+              ByteStreams.toByteArray(gzip.decompress(new ByteArrayInputStream(byteOs.toByteArray())))));
+
     }
+  }
+
+  private final static char[] hexArray = "0123456789ABCDEF".toCharArray();
+  public static String bytesToHex(byte[] bytes) {
+    char[] hexChars = new char[bytes.length * 2];
+    for ( int j = 0; j < bytes.length; j++ ) {
+      int v = bytes[j] & 0xFF;
+      hexChars[j * 2] = hexArray[v >>> 4];
+      hexChars[j * 2 + 1] = hexArray[v & 0x0F];
+    }
+    return new String(hexChars);
   }
 
   @Override
