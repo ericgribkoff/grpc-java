@@ -108,6 +108,13 @@ public class StressTestClientTest {
     assertEquals("foo.test.google.fr", client.addresses().get(0).getHostName());
   }
 
+  // TODO - consistent failure here
+  //  io.grpc.testing.integration.StressTestClientTest > gaugesShouldBeExported FAILED
+  //  java.lang.Exception: test timed out after 5000 milliseconds
+  //  at sun.misc.Unsafe.park(Native Method)
+  //  at java.util.concurrent.locks.LockSupport.parkNanos(LockSupport.java:338)
+  //  at io.grpc.testing.integration.StressTestClientTest.gaugesShouldBeExported
+  // (StressTestClientTest.java:139)
   @Test(timeout = 5000)
   public void gaugesShouldBeExported() throws Exception {
 

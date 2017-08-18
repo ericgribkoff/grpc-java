@@ -329,6 +329,8 @@ public class TestServiceClient {
         if (serverHostOverride != null) {
           builder.overrideAuthority(serverHostOverride);
         }
+        // TODO without this and large unary test (with size * 100) Netty fails silently.
+        builder.maxInboundMessageSize(31415911);
         return builder.build();
       } else {
         OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress(serverHost, serverPort);

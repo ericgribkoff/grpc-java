@@ -16,9 +16,6 @@
 
 package io.grpc.testing.integration;
 
-import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_SPLITTER;
-import static io.grpc.internal.GrpcUtil.CONTENT_ACCEPT_ENCODING_KEY;
-
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Queues;
 import com.google.protobuf.ByteString;
@@ -29,7 +26,6 @@ import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.Status;
-import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.LogExceptionRunnable;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
@@ -92,10 +88,16 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
     ServerCallStreamObserver<SimpleResponse> obs =
         (ServerCallStreamObserver<SimpleResponse>) responseObserver;
     SimpleResponse.Builder responseBuilder = SimpleResponse.newBuilder();
+
+    // TODO - these break my command line tests for large_unary with stream compression,
+    // because the same mechanism disables stream compression too. But without this,
+    // TransportCompressionTest fails
     //    try {
     //      if (req.hasResponseCompressed() && req.getResponseCompressed().getValue()) {
+    //        System.out.println("Setting gzip");
     //        obs.setCompression("gzip");
     //      } else {
+    //        System.out.println("Setting identity");
     //        obs.setCompression("identity");
     //      }
     //    } catch (IllegalArgumentException e) {
@@ -510,10 +512,10 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
         //        if (acceptedEncodingsList.contains("gzip")) {
         //          System.out.println("gzip stream compression accepted");
 
-        //        System.out.println("Calling setStreamCompression(true)");
-        //        call.setStreamCompression(true);
-        //        System.out.println("call class: " + call);
-        //        call.setCompression("gzip");
+                System.out.println("Calling setStreamCompression(true)");
+                call.setStreamCompression(true);
+                System.out.println("call class: " + call);
+                call.setCompression("gzip");
 
         //        }
         return next.startCall(new SimpleForwardingServerCall<ReqT, RespT>(call) {

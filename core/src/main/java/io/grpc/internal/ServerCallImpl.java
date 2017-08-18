@@ -89,86 +89,89 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
     checkState(!sendHeadersCalled, "sendHeaders has already been called");
     checkState(!closeCalled, "call is closed");
 
-    System.out.println("Accept encodings: " + new String(messageAcceptEncoding, GrpcUtil.US_ASCII));
-    System.out.println("Compressor: " + compressor);
-    headers.discardAll(MESSAGE_ENCODING_KEY);
-    if (compressor == null) {
-      compressor = Codec.Identity.NONE;
-    } else {
-      if (messageAcceptEncoding != null) {
-        // TODO(carl-mastrangelo): remove the string allocation.
-        List<String> acceptedEncodingsList = ACCEPT_ENCODING_SPLITTER.splitToList(
-                new String(messageAcceptEncoding, GrpcUtil.US_ASCII));
-        if (!acceptedEncodingsList.contains(compressor.getMessageEncoding())) {
-          // resort to using no compression.
-          System.out.println("Compressor not found :(");
+    //    System.out.println("Accept encodings: "
+    // + new String(messageAcceptEncoding, GrpcUtil.US_ASCII));
+    //    System.out.println("Compressor: " + compressor);
+    //    headers.discardAll(MESSAGE_ENCODING_KEY);
+    //    if (compressor == null) {
+    //      compressor = Codec.Identity.NONE;
+    //    } else {
+    //      if (messageAcceptEncoding != null) {
+    //        // TODO(carl-mastrangelo): remove the string allocation.
+    //        List<String> acceptedEncodingsList = ACCEPT_ENCODING_SPLITTER
+    // .splitToList(
+    //                new String(messageAcceptEncoding, GrpcUtil.US_ASCII));
+    //        if (!acceptedEncodingsList.contains(compressor.getMessageEncoding())) {
+    //          // resort to using no compression.
+    //          System.out.println("Compressor not found :(");
+    //          compressor = Codec.Identity.NONE;
+    //        }
+    //      } else {
+    //        compressor = Codec.Identity.NONE;
+    //      }
+    //    }
+    //
+    //    // Always put compressor, even if it's identity.
+    //    headers.put(MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
+    //    System.out.println("Setting compressor: " + compressor);
+    //
+    //    stream.setCompressor(compressor);
+
+    System.out.println("streamCompression = " + streamCompression);
+    headers.discardAll(CONTENT_ENCODING_KEY);
+    System.out.println("compressor: " + compressor);
+    if (streamCompression) {
+      if (compressor == null) {
+        compressor = Codec.Identity.NONE;
+      } else {
+        if (contentAcceptEncoding != null) {
+          List<String> acceptedEncodingsList = ACCEPT_ENCODING_SPLITTER.splitToList(
+                  new String(contentAcceptEncoding, GrpcUtil.US_ASCII));
+          if (!acceptedEncodingsList.contains(compressor.getMessageEncoding())) {
+            // resort to using no compression.
+            compressor = Codec.Identity.NONE;
+          } else {
+            streamCompression = true;
+          }
+        } else {
           compressor = Codec.Identity.NONE;
         }
-      } else {
-        compressor = Codec.Identity.NONE;
       }
     }
 
-    // Always put compressor, even if it's identity.
-    headers.put(MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
-    System.out.println("Setting compressor: " + compressor);
+    headers.discardAll(MESSAGE_ENCODING_KEY);
+    if (!streamCompression || compressor == Codec.Identity.NONE) {
+      // full-stream compression supersedes per-message compression
+      if (compressor == null) {
+        compressor = Codec.Identity.NONE;
+      } else {
+        if (messageAcceptEncoding != null) {
+          // TODO(carl-mastrangelo): remove the string allocation.
+          List<String> acceptedEncodingsList = ACCEPT_ENCODING_SPLITTER.splitToList(
+              new String(messageAcceptEncoding, GrpcUtil.US_ASCII));
+          if (!acceptedEncodingsList.contains(compressor.getMessageEncoding())) {
+            // resort to using no compression.
+            compressor = Codec.Identity.NONE;
+          }
+        } else {
+          compressor = Codec.Identity.NONE;
+        }
+      }
+    }
+
+    // Always put compressors, even if they're identity.
+    System.out.println("streamCompression = " + streamCompression);
+    System.out.println("compressor: " + compressor);
+    if (streamCompression) {
+      headers.put(CONTENT_ENCODING_KEY, compressor.getMessageEncoding());
+      headers.put(MESSAGE_ENCODING_KEY, Codec.Identity.NONE.getMessageEncoding());
+    } else {
+      headers.put(CONTENT_ENCODING_KEY, Codec.Identity.NONE.getMessageEncoding());
+      headers.put(MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
+    }
 
     stream.setCompressor(compressor);
-//    System.out.println("streamCompression = " + streamCompression);
-//    headers.discardAll(CONTENT_ENCODING_KEY);
-//    System.out.println("compressor: " + compressor);
-//    if (streamCompression) {
-//      if (compressor == null) {
-//        compressor = Codec.Identity.NONE;
-//      } else {
-//        if (contentAcceptEncoding != null) {
-//          List<String> acceptedEncodingsList = ACCEPT_ENCODING_SPLITTER.splitToList(
-//                  new String(contentAcceptEncoding, GrpcUtil.US_ASCII));
-//          if (!acceptedEncodingsList.contains(compressor.getMessageEncoding())) {
-//            // resort to using no compression.
-//            compressor = Codec.Identity.NONE;
-//          } else {
-//            streamCompression = true;
-//          }
-//        } else {
-//          compressor = Codec.Identity.NONE;
-//        }
-//      }
-//    }
-//
-//    headers.discardAll(MESSAGE_ENCODING_KEY);
-//    if (!streamCompression || compressor == Codec.Identity.NONE) {
-//      // full-stream compression supersedes per-message compression
-//      if (compressor == null) {
-//        compressor = Codec.Identity.NONE;
-//      } else {
-//        if (messageAcceptEncoding != null) {
-//          // TODO(carl-mastrangelo): remove the string allocation.
-//          List<String> acceptedEncodingsList = ACCEPT_ENCODING_SPLITTER.splitToList(
-//              new String(messageAcceptEncoding, GrpcUtil.US_ASCII));
-//          if (!acceptedEncodingsList.contains(compressor.getMessageEncoding())) {
-//            // resort to using no compression.
-//            compressor = Codec.Identity.NONE;
-//          }
-//        } else {
-//          compressor = Codec.Identity.NONE;
-//        }
-//      }
-//    }
-//
-//    // Always put compressors, even if they're identity.
-//    System.out.println("streamCompression = " + streamCompression);
-//    System.out.println("compressor: " + compressor);
-//    if (streamCompression) {
-//      headers.put(CONTENT_ENCODING_KEY, compressor.getMessageEncoding());
-//      headers.put(MESSAGE_ENCODING_KEY, Codec.Identity.NONE.getMessageEncoding());
-//    } else {
-//      headers.put(CONTENT_ENCODING_KEY, Codec.Identity.NONE.getMessageEncoding());
-//      headers.put(MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
-//    }
-//
-//    stream.setCompressor(compressor);
-//    stream.setStreamCompression(streamCompression);
+    stream.setStreamCompression(streamCompression);
 
     headers.discardAll(MESSAGE_ACCEPT_ENCODING_KEY);
     byte[] advertisedEncodings =

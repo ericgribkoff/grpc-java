@@ -33,12 +33,10 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.EventLoop;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Stream;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.Arrays;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -86,13 +84,18 @@ class NettyServerStream extends AbstractServerStream {
       compressedOs.close();
       System.out.println("Compressed bytes: " + bytesToHex(byteOs.toByteArray()));
 
-      System.out.println("Uncompressed bytes: " + bytesToHex(
-              ByteStreams.toByteArray(gzip.decompress(new ByteArrayInputStream(byteOs.toByteArray())))));
+      System.out.println(
+          "Uncompressed bytes: "
+              + bytesToHex(
+                  ByteStreams.toByteArray(
+                      gzip.decompress(new ByteArrayInputStream(byteOs.toByteArray())))));
 
     }
   }
 
-  private final static char[] hexArray = "0123456789ABCDEF".toCharArray();
+  private static final char[] hexArray = "0123456789ABCDEF".toCharArray();
+
+  /** Javadoc. */
   public static String bytesToHex(byte[] bytes) {
     char[] hexChars = new char[bytes.length * 2];
     for ( int j = 0; j < bytes.length; j++ ) {
