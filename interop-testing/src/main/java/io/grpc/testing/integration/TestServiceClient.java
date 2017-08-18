@@ -330,6 +330,8 @@ public class TestServiceClient {
           builder.overrideAuthority(serverHostOverride);
         }
         // TODO without this and large unary test (with size * 100) Netty fails silently.
+        // It's a race condition (?) with deframing in the application thread. Deframing in client thread and
+        // the RESOURCE_EXHAUSTED error is returned.
 //        builder.maxInboundMessageSize(31415911);
         return builder.build();
       } else {
