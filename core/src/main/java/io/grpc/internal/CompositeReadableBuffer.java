@@ -30,7 +30,7 @@ import java.util.Queue;
  * the composite has read past the end of a given buffer, that buffer is automatically closed and
  * removed from the composite.
  */
-public class CompositeReadableBuffer extends AbstractReadableBuffer {
+public class CompositeReadableBuffer extends AbstractReadableBuffer implements CompositeBuffer {
 
   private int readableBytes;
   private final Queue<ReadableBuffer> buffers = new ArrayDeque<ReadableBuffer>();
@@ -41,6 +41,7 @@ public class CompositeReadableBuffer extends AbstractReadableBuffer {
    * buffer (i.e. modifying the readable bytes) may result in corruption of the internal state of
    * this {@code CompositeBuffer}.
    */
+  @Override
   public void addBuffer(ReadableBuffer buffer) {
     if (!(buffer instanceof CompositeReadableBuffer)) {
       buffers.add(buffer);

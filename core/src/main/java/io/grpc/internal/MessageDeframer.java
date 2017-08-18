@@ -91,7 +91,7 @@ public class MessageDeframer implements Closeable, Deframer {
   private int requiredLength = HEADER_LENGTH;
   private boolean compressedFlag;
   private CompositeReadableBuffer nextFrame;
-  private CompositeReadableBuffer unprocessed = new CompositeReadableBuffer();
+  private CompositeBuffer unprocessed = new CompositeReadableBuffer();
   private long pendingDeliveries;
   private boolean inDelivery = false;
 
