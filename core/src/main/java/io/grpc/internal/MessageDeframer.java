@@ -116,8 +116,8 @@ public class MessageDeframer implements Closeable, Deframer {
     this.debugString = debugString;
   }
 
-  // TODO Replace this and following method with lazy/settable equivalent (probably in constructor, done via
-  // AbstractStream)
+  // TODO Replace this and following method with lazy/settable equivalent (probably in constructor,
+  // done via AbstractStream)
   public void setUnprocessedBuffer(CompositeBuffer buffer) {
     unprocessed = buffer;
   }

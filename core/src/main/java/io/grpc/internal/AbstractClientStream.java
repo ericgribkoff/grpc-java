@@ -21,15 +21,13 @@ import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.io.ByteStreams;
 import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.Status;
-
-import java.io.*;
+import java.io.InputStream;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
@@ -269,8 +267,9 @@ public abstract class AbstractClientStream extends AbstractStream
       listener().headersRead(headers);
     }
 
-    private ReadableBuffer hackyBufferMemory;
-    private GzipStreamDeframer gzipStreamDeframer;
+    //private ReadableBuffer hackyBufferMemory;
+    //private GzipStreamDeframer gzipStreamDeframer;
+
     /**
      * Processes the contents of a received data frame from the server.
      *
@@ -285,38 +284,38 @@ public abstract class AbstractClientStream extends AbstractStream
           return;
         }
 
-//        System.out.println("streamDecompressor: " + streamDecompressor);
-//        if (streamDecompressor != null) {
-//          if (gzipStreamDeframer == null) {
-//            gzipStreamDeframer = new GzipStreamDeframer(deframer, streamDecompressor);
-//          }
-//          needToCloseFrame = false;
-//          gzipStreamDeframer.deframe(frame);
-////          System.out.println("frame.readableBytes() = " + frame.readableBytes());
-////          if (hackyBufferMemory == null) {
-////            System.out.println("Saving frame");
-////            needToCloseFrame = false;
-////
-////            // This = needed streaming Gzip decoder
-////            hackyBufferMemory = frame;
-////          } else {
-////            try {
-////              InputStream concat = new SequenceInputStream(
-////                      ReadableBuffers.openStream(hackyBufferMemory, true),
-////                      ReadableBuffers.openStream(frame, true));
-////              InputStream unlimitedStream = streamDecompressor.decompress(concat);
-////              deframe(ReadableBuffers.wrap(ByteStreams.toByteArray(unlimitedStream)));
-////              needToCloseFrame = false;
-////            } catch (IOException e) {
-////              // TODO handle this
-////              System.out.println("Failed to decompress inbound data");
-////              e.printStackTrace(System.out);
-////            }
-////          }
-//        } else {
-          needToCloseFrame = false;
-          deframe(frame);
-//        }
+        //        System.out.println("streamDecompressor: " + streamDecompressor);
+        //        if (streamDecompressor != null) {
+        //          if (gzipStreamDeframer == null) {
+        //            gzipStreamDeframer = new GzipStreamDeframer(deframer, streamDecompressor);
+        //          }
+        //          needToCloseFrame = false;
+        //          gzipStreamDeframer.deframe(frame);
+        ////          System.out.println("frame.readableBytes() = " + frame.readableBytes());
+        ////          if (hackyBufferMemory == null) {
+        ////            System.out.println("Saving frame");
+        ////            needToCloseFrame = false;
+        ////
+        ////            // This = needed streaming Gzip decoder
+        ////            hackyBufferMemory = frame;
+        ////          } else {
+        ////            try {
+        ////              InputStream concat = new SequenceInputStream(
+        ////                      ReadableBuffers.openStream(hackyBufferMemory, true),
+        ////                      ReadableBuffers.openStream(frame, true));
+        ////              InputStream unlimitedStream = streamDecompressor.decompress(concat);
+        ////              deframe(ReadableBuffers.wrap(ByteStreams.toByteArray(unlimitedStream)));
+        ////              needToCloseFrame = false;
+        ////            } catch (IOException e) {
+        ////              // TODO handle this
+        ////              System.out.println("Failed to decompress inbound data");
+        ////              e.printStackTrace(System.out);
+        ////            }
+        ////          }
+        //        } else {
+        needToCloseFrame = false;
+        deframe(frame);
+        //        }
       } finally {
         if (needToCloseFrame) {
           frame.close();

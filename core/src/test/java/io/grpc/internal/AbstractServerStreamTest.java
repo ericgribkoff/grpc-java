@@ -35,6 +35,7 @@ import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.TimeUnit;
@@ -344,6 +345,10 @@ public class AbstractServerStreamTest {
     protected Sink abstractServerStreamSink() {
       return sink;
     }
+
+    @Override
+    protected void readBytesFromBufferToStream(WritableBuffer buffer, OutputStream stream)
+        throws IOException {}
 
     @Override
     protected AbstractServerStream.TransportState transportState() {

@@ -24,7 +24,6 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.io.WriteAbortedException;
 import java.util.ArrayList;
 import java.util.List;
 import javax.annotation.Nullable;
@@ -91,8 +90,8 @@ public abstract class AbstractServerStream extends AbstractStream
 
     @Override
     public void deliverFrame(@Nullable WritableBuffer frame, boolean endOfStream, boolean flush) {
-//      System.out.println("I can buffer this by just wrapping sink! ? " + streamCompression);
-//      System.out.println("With compressor " + compressor);
+      //      System.out.println("I can buffer this by just wrapping sink! ? " + streamCompression);
+      //      System.out.println("With compressor " + compressor);
       if (streamCompression) {
         buffers.add(frame);
         if (endOfStream) {

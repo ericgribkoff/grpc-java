@@ -58,9 +58,9 @@ public class ApplicationThreadDeframer implements Deframer, MessageDeframer.List
   }
 
   ApplicationThreadDeframer(
-          MessageDeframer.Listener listener,
-          MessageDeframer deframer,
-          TransportExecutor transportExecutor) {
+      MessageDeframer.Listener listener,
+      MessageDeframer deframer,
+      TransportExecutor transportExecutor) {
     this.deframer = deframer;
     this.storedListener = checkNotNull(listener, "listener");
     this.transportExecutor = checkNotNull(transportExecutor, "transportExecutor");
