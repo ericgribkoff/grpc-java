@@ -312,7 +312,7 @@ public abstract class AbstractInteropTest {
   public void largeUnary() throws Exception {
     assumeEnoughMemory();
     final SimpleRequest request = SimpleRequest.newBuilder()
-        .setResponseSize(31415900)
+        .setResponseSize(314159 /*00*/)
         .setResponseType(PayloadType.COMPRESSABLE)
         .setPayload(Payload.newBuilder()
             .setBody(ByteString.copyFrom(new byte[271828])))
@@ -320,7 +320,7 @@ public abstract class AbstractInteropTest {
     final SimpleResponse goldenResponse = SimpleResponse.newBuilder()
         .setPayload(Payload.newBuilder()
             .setType(PayloadType.COMPRESSABLE)
-            .setBody(ByteString.copyFrom(new byte[31415900])))
+            .setBody(ByteString.copyFrom(new byte[314159 /*00*/])))
         .build();
 
     assertEquals(goldenResponse, blockingStub.unaryCall(request));

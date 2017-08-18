@@ -238,7 +238,9 @@ public abstract class AbstractClientStream extends AbstractStream
 
       Decompressor decompressor = Codec.Identity.NONE;
       String streamEncoding = headers.get(CONTENT_ENCODING_KEY);
-      if (streamEncoding != null) {
+      boolean checkPerMessageEncoding = true;
+      if (streamEncoding != null && !streamEncoding.equals("identity")) {
+        checkPerMessageEncoding = false;
         // Ignore per-message encoding if this is set
         // TODO What if it's identity?
         decompressor = decompressorRegistry.lookupDecompressor(streamEncoding);
@@ -248,10 +250,15 @@ public abstract class AbstractClientStream extends AbstractStream
               .asRuntimeException());
           return;
         }
-        streamDecompressor = decompressor;
-        System.out.println("Turning on full-stream decompression");
-        enableFullStreamDecompression();
-      } else {
+        if (decompressor != Codec.Identity.NONE) {
+          streamDecompressor = decompressor;
+          System.out.println("Turning on full-stream decompression: " + decompressor);
+          enableFullStreamDecompression();
+        } else {
+          checkPerMessageEncoding = true;
+        }
+      }
+      if (checkPerMessageEncoding) {
         String encoding = headers.get(MESSAGE_ENCODING_KEY);
         if (encoding != null) {
           decompressor = decompressorRegistry.lookupDecompressor(encoding);
