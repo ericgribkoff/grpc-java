@@ -116,6 +116,18 @@ public class MessageDeframer implements Closeable, Deframer {
     this.debugString = debugString;
   }
 
+  // TODO Replace this and following method with lazy/settable equivalent (probably in constructor, done via
+  // AbstractStream)
+  public void setUnprocessedBuffer(CompositeBuffer buffer) {
+    unprocessed = buffer;
+  }
+
+  private boolean reportBytesRead = true;
+
+  public void setReportBytesRead(boolean report) {
+    this.reportBytesRead = report;
+  }
+
   @Override
   public void setMaxInboundMessageSize(int messageSize) {
     maxInboundMessageSize = messageSize;
@@ -286,7 +298,7 @@ public class MessageDeframer implements Closeable, Deframer {
       }
       return true;
     } finally {
-      if (totalBytesRead > 0) {
+      if (totalBytesRead > 0 && reportBytesRead) {
         listener.bytesRead(totalBytesRead);
         if (state == State.BODY) {
           statsTraceCtx.inboundWireSize(totalBytesRead);

@@ -50,8 +50,18 @@ public class ApplicationThreadDeframer implements Deframer, MessageDeframer.List
       StatsTraceContext statsTraceCtx,
       String debugString,
       TransportExecutor transportExecutor) {
+    // TODO invoke other constructor
     this.deframer =
         new MessageDeframer(this, decompressor, maxMessageSize, statsTraceCtx, debugString);
+    this.storedListener = checkNotNull(listener, "listener");
+    this.transportExecutor = checkNotNull(transportExecutor, "transportExecutor");
+  }
+
+  ApplicationThreadDeframer(
+          MessageDeframer.Listener listener,
+          MessageDeframer deframer,
+          TransportExecutor transportExecutor) {
+    this.deframer = deframer;
     this.storedListener = checkNotNull(listener, "listener");
     this.transportExecutor = checkNotNull(transportExecutor, "transportExecutor");
   }

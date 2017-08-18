@@ -1,19 +1,21 @@
 package io.grpc.internal;
 
-import java.io.ByteArrayInputStream;
-import java.io.EOFException;
-import java.io.IOException;
-import java.io.InputStream;
+import static com.google.common.base.Preconditions.checkState;
+
 import java.util.zip.CRC32;
-import java.util.zip.CheckedInputStream;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
-import java.util.zip.ZipException;
 
 /**
  * Created by ericgribkoff on 8/17/17.
  */
 public class GzipInflatingCompositeBuffer implements CompositeBuffer {
+  private final MessageDeframer.Listener listener;
+
+  public GzipInflatingCompositeBuffer(MessageDeframer.Listener listener) {
+    this.listener = listener;
+  }
+
   private final CompositeReadableBuffer compressedData = new CompositeReadableBuffer();
   private final CompositeReadableBuffer uncompressedData = new CompositeReadableBuffer();
 
@@ -36,8 +38,19 @@ public class GzipInflatingCompositeBuffer implements CompositeBuffer {
     int uncompressedBytes = uncompressedData.readableBytes();
     if (uncompressedBytes > 0) {
       return uncompressedBytes;
+    } else {
+
+      // TODO loop
+      // TODO - right now we are giving too much data to the inflater (potentialy, because
+      // we might be including the trailers). So we can have inflater.finished() && !inflater.needsInput(),
+      // when we need to pull back some data from the inflater - which should be the TRAILERS plus potentially
+      // the next stream.
+      while (uncompressedData.readableBytes() == 0 && !inflater.finished() // TODO: concatenated streams
+              && (compressedData.readableBytes() > 0 || !inflater.needsInput())) {
+        inflate();
+      }
+      return uncompressedData.readableBytes();
     }
-    return inflate();
   }
 
   @Override
@@ -50,20 +63,63 @@ public class GzipInflatingCompositeBuffer implements CompositeBuffer {
     compressedData.close();
   }
 
-  private final static int BASE_GZIP_HEADER_SIZE = 10;
+  private final static int GZIP_BASE_HEADER_SIZE = 10;
+  private final static int GZIP_TRAILER_SIZE = 8;
 
   private Inflater inflater = new Inflater(true);
   private State state = State.HEADER;
 
-  private int requiredLength = BASE_GZIP_HEADER_SIZE;
+  private int requiredLength = GZIP_BASE_HEADER_SIZE;
 
+  // TODO pair state and required length
   private enum State {
     HEADER, HEADER_EXTRA, BODY, TRAILER
   }
 
-  private int inflate() {
+  private void inflate() {
+    // But we can also have inflater.needsInput() && inflater.finished(), or !inflated.needsInput() && inflater.finished().
+    if (inflater.finished()) {
+      // TODO harvest extra bytes given to inflater from trailers/next gzip stream
+      state = State.TRAILER;
+      requiredLength = GZIP_TRAILER_SIZE;
+      processCompressedBytes();
+    } else if (inflater.needsInput()) {
+      processCompressedBytes();
+    } else {
+//      byte[] inputBuf = new byte[nextBlock.readableBytes()];
+//      nextBlock.readBytes(inputBuf, 0, nextBlock.readableBytes());
+//      System.out.println("Raw byte read: " + bytesToHex(inputBuf));
+
+      byte[] decompressedBuf = new byte[INFLATE_BUFFER_SIZE];
+      try {
+        if (inflater.finished()) {
+          System.out.println("Finished! Inflater needs input: " + inflater.needsInput());
+          state = State.TRAILER;
+        }
+        int n = inflater.inflate(decompressedBuf, 0, INFLATE_BUFFER_SIZE);
+        System.out.println("INFLATED (" + n + " bytes) " + bytesToHex(decompressedBuf));
+        uncompressedData.addBuffer(ReadableBuffers.wrap(decompressedBuf, 0, n));
+//        while (n > 0) {
+//          System.out.println("INFLATED: (" + n + ") " + bytesToHex(decompressedBuf));
+//          if (n > 0) {
+//            System.out.println("Inflated " + n + " bytes");
+//            deframer.deframe(ReadableBuffers.wrap(decompressedBuf, 0, n));
+//          }
+//          n = inflater.inflate(decompressedBuf, 0, 100);
+//        }
+      } catch (DataFormatException e) {
+        System.out.println("DataFormatException");
+        e.printStackTrace(System.out);
+      }
+    }
+  }
+
+  private int processCompressedBytes() {
+
+    System.out.println("processCompressedBytes() called");
     // TODO pending deliveries? should be replaced with buffer fill size, double-check
-    while (readRequiredBytes()) {
+    if (readRequiredBytes()) {
+      System.out.println("readRequiredBytes() returned true, state = " + state);
       switch (state) {
         case HEADER:
           processHeader();
@@ -84,13 +140,18 @@ public class GzipInflatingCompositeBuffer implements CompositeBuffer {
 //          state = State.BODY;
 //          requiredLength = BYTES_TO_READ;
 //          break;
+        case HEADER_EXTRA:
+          // TODO break down HEADER_EXTRA into FEXTRA, FNAME, FCOMMENT, and FHCRC
+          throw new AssertionError("Reached HEADER_EXTRA");
         case BODY:
           // Pass the body bytes to the inflater
           processBody();
           break;
         case TRAILER:
           // TODO something
-          throw new AssertionError("Reached TRAILER");
+          processTrailer();
+          break;
+//          throw new AssertionError("Reached TRAILER");
         default:
           throw new AssertionError("Invalid state: " + state);
       }
@@ -105,6 +166,10 @@ public class GzipInflatingCompositeBuffer implements CompositeBuffer {
    */
   private boolean readRequiredBytes() {
     int totalBytesRead = 0;
+    int maxToRead = requiredLength;
+    if (state == State.BODY) {
+      maxToRead = INFLATE_BUFFER_SIZE;
+    }
     try {
       if (nextBlock == null) {
         nextBlock = new CompositeReadableBuffer();
@@ -112,10 +177,15 @@ public class GzipInflatingCompositeBuffer implements CompositeBuffer {
 
       // Read until the buffer contains all the required bytes.
       int missingBytes;
-      while ((missingBytes = requiredLength - nextBlock.readableBytes()) > 0) {
+      while ((missingBytes = maxToRead - nextBlock.readableBytes()) > 0) {
         if (compressedData.readableBytes() == 0) {
-          // No more data is available.
-          return false;
+          if (state == State.BODY && totalBytesRead > 0) {
+            // We've read at least one byte, pass it to inflater
+            break;
+          } else {
+            // No more data is available.
+            return false;
+          }
         }
         int toRead = Math.min(missingBytes, compressedData.readableBytes());
         totalBytesRead += toRead;
@@ -163,7 +233,7 @@ public class GzipInflatingCompositeBuffer implements CompositeBuffer {
   private void processHeader() {
     crc.reset();
 
-    // TODO - handle CRC
+    // TODO - handle CRC (here it's just for header, also need it for compressed bytes)
 
     // Check header magic
     if (readUShort() != GZIP_MAGIC) {
@@ -184,41 +254,61 @@ public class GzipInflatingCompositeBuffer implements CompositeBuffer {
     nextBlock.readBytes(6); // TODO crc
     int n = 2 + 2 + 6;
 
-    // TODO handle optional additional bytes here
+    // TODO handle optional extra fields here (some with given length, otherwise zero terminated)
+    // + optional header crc
     state = State.BODY;
   }
 
 
   private void processBody() {
+    System.out.println("processBody() called");
+    checkState(inflater.needsInput(), "inflater not empty");
     //ReadableBuffers.openStream(nextFrame, true);
-    byte[] inputBuf = new byte[BYTES_TO_READ];
-    nextFrame.readBytes(inputBuf, 0, BYTES_TO_READ);
-    System.out.println("Raw byte read: " + bytesToHex(inputBuf));
-    if (inflater.needsInput()) {
-      System.out.println("Input needed");
-      inflater.setInput(inputBuf);
-    } else {
-      System.out.println("No input needed");
-    }
-    byte[] decompressedBuf = new byte[100];
-    try {
-      if (inflater.finished()) {
-        System.out.println("Finished!");
-        return;
-      }
-      int n = inflater.inflate(decompressedBuf, 0, 100);
-      while (n > 0) {
-        System.out.println("INFLATED: (" + n + ") " + bytesToHex(decompressedBuf));
-        if (n > 0) {
-          System.out.println("Inflated " + n + " bytes");
-          deframer.deframe(ReadableBuffers.wrap(decompressedBuf, 0, n));
-        }
-        n = inflater.inflate(decompressedBuf, 0, 100);
-      }
-    } catch (DataFormatException e) {
-      System.out.println("DataFormatException");
-      e.printStackTrace(System.out);
-    }
+    byte[] inputBuf = new byte[nextBlock.readableBytes()];
+    nextBlock.readBytes(inputBuf, 0, nextBlock.readableBytes());
+    System.out.println("Raw bytes read and set as inflater input: " + bytesToHex(inputBuf));
+    inflater.setInput(inputBuf);
+
+    // TODO totally wrong
+    // Only advance to TRAILER if inflater.finished() is true.
+//    state = State.TRAILER;
+//    requiredLength = GZIP_TRAILER_SIZE;
+
+//    if (inflater.needsInput()) {
+//      System.out.println("Input needed");
+//      inflater.setInput(inputBuf);
+//    } else {
+//      System.out.println("No input needed");
+//    }
+//    byte[] decompressedBuf = new byte[100];
+//    try {
+//      if (inflater.finished()) {
+//        System.out.println("Finished!");
+//        return;
+//      }
+//      int n = inflater.inflate(decompressedBuf, 0, 100);
+//      while (n > 0) {
+//        System.out.println("INFLATED: (" + n + ") " + bytesToHex(decompressedBuf));
+//        if (n > 0) {
+//          System.out.println("Inflated " + n + " bytes");
+//          deframer.deframe(ReadableBuffers.wrap(decompressedBuf, 0, n));
+//        }
+//        n = inflater.inflate(decompressedBuf, 0, 100);
+//      }
+//    } catch (DataFormatException e) {
+//      System.out.println("DataFormatException");
+//      e.printStackTrace(System.out);
+//    }
+  }
+
+  private void processTrailer() {
+    byte[] trailer = new byte[GZIP_TRAILER_SIZE];
+    nextBlock.readBytes(trailer, 0, GZIP_TRAILER_SIZE);
+
+    // TODO check trailer CRC etc
+
+    state = State.HEADER;
+    requiredLength = GZIP_BASE_HEADER_SIZE;
   }
 
   /*
@@ -229,55 +319,55 @@ public class GzipInflatingCompositeBuffer implements CompositeBuffer {
     return (nextBlock.readUnsignedByte() << 8) | b;
   }
 
-  /*
- * Reads GZIP member header and returns the total byte number
- * of this member header.
- */
-  private boolean readHeader() throws IOException {
-    crc.reset();
-
-    // Check header magic
-    if (readUShort(in) != GZIP_MAGIC) {
-      throw new ZipException("Not in GZIP format");
-    }
-    // Check compression method
-    if (readUByte(in) != 8) {
-      throw new ZipException("Unsupported compression method");
-    }
-    // Read flags
-    int flg = readUByte(in);
-    // Skip MTIME, XFL, and OS fields
-    skipBytes(in, 6);
-    int n = 2 + 2 + 6;
-    // Skip optional extra field
-    if ((flg & FEXTRA) == FEXTRA) {
-      int m = readUShort(in);
-      skipBytes(in, m);
-      n += m + 2;
-    }
-    // Skip optional file name
-    if ((flg & FNAME) == FNAME) {
-      do {
-        n++;
-      } while (readUByte(in) != 0);
-    }
-    // Skip optional file comment
-    if ((flg & FCOMMENT) == FCOMMENT) {
-      do {
-        n++;
-      } while (readUByte(in) != 0);
-    }
-    // Check optional header CRC
-    if ((flg & FHCRC) == FHCRC) {
-      int v = (int)crc.getValue() & 0xffff;
-      if (readUShort(in) != v) {
-        throw new ZipException("Corrupt GZIP header");
-      }
-      n += 2;
-    }
-    crc.reset();
-    return n;
-  }
+//  /*
+// * Reads GZIP member header and returns the total byte number
+// * of this member header.
+// */
+//  private boolean readHeader() throws IOException {
+//    crc.reset();
+//
+//    // Check header magic
+//    if (readUShort(in) != GZIP_MAGIC) {
+//      throw new ZipException("Not in GZIP format");
+//    }
+//    // Check compression method
+//    if (readUByte(in) != 8) {
+//      throw new ZipException("Unsupported compression method");
+//    }
+//    // Read flags
+//    int flg = readUByte(in);
+//    // Skip MTIME, XFL, and OS fields
+//    skipBytes(in, 6);
+//    int n = 2 + 2 + 6;
+//    // Skip optional extra field
+//    if ((flg & FEXTRA) == FEXTRA) {
+//      int m = readUShort(in);
+//      skipBytes(in, m);
+//      n += m + 2;
+//    }
+//    // Skip optional file name
+//    if ((flg & FNAME) == FNAME) {
+//      do {
+//        n++;
+//      } while (readUByte(in) != 0);
+//    }
+//    // Skip optional file comment
+//    if ((flg & FCOMMENT) == FCOMMENT) {
+//      do {
+//        n++;
+//      } while (readUByte(in) != 0);
+//    }
+//    // Check optional header CRC
+//    if ((flg & FHCRC) == FHCRC) {
+//      int v = (int)crc.getValue() & 0xffff;
+//      if (readUShort(in) != v) {
+//        throw new ZipException("Corrupt GZIP header");
+//      }
+//      n += 2;
+//    }
+//    crc.reset();
+//    return n;
+//  }
 
 //  /*
 //   * Reads GZIP member trailer and returns true if the eos
@@ -322,49 +412,49 @@ public class GzipInflatingCompositeBuffer implements CompositeBuffer {
   /*
  * Reads unsigned integer in Intel byte order.
  */
-  private long readUInt(InputStream in) throws IOException {
-    long s = readUShort(in);
-    return ((long)readUShort(in) << 16) | s;
-  }
-
-  /*
-   * Reads unsigned short in Intel byte order.
-   */
-  private int readUShort(InputStream in) throws IOException {
-    int b = readUByte(in);
-    return (readUByte(in) << 8) | b;
-  }
-
-  /*
-   * Reads unsigned byte.
-   */
-  private int readUByte(InputStream in) throws IOException {
-    int b = in.read();
-    if (b == -1) {
-      throw new EOFException();
-    }
-    if (b < -1 || b > 255) {
-      // Report on this.in, not argument in; see read{Header, Trailer}.
-      throw new IOException(this.getClass().getName()
-          + ".read() returned value out of range -1..255: " + b);
-    }
-    return b;
-  }
-
-  private byte[] tmpbuf = new byte[128];
-
-  /*
-   * Skips bytes of input data blocking until all bytes are skipped.
-   * Does not assume that the input stream is capable of seeking.
-   */
-  private void skipBytes(InputStream in, int n) throws IOException {
-    while (n > 0) {
-      int len = in.read(tmpbuf, 0, n < tmpbuf.length ? n : tmpbuf.length);
-      if (len == -1) {
-        throw new EOFException();
-      }
-      n -= len;
-    }
-  }
+//  private long readUInt(InputStream in) throws IOException {
+//    long s = readUShort(in);
+//    return ((long)readUShort(in) << 16) | s;
+//  }
+//
+//  /*
+//   * Reads unsigned short in Intel byte order.
+//   */
+//  private int readUShort(InputStream in) throws IOException {
+//    int b = readUByte(in);
+//    return (readUByte(in) << 8) | b;
+//  }
+//
+//  /*
+//   * Reads unsigned byte.
+//   */
+//  private int readUByte(InputStream in) throws IOException {
+//    int b = in.read();
+//    if (b == -1) {
+//      throw new EOFException();
+//    }
+//    if (b < -1 || b > 255) {
+//      // Report on this.in, not argument in; see read{Header, Trailer}.
+//      throw new IOException(this.getClass().getName()
+//          + ".read() returned value out of range -1..255: " + b);
+//    }
+//    return b;
+//  }
+//
+//  private byte[] tmpbuf = new byte[128];
+//
+//  /*
+//   * Skips bytes of input data blocking until all bytes are skipped.
+//   * Does not assume that the input stream is capable of seeking.
+//   */
+//  private void skipBytes(InputStream in, int n) throws IOException {
+//    while (n > 0) {
+//      int len = in.read(tmpbuf, 0, n < tmpbuf.length ? n : tmpbuf.length);
+//      if (len == -1) {
+//        throw new EOFException();
+//      }
+//      n -= len;
+//    }
+//  }
 
 }
