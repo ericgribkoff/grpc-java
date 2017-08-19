@@ -61,17 +61,17 @@ public class OkHttpChannelBuilder extends
 
   public static final ConnectionSpec DEFAULT_CONNECTION_SPEC =
       new ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
-          .cipherSuites(
-              // The following items should be sync with Netty's Http2SecurityUtil.CIPHERS.
-              CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-              CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-              CipherSuite.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-              CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-              CipherSuite.TLS_DHE_RSA_WITH_AES_128_GCM_SHA256,
-              CipherSuite.TLS_DHE_DSS_WITH_AES_128_GCM_SHA256,
-              CipherSuite.TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
-              CipherSuite.TLS_DHE_DSS_WITH_AES_256_GCM_SHA384)
-          .tlsVersions(TlsVersion.TLS_1_2)
+//          .cipherSuites(
+//              // The following items should be sync with Netty's Http2SecurityUtil.CIPHERS.
+//              CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+//              CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+//              CipherSuite.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+//              CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+//              CipherSuite.TLS_DHE_RSA_WITH_AES_128_GCM_SHA256,
+//              CipherSuite.TLS_DHE_DSS_WITH_AES_128_GCM_SHA256,
+//              CipherSuite.TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
+//              CipherSuite.TLS_DHE_DSS_WITH_AES_256_GCM_SHA384)
+//          .tlsVersions(TlsVersion.TLS_1_2)
           .supportsTlsExtensions(true)
           .build();
 
