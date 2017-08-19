@@ -58,4 +58,6 @@ dependencies {
     compile 'io.grpc:grpc-protobuf-lite:1.6.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     compile 'io.grpc:grpc-stub:1.6.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     compile 'javax.annotation:javax.annotation-api:1.2'
+
+    compile 'org.conscrypt:conscrypt-android:1.0.0.RC9'
 }

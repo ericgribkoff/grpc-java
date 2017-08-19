@@ -34,6 +34,11 @@ import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
 
+import org.conscrypt.Conscrypt;
+
+import java.security.Provider;
+import java.security.Security;
+
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.concurrent.TimeUnit;
@@ -55,6 +60,13 @@ public class HelloworldActivity extends AppCompatActivity {
         mMessageEdit = (EditText) findViewById(R.id.message_edit_text);
         mResultText = (TextView) findViewById(R.id.grpc_response_text);
         mResultText.setMovementMethod(new ScrollingMovementMethod());
+
+//        Security.removeProvider("AndroidOpenSSL");
+//        for (Provider p : Security.getProviders()) {
+//            System.out.println(p);
+//        }
+//        System.out.println(Security.addProvider(Conscrypt.newProvider()));
+        System.out.println(Security.insertProviderAt(Conscrypt.newProvider("GmsCore_OpenSSL"), 1));
     }
 
     public void sendMessage(View view) {
@@ -72,10 +84,10 @@ public class HelloworldActivity extends AppCompatActivity {
 
         @Override
         protected void onPreExecute() {
-            mHost = mHostEdit.getText().toString();
-            mMessage = mMessageEdit.getText().toString();
-            String portStr = mPortEdit.getText().toString();
-            mPort = TextUtils.isEmpty(portStr) ? 0 : Integer.valueOf(portStr);
+            mHost = "library-example.googleapis.com"; //mHostEdit.getText().toString();
+            mMessage = "test"; //mMessageEdit.getText().toString();
+//            String portStr = mPortEdit.getText().toString();
+            mPort = 443; //TextUtils.isEmpty(portStr) ? 0 : Integer.valueOf(portStr);
             mResultText.setText("");
         }
 
@@ -83,7 +95,7 @@ public class HelloworldActivity extends AppCompatActivity {
         protected String doInBackground(Void... nothing) {
             try {
                 mChannel = ManagedChannelBuilder.forAddress(mHost, mPort)
-                    .usePlaintext(true)
+//                    .usePlaintext(true)
                     .build();
                 GreeterGrpc.GreeterBlockingStub stub = GreeterGrpc.newBlockingStub(mChannel);
                 HelloRequest message = HelloRequest.newBuilder().setName(mMessage).build();
