@@ -124,8 +124,15 @@ public class MessageDeframer implements Closeable, Deframer {
 
   private boolean reportBytesRead = true;
 
+  // TODO remove
   public void setReportBytesRead(boolean report) {
     this.reportBytesRead = report;
+  }
+
+  private GZipInflatingBuffer gzipInflater;
+
+  public void setGZipInflater(GZipInflatingBuffer gzipInflater) {
+    this.gzipInflater = gzipInflater;
   }
 
   @Override
@@ -154,7 +161,11 @@ public class MessageDeframer implements Closeable, Deframer {
     boolean needToCloseData = true;
     try {
       if (!isClosedOrScheduledToClose()) {
-        unprocessed.addBuffer(data);
+        if (gzipInflater != null) {
+          gzipInflater.addCompressedBytes(data);
+        } else {
+          unprocessed.addBuffer(data);
+        }
         needToCloseData = false;
 
         deliver();
@@ -171,6 +182,7 @@ public class MessageDeframer implements Closeable, Deframer {
     if (unprocessed == null) {
       return;
     }
+    // TODO handle this with compressed data
     boolean stalled = unprocessed.readableBytes() == 0;
     if (stalled) {
       close();
@@ -264,6 +276,7 @@ public class MessageDeframer implements Closeable, Deframer {
        * frame and not in unprocessed.  If there is extra data but no pending deliveries, it will
        * be in unprocessed.
        */
+      // TODO handle this with compressed data
       boolean stalled = unprocessed.readableBytes() == 0;
       if (closeWhenComplete && stalled) {
         close();
@@ -278,6 +291,7 @@ public class MessageDeframer implements Closeable, Deframer {
    *
    * @return {@code true} if all of the required bytes have been read.
    */
+  // TODO handle this with compressed data
   private boolean readRequiredBytes() {
     int totalBytesRead = 0;
     try {
@@ -288,13 +302,30 @@ public class MessageDeframer implements Closeable, Deframer {
       // Read until the buffer contains all the required bytes.
       int missingBytes;
       while ((missingBytes = requiredLength - nextFrame.readableBytes()) > 0) {
-        if (unprocessed.readableBytes() == 0) {
-          // No more data is available.
-          return false;
+        if (gzipInflater != null) {
+          // TODO handle ~4K max buffer size in gzipInflater - so if asking for 10MB, only returned
+          // in 4K (preallocated) chunks.
+          int compressedBytesRead = gzipInflater.readUncompressedBytes(missingBytes, nextFrame);
+          if (compressedBytesRead > 0) {
+            totalBytesRead += compressedBytesRead;
+          } else {
+            return false;
+          }
+          //if (gzipInflater.uncompressedBytesReady(missingBytes)) {
+          //  int compressedBytesRead = gzipInflater.readUncompressedBytes(missingBytes, nextFrame);
+          //  totalBytesRead += compressedBytesRead;
+          //} else {
+          //  return false;
+          //}
+        } else {
+          if (unprocessed.readableBytes() == 0) {
+            // No more data is available.
+            return false;
+          }
+          int toRead = Math.min(missingBytes, unprocessed.readableBytes());
+          totalBytesRead += toRead;
+          nextFrame.addBuffer(unprocessed.readBytes(toRead));
         }
-        int toRead = Math.min(missingBytes, unprocessed.readableBytes());
-        totalBytesRead += toRead;
-        nextFrame.addBuffer(unprocessed.readBytes(toRead));
       }
       return true;
     } finally {
