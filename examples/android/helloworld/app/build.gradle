@@ -34,6 +34,7 @@ protobuf {
             artifact = "com.google.protobuf:protoc-gen-javalite:3.0.0"
         }
         grpc {
+//            artifact = 'io.grpc:protoc-gen-grpc-java:1.0.0' // CURRENT_GRPC_VERSION
             artifact = 'io.grpc:protoc-gen-grpc-java:1.6.0-SNAPSHOT' // CURRENT_GRPC_VERSION
         }
     }
@@ -57,7 +58,10 @@ dependencies {
     compile 'io.grpc:grpc-okhttp:1.6.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     compile 'io.grpc:grpc-protobuf-lite:1.6.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     compile 'io.grpc:grpc-stub:1.6.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+//    compile 'io.grpc:grpc-okhttp:1.0.0' // CURRENT_GRPC_VERSION
+//    compile 'io.grpc:grpc-protobuf-lite:1.0.0' // CURRENT_GRPC_VERSION
+//    compile 'io.grpc:grpc-stub:1.0.0' // CURRENT_GRPC_VERSION
     compile 'javax.annotation:javax.annotation-api:1.2'
 
-    compile 'org.conscrypt:conscrypt-android:1.0.0.RC9'
+//    compile 'org.conscrypt:conscrypt-android:1.0.0.RC9'
 }
