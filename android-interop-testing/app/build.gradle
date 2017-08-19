@@ -69,6 +69,8 @@ dependencies {
 
     androidTestCompile 'com.android.support.test:rules:0.5'
     androidTestCompile 'com.android.support.test:runner:0.5'
+
+    compile 'org.conscrypt:conscrypt-android:1.0.0.RC9'
 }
 
 gradle.projectsEvaluated {

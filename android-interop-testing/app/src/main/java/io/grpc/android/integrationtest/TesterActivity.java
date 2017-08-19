@@ -32,6 +32,11 @@ import com.google.android.gms.security.ProviderInstaller;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.conscrypt.Conscrypt;
+
+import java.security.Provider;
+import java.security.Security;
+
 public class TesterActivity extends AppCompatActivity
     implements ProviderInstaller.ProviderInstallListener {
   private List<Button> buttons;
@@ -56,9 +61,10 @@ public class TesterActivity extends AppCompatActivity
     resultText = (TextView) findViewById(R.id.grpc_response_text);
     getCheckBox = (CheckBox) findViewById(R.id.get_checkbox);
 
-    ProviderInstaller.installIfNeededAsync(this, this);
+//    ProviderInstaller.installIfNeededAsync(this, this);
     // Disable buttons until the security provider installing finishes.
-    enableButtons(false);
+    enableButtons(true);
+//    System.out.println(Security.insertProviderAt(Conscrypt.newProvider("GmsCore_OpenSSL"), 1));
   }
 
   public void startEmptyUnary(View view) {
