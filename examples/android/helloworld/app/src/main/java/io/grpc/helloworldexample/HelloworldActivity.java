@@ -66,7 +66,7 @@ public class HelloworldActivity extends AppCompatActivity {
 //            System.out.println(p);
 //        }
 //        System.out.println(Security.addProvider(Conscrypt.newProvider()));
-        System.out.println(Security.insertProviderAt(Conscrypt.newProvider("GmsCore_OpenSSL"), 1));
+//        System.out.println(Security.insertProviderAt(Conscrypt.newProvider("GmsCore_OpenSSL"), 1));
     }
 
     public void sendMessage(View view) {
@@ -84,10 +84,10 @@ public class HelloworldActivity extends AppCompatActivity {
 
         @Override
         protected void onPreExecute() {
-            mHost = "library-example.googleapis.com"; //mHostEdit.getText().toString();
-            mMessage = "test"; //mMessageEdit.getText().toString();
-//            String portStr = mPortEdit.getText().toString();
-            mPort = 443; //TextUtils.isEmpty(portStr) ? 0 : Integer.valueOf(portStr);
+            mHost = mHostEdit.getText().toString();
+            mMessage = "test";// mMessageEdit.getText().toString();
+            String portStr = mPortEdit.getText().toString();
+            mPort = TextUtils.isEmpty(portStr) ? 0 : Integer.valueOf(portStr);
             mResultText.setText("");
         }
 
@@ -102,6 +102,7 @@ public class HelloworldActivity extends AppCompatActivity {
                 HelloReply reply = stub.sayHello(message);
                 return reply.getMessage();
             } catch (Exception e) {
+                e.printStackTrace(System.out);
                 StringWriter sw = new StringWriter();
                 PrintWriter pw = new PrintWriter(sw);
                 e.printStackTrace(pw);

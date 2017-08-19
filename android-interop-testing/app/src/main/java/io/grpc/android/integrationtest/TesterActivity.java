@@ -63,6 +63,7 @@ public class TesterActivity extends AppCompatActivity
 
 //    ProviderInstaller.installIfNeededAsync(this, this);
     // Disable buttons until the security provider installing finishes.
+//    Security.removeProvider("AndroidOpenSSL");
     enableButtons(true);
 //    System.out.println(Security.insertProviderAt(Conscrypt.newProvider("GmsCore_OpenSSL"), 1));
   }
