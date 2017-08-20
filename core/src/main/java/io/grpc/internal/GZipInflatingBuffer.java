@@ -51,43 +51,85 @@ public class GZipInflatingBuffer {
 
   private static final int INFLATE_BUFFER_SIZE = 512;
 
+  private byte[] uncompressedBuf;
+  // TODO - decide if need long - probably not since requiredLength in MessageDeframer is int
+  private int compressedBytesConsumed;
+  private int uncompressedBytesAvailable;
+
+  private static final int MAX_BUFFER_SIZE = 1024 * 4;
+
+  public int getAndResetCompressedBytesConsumed() {
+    int toReturn = compressedBytesConsumed;
+    compressedBytesConsumed = 0;
+    return toReturn;
+  }
+
   /**
-   * Reads bytesToRead into bufferToWrite and returns number of compressed bytes consumed.
+   * If min(bytesToRead, MAX_BUFFER_SIZE) of uncompressed data are available, adds them to
+   * bufferToWrite and returns true. Otherwise returns 0.
    *
-   * @param bytesToRead
+   * @param bytesRequested
    * @param bufferToWrite
    * @return
    */
-  public int readUncompressedBytes(int bytesToRead, CompositeReadableBuffer bufferToWrite) {
-    return 0;
+  // TODO: can number of compressed bytes = 0 but still the uncompressed output is available?
+  // Maybe possible if locked in inflater's buffer already.
+  public boolean readUncompressedBytes(int bytesRequested, CompositeReadableBuffer bufferToWrite) {
+    int bytesToUncompress = Math.min(bytesRequested, MAX_BUFFER_SIZE);
+    if (uncompressedBuf == null) {
+      uncompressedBuf = new byte[bytesToUncompress];
+      uncompressedBytesAvailable = 0; // reset
+      compressedBytesConsumed = 0; // reset
+    }
+    // TODO - right now we are giving too much data to the inflater (potentialy, because
+    // we might be including the trailers). So we can have inflater.finished() &&
+    // !inflater.needsInput(),
+    // when we need to pull back some data from the inflater - which should be the TRAILERS
+    // plus potentially the next stream.
+    // TODO: concatenated streams
+    // TODO cannot have compressedData available && inflater.needsInput() ? irrelevant...
+    // last condition is ( have data || don't have more data but inflater doesn't need it)
+    while (uncompressedBytesAvailable < bytesToUncompress
+        && !inflater.finished()
+        && (compressedData.readableBytes() > 0 || !inflater.needsInput())) {
+      inflate(bytesToUncompress - uncompressedBytesAvailable);
+    }
+    // TODO assert can't be greater than
+    if (uncompressedBytesAvailable == bytesToUncompress) {
+      bufferToWrite.addBuffer(ReadableBuffers.wrap(uncompressedBuf));
+      uncompressedBuf = null;
+      return true;
+    } else {
+      return false;
+    }
   }
 
   public void addCompressedBytes(ReadableBuffer buffer) {
     compressedData.addBuffer(buffer);
   }
 
-  public boolean uncompressedBytesReady(int bytesRequested) {
-    checkState(bytesRequested >= 0, "bytes must be non-negative");
-    int uncompressedBytes = uncompressedData.readableBytes();
-    if (uncompressedBytes >= bytesRequested) {
-      return true;
-    } else {
-      // TODO - right now we are giving too much data to the inflater (potentialy, because
-      // we might be including the trailers). So we can have inflater.finished() &&
-      // !inflater.needsInput(),
-      // when we need to pull back some data from the inflater - which should be the TRAILERS
-      // plus potentially the next stream.
-      // TODO: concatenated streams
-      while (uncompressedData.readableBytes() < bytesRequested
-          && !inflater.finished()
-          && (compressedData.readableBytes() > 0 || !inflater.needsInput())) {
-        inflate(bytesRequested);
-      }
-      return uncompressedData.readableBytes() >= bytesRequested;
-    }
-  }
+  //  public boolean uncompressedBytesReady(int bytesRequested) {
+  //    checkState(bytesRequested >= 0, "bytes must be non-negative");
+  //    int uncompressedBytes = uncompressedData.readableBytes();
+  //    if (uncompressedBytes >= bytesRequested) {
+  //      return true;
+  //    } else {
+  //      // TODO - right now we are giving too much data to the inflater (potentialy, because
+  //      // we might be including the trailers). So we can have inflater.finished() &&
+  //      // !inflater.needsInput(),
+  //      // when we need to pull back some data from the inflater - which should be the TRAILERS
+  //      // plus potentially the next stream.
+  //      // TODO: concatenated streams
+  //      while (uncompressedData.readableBytes() < bytesRequested
+  //          && !inflater.finished()
+  //          && (compressedData.readableBytes() > 0 || !inflater.needsInput())) {
+  //        inflate(bytesRequested);
+  //      }
+  //      return uncompressedData.readableBytes() >= bytesRequested;
+  //    }
+  //  }
 
-  private void inflate(int bytesRequested) {
+  private void inflate(int bytesToInflate) {
     // But we can also have inflater.needsInput() && inflater.finished(), or !inflated.needsInput()
     // && inflater.finished().
     if (inflater.finished()) {
@@ -98,16 +140,18 @@ public class GZipInflatingBuffer {
     } else if (inflater.needsInput()) {
       processCompressedBytes();
     } else {
-      // TODO - use bytesRequested to avoid this re-allocation every time
-      byte[] decompressedBuf = new byte[INFLATE_BUFFER_SIZE];
+      //      // TODO - use bytesRequested to avoid this re-allocation every time
+      //      byte[] decompressedBuf = new byte[INFLATE_BUFFER_SIZE];
       try {
         if (inflater.finished()) {
           System.out.println("Finished! Inflater needs input: " + inflater.needsInput());
           state = State.TRAILER;
         }
-        int n = inflater.inflate(decompressedBuf, 0, INFLATE_BUFFER_SIZE);
-        System.out.println("INFLATED (" + n + " bytes) " + bytesToHex(decompressedBuf));
-        uncompressedData.addBuffer(ReadableBuffers.wrap(decompressedBuf, 0, n));
+        int n = inflater.inflate(uncompressedBuf, uncompressedBytesAvailable, bytesToInflate);
+        uncompressedBytesAvailable += n;
+        System.out.println("INFLATED (" + n + " bytes) " +
+            bytesToHex(uncompressedBuf, uncompressedBytesAvailable));
+        //        uncompressedData.addBuffer(ReadableBuffers.wrap(uncompressedBuf, 0, n));
       } catch (DataFormatException e) {
         System.out.println("DataFormatException");
         e.printStackTrace(System.out);
@@ -148,39 +192,33 @@ public class GZipInflatingBuffer {
    * @return {@code true} if all of the required bytes have been read.
    */
   private boolean readRequiredBytes() {
+    // TODO get rid of totalBytesRead here, or drop nextBlock altogether?
     int totalBytesRead = 0;
     int maxToRead = requiredLength;
     if (state == State.BODY) {
       maxToRead = INFLATE_BUFFER_SIZE;
     }
-    try {
-      if (nextBlock == null) {
-        nextBlock = new CompositeReadableBuffer();
-      }
-
-      // Read until the buffer contains all the required bytes.
-      int missingBytes;
-      while ((missingBytes = maxToRead - nextBlock.readableBytes()) > 0) {
-        if (compressedData.readableBytes() == 0) {
-          if (state == State.BODY && totalBytesRead > 0) {
-            // We've read at least one byte, pass it to inflater
-            break;
-          } else {
-            // No more data is available.
-            return false;
-          }
-        }
-        int toRead = Math.min(missingBytes, compressedData.readableBytes());
-        totalBytesRead += toRead;
-        nextBlock.addBuffer(compressedData.readBytes(toRead));
-      }
-      return true;
-    } finally {
-      if (totalBytesRead > 0) {
-        // TODO get a listener
-        listener.bytesRead(totalBytesRead);
-      }
+    if (nextBlock == null) {
+      nextBlock = new CompositeReadableBuffer();
     }
+
+    // Read until the buffer contains all the required bytes.
+    int missingBytes;
+    while ((missingBytes = maxToRead - nextBlock.readableBytes()) > 0) {
+      if (compressedData.readableBytes() == 0) {
+        if (state == State.BODY && totalBytesRead > 0) {
+          // We've read at least one byte, pass it to inflater
+          break;
+        } else {
+          // No more data is available.
+          return false;
+        }
+      }
+      int toRead = Math.min(missingBytes, compressedData.readableBytes());
+      totalBytesRead += toRead;
+      nextBlock.addBuffer(compressedData.readBytes(toRead));
+    }
+    return true;
   }
 
   /** GZIP header magic number. */
@@ -262,13 +300,18 @@ public class GZipInflatingBuffer {
   /** Javadoc. */
   // TODO - remove
   public static String bytesToHex(byte[] bytes) {
-    char[] hexChars = new char[bytes.length * 2];
-    for (int j = 0; j < bytes.length; j++) {
+    return bytesToHex(bytes, bytes.length);
+  }
+
+  /** Javadoc. */
+  // TODO - remove
+  public static String bytesToHex(byte[] bytes, int len) {
+    char[] hexChars = new char[len * 2];
+    for (int j = 0; j < len; j++) {
       int v = bytes[j] & 0xFF;
       hexChars[j * 2] = hexArray[v >>> 4];
       hexChars[j * 2 + 1] = hexArray[v & 0x0F];
     }
     return new String(hexChars);
   }
-
 }

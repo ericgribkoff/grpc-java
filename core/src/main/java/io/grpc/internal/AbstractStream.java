@@ -118,7 +118,7 @@ public abstract class AbstractStream implements Stream {
     public static final int DEFAULT_ONREADY_THRESHOLD = 32 * 1024;
     private static final boolean DEFRAME_IN_APPLICATION_THREAD = false;
 
-    protected Deframer deframer;
+    private Deframer deframer;
     private final Object onReadyLock = new Object();
     private final StatsTraceContext statsTraceCtx;
 
@@ -161,8 +161,9 @@ public abstract class AbstractStream implements Stream {
 
     // TODO replace this with a lazy/settable deframer object
     protected void enableFullStreamDecompression() {
-      ((MessageDeframer) deframer).setUnprocessedBuffer(new GzipInflatingCompositeBuffer(this));
-      ((MessageDeframer) deframer).setReportBytesRead(false);
+//      ((MessageDeframer) deframer).setUnprocessedBuffer(new GzipInflatingCompositeBuffer(this));
+//      ((MessageDeframer) deframer).setReportBytesRead(false);
+      ((MessageDeframer) deframer).setGZipInflater(new GZipInflatingBuffer());
       this.deframer = new ApplicationThreadDeframer(this, (MessageDeframer) deframer, this);
     }
 
