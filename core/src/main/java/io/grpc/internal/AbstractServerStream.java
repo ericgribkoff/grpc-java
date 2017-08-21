@@ -88,29 +88,57 @@ public abstract class AbstractServerStream extends AbstractStream
       this.bufferAllocator = bufferAllocator;
     }
 
+    private boolean waitTillEndOfStream = false;
+
     @Override
     public void deliverFrame(@Nullable WritableBuffer frame, boolean endOfStream, boolean flush) {
       //      System.out.println("I can buffer this by just wrapping sink! ? " + streamCompression);
       //      System.out.println("With compressor " + compressor);
+      System.out.println("deliverFrame called: frame=" + frame + " endOfStream=" + endOfStream);
       if (streamCompression) {
-        buffers.add(frame);
-        if (endOfStream) {
+        if (waitTillEndOfStream) {
+          buffers.add(frame);
+          if (endOfStream) {
+            try {
+              // This is wrong - it compresses before writing to buffers, so the sizes won't be right
+              // Need to *write* to the compressed stream.
+              BufferChainOutputStream bufferChain = new BufferChainOutputStream();
+              OutputStream compressingStream = compressor.compress(bufferChain);
+              //compressor.compress(new UnchainedOutputStream(buffers));
+              for (WritableBuffer buffer : buffers) {
+                // This is highly likely to fail if the buffers haven't been written to...but they are
+                // written in MessageFramer.
+                readBytesFromBufferToStream(buffer, compressingStream);
+              }
+              compressingStream.close();
+              for (WritableBuffer buffer : bufferChain.bufferList) {
+                savedSink.deliverFrame(buffer, false, false);
+              }
+              savedSink.deliverFrame(null, endOfStream, flush);
+            } catch (IOException e) {
+              System.out.println("Failed to compress stream");
+              e.printStackTrace(System.out);
+            }
+          }
+        } else {
           try {
-            // This is wrong - it compresses before writing to buffers, so the sizes won't be right
-            // Need to *write* to the compressed stream.
-            BufferChainOutputStream bufferChain = new BufferChainOutputStream();
-            OutputStream compressingStream = compressor.compress(bufferChain);
-            //compressor.compress(new UnchainedOutputStream(buffers));
-            for (WritableBuffer buffer : buffers) {
-              // This is highly likely to fail if the buffers haven't been written to...but they are
-              // written in MessageFramer.
-              readBytesFromBufferToStream(buffer, compressingStream);
+            if (frame != null) {
+              BufferChainOutputStream bufferChain = new BufferChainOutputStream();
+              OutputStream compressingStream = compressor.compress(bufferChain);
+              //compressor.compress(new UnchainedOutputStream(buffers));
+              readBytesFromBufferToStream(frame, compressingStream);
+              compressingStream.close();
+              for (WritableBuffer buffer : bufferChain.bufferList) {
+                savedSink.deliverFrame(buffer, false, flush);
+              }
+              if (endOfStream) {
+                savedSink.deliverFrame(null, endOfStream, flush);
+              }
+            } else {
+              if (endOfStream) {
+                savedSink.deliverFrame(null, endOfStream, flush);
+              }
             }
-            compressingStream.close();
-            for (WritableBuffer buffer : bufferChain.bufferList) {
-              savedSink.deliverFrame(buffer, false, false);
-            }
-            savedSink.deliverFrame(null, endOfStream, flush);
           } catch (IOException e) {
             System.out.println("Failed to compress stream");
             e.printStackTrace(System.out);

@@ -72,7 +72,7 @@ class NettyServerStream extends AbstractServerStream {
       System.out.println("Readable bytes: " + bytebuf.readableBytes());
       byte[] rawBytes = new byte[bytebuf.readableBytes()];
       bytebuf.readBytes(rawBytes);
-      System.out.println("Raw bytes:" + bytesToHex(rawBytes));
+//      System.out.println("Raw bytes:" + bytesToHex(rawBytes));
       bytebuf.resetReaderIndex();
       System.out.println("Readable bytes: " + bytebuf.readableBytes());
       bytebuf.readBytes(os, bytebuf.readableBytes());
@@ -82,13 +82,16 @@ class NettyServerStream extends AbstractServerStream {
       OutputStream compressedOs = gzip.compress(byteOs);
       compressedOs.write(rawBytes);
       compressedOs.close();
-      System.out.println("Compressed bytes: " + bytesToHex(byteOs.toByteArray()));
 
-      System.out.println(
-          "Uncompressed bytes: "
-              + bytesToHex(
-                  ByteStreams.toByteArray(
-                      gzip.decompress(new ByteArrayInputStream(byteOs.toByteArray())))));
+      System.out.println("Compressed bytes: " + byteOs.toByteArray().length);
+
+      //      System.out.println("Compressed bytes: " + bytesToHex(byteOs.toByteArray()));
+      //
+      //      System.out.println(
+      //          "Uncompressed bytes: "
+      //              + bytesToHex(
+      //                  ByteStreams.toByteArray(
+      //                      gzip.decompress(new ByteArrayInputStream(byteOs.toByteArray())))));
 
     }
   }
@@ -111,7 +114,7 @@ class NettyServerStream extends AbstractServerStream {
       hexChars[j * 3 + 1] = hexArray[v & 0x0F];
       hexChars[j * 3 + 2] = '-';
     }
-    return new String(hexChars);
+    return new String(hexChars) + " (" + len + " bytes)";
   }
 
   @Override

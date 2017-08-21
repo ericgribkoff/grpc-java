@@ -312,7 +312,7 @@ public abstract class AbstractInteropTest {
   public void largeUnary() throws Exception {
     assumeEnoughMemory();
     final SimpleRequest request = SimpleRequest.newBuilder()
-        .setResponseSize(31415900)
+        .setResponseSize(3141590)
         .setResponseType(PayloadType.COMPRESSABLE)
         .setPayload(Payload.newBuilder()
             .setBody(ByteString.copyFrom(new byte[271828])))
@@ -320,7 +320,7 @@ public abstract class AbstractInteropTest {
     final SimpleResponse goldenResponse = SimpleResponse.newBuilder()
         .setPayload(Payload.newBuilder()
             .setType(PayloadType.COMPRESSABLE)
-            .setBody(ByteString.copyFrom(new byte[31415900])))
+            .setBody(ByteString.copyFrom(new byte[3141590])))
         .build();
 
     assertEquals(goldenResponse, blockingStub.unaryCall(request));
@@ -436,19 +436,19 @@ public abstract class AbstractInteropTest {
     final StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
         .setResponseType(PayloadType.COMPRESSABLE)
         .addResponseParameters(ResponseParameters.newBuilder()
-            .setSize(31415))
+            .setSize(3))
         .addResponseParameters(ResponseParameters.newBuilder()
             .setSize(9))
         .addResponseParameters(ResponseParameters.newBuilder()
-            .setSize(2653))
+            .setSize(2))
         .addResponseParameters(ResponseParameters.newBuilder()
-            .setSize(58979))
+            .setSize(5))
         .build();
     final List<StreamingOutputCallResponse> goldenResponses = Arrays.asList(
         StreamingOutputCallResponse.newBuilder()
             .setPayload(Payload.newBuilder()
                 .setType(PayloadType.COMPRESSABLE)
-                .setBody(ByteString.copyFrom(new byte[31415])))
+                .setBody(ByteString.copyFrom(new byte[3])))
             .build(),
         StreamingOutputCallResponse.newBuilder()
             .setPayload(Payload.newBuilder()
@@ -458,12 +458,12 @@ public abstract class AbstractInteropTest {
         StreamingOutputCallResponse.newBuilder()
             .setPayload(Payload.newBuilder()
                 .setType(PayloadType.COMPRESSABLE)
-                .setBody(ByteString.copyFrom(new byte[2653])))
+                .setBody(ByteString.copyFrom(new byte[2])))
             .build(),
         StreamingOutputCallResponse.newBuilder()
             .setPayload(Payload.newBuilder()
                 .setType(PayloadType.COMPRESSABLE)
-                .setBody(ByteString.copyFrom(new byte[58979])))
+                .setBody(ByteString.copyFrom(new byte[5])))
             .build());
 
     StreamRecorder<StreamingOutputCallResponse> recorder = StreamRecorder.create();

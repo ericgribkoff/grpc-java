@@ -194,7 +194,12 @@ public class MessageDeframer implements Closeable, Deframer {
     if (isClosed()) {
       return;
     }
-    boolean hasPartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
+    boolean hasPartialMessage;
+    if (gzipInflater != null) {
+      hasPartialMessage = gzipInflater.hasPartialData();
+    } else {
+      hasPartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
+    }
     try {
       if (unprocessed != null) {
         unprocessed.close();
@@ -306,7 +311,7 @@ public class MessageDeframer implements Closeable, Deframer {
           previousMissingBytes = missingBytes;
 
           // TODO how do we know if we are making progress...We know we are making progress if the
-          // inflater reads some uncompressed bytes. This does *not* mean that it read more
+          // inflater outputs some uncompressed bytes. This does *not* mean that it read more
           // compressed bytes, AFAICT.
           // We do not need to loop here on the chance more data was simultaneously written to the
           // gzipInflater - this can't happen (single-threaded) and also would trigger another call
@@ -314,8 +319,11 @@ public class MessageDeframer implements Closeable, Deframer {
           // ready.
           // even if we are or are not ready, the inflater may have consumed more compressed bytes,
           // so return these to flow control
-          int compressedBytesRead = gzipInflater.readUncompressedBytes(missingBytes, nextFrame);
-          totalBytesRead += compressedBytesRead;
+          int uncompressedBytesRead = gzipInflater.readUncompressedBytes(missingBytes, nextFrame);
+          totalBytesRead += gzipInflater.getAndResetCompressedBytesConsumed();
+          if (uncompressedBytesRead == 0) {
+            return false;
+          }
 
           //          int compressedBytesRead = gzipInflater.uncompressedBytesReady(missingBytes);
           //          if (compressedBytesRead > 0) {
@@ -338,6 +346,7 @@ public class MessageDeframer implements Closeable, Deframer {
           nextFrame.addBuffer(unprocessed.readBytes(toRead));
         }
       }
+      System.out.println("readRequiredBytes complete! (" + requiredLength + " total needed)");
       return true;
     } finally {
       if (totalBytesRead > 0) {
