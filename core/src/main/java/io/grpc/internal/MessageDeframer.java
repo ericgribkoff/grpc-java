@@ -295,6 +295,7 @@ public class MessageDeframer implements Closeable, Deframer {
   private boolean readRequiredBytes() {
     int totalBytesRead = 0;
     try {
+      // TODO nextFrame essentially "moves" into GZipInflatingBuffer for a compressed stream
       if (nextFrame == null) {
         nextFrame = new CompositeReadableBuffer();
       }
