@@ -25,14 +25,10 @@ import java.util.zip.Inflater;
 /**
  * Created by ericgribkoff on 8/18/17.
  */
-// TODO consistent use of inflate OR decompress
+// TODO consistent use of inflate OR decompress terminology
 public class GZipInflatingBuffer {
+  // Equivalent of unprocessed in standard MessageDeframer
   private final CompositeReadableBuffer compressedData = new CompositeReadableBuffer();
-  // TODO - replace uncompressedData with byte[]
-  private final CompositeReadableBuffer uncompressedData = new CompositeReadableBuffer();
-  // Either gzip header, deflated block, or gzip trailer
-  // TODO: remove?
-  private CompositeReadableBuffer nextBlock;
 
   private static final int GZIP_BASE_HEADER_SIZE = 10;
   private static final int GZIP_TRAILER_SIZE = 8;
@@ -40,30 +36,27 @@ public class GZipInflatingBuffer {
   private Inflater inflater = new Inflater(true);
   private State state = State.HEADER;
 
-  private int requiredLength = GZIP_BASE_HEADER_SIZE;
-
   // TODO pair state and required length
   private enum State {
     HEADER,
-    HEADER_EXTRA,
-    BODY,
+    HEADER_EXTRA, // TODO break down further
+    INFLATING,
+    INFLATER_NEEDS_INPUT,
+    INFLATER_FINISHED,
     TRAILER
   }
 
+  // Test edge cases by setting these to small values
   private static final int INFLATE_BUFFER_SIZE = 512;
-
-  private byte[] compressedBuf = new byte[INFLATE_BUFFER_SIZE];
-  private byte[] uncompressedBuf;
-  // TODO - decide if need long - probably not since requiredLength in MessageDeframer is int
-  private int compressedBytesConsumed;
-  private int uncompressedBytesAvailable;
-
   private static final int MAX_BUFFER_SIZE = 1024 * 4;
 
-  public int getAndResetCompressedBytesConsumed() {
-    int toReturn = compressedBytesConsumed;
-    compressedBytesConsumed = 0;
-    return toReturn;
+  private byte[] inflaterBuf = new byte[INFLATE_BUFFER_SIZE];
+  private byte[] uncompressedBuf;
+  // TODO - decide if need long - probably not since requiredLength in MessageDeframer is int
+  private int uncompressedBytesAvailable;
+
+  public void addCompressedBytes(ReadableBuffer buffer) {
+    compressedData.addBuffer(buffer);
   }
 
   /**
@@ -76,45 +69,219 @@ public class GZipInflatingBuffer {
    */
   // TODO: can number of compressed bytes = 0 but still the uncompressed output is available?
   // Maybe possible if locked in inflater's buffer already.
+  // TODO - YES, additional compressed bytes can be ZERO with another additional uncompressed
+  // block available.
   // TODO - this is basically the wrapping logic for GZip - maybe this should just be in
   // MessageDeframer?
-  public boolean readUncompressedBytes(int bytesRequested, CompositeReadableBuffer bufferToWrite) {
+  public int readUncompressedBytes(int bytesRequested, CompositeReadableBuffer bufferToWrite) {
     int bytesToUncompress = Math.min(bytesRequested, MAX_BUFFER_SIZE);
-    if (uncompressedBuf == null) {
-      uncompressedBuf = new byte[bytesToUncompress]; // TODO: pre-allocate and always
-                                                     // reuse. Already done in InflaterInputStream
-      uncompressedBytesAvailable = 0; // reset
-      compressedBytesConsumed = 0; // reset
+    // have to reallocate each time - just wrap()'ing in a ReadableBuffer doesn't reallocate
+    uncompressedBuf = new byte[bytesToUncompress];
+    int bytesNeeded;
+    int bytesProcessed = 0; // to be removed from flow control
+
+    while ((bytesNeeded = bytesToUncompress - uncompressedBytesAvailable) > 0) {
+      switch (state) {
+        case HEADER:
+          if (compressedData.readableBytes() >= GZIP_BASE_HEADER_SIZE) {
+            bytesProcessed += processHeader();
+          } else {
+            return bytesProcessed;
+          }
+          break;
+        case HEADER_EXTRA:
+          // TODO break down HEADER_EXTRA into FEXTRA, FNAME, FCOMMENT, and FHCRC
+          throw new AssertionError("Reached HEADER_EXTRA");
+        case INFLATING:
+          // Pass the body bytes to the inflater
+          bytesProcessed += inflate(bytesNeeded);
+          break;
+        case INFLATER_NEEDS_INPUT:
+          if (compressedData.readableBytes() > 0) {
+            fill();
+          } else {
+            return bytesProcessed;
+          }
+          break;
+        case INFLATER_FINISHED:
+          inflaterFinished();
+          break;
+        case TRAILER:
+          // TODO get bytes back from inflater if necessary
+          if (compressedData.readableBytes() >= GZIP_TRAILER_SIZE) {
+            bytesProcessed += processTrailer();
+          } else {
+            return bytesProcessed;
+          }
+          break;
+        default:
+          throw new AssertionError("Invalid state: " + state);
+      }
     }
-    // TODO - right now we are giving too much data to the inflater (potentially, because
-    // we might be including the trailers). So we can have inflater.finished() &&
-    // !inflater.needsInput(),
-    // when we need to pull back some data from the inflater - which should be the TRAILERS
-    // plus potentially the next stream.
-    // TODO: concatenated streams
-    // TODO cannot have compressedData available && inflater.needsInput() ? irrelevant...
-    // last condition is ( have data || don't have more data but inflater doesn't need it)
-    //    while (uncompressedBytesAvailable < bytesToUncompress
-    //        && !inflater.finished()
-    //        && (compressedData.readableBytes() > 0 || !inflater.needsInput())) {
-    int bytesNeeded = bytesToUncompress - uncompressedBytesAvailable;
-    if (bytesNeeded > 0) {
-      inflate(bytesNeeded);
-    }
-    //    }
+
     // TODO assert can't be greater than
+    checkState(uncompressedBytesAvailable <= bytesToUncompress, "too many bytes inflated");
     if (uncompressedBytesAvailable == bytesToUncompress) {
-      bufferToWrite.addBuffer(ReadableBuffers.wrap(uncompressedBuf));
-      uncompressedBuf = null;
-      return true;
+      System.out.println("All " + bytesToUncompress + " bytes inflated: " +
+              bytesToHex(uncompressedBuf, uncompressedBytesAvailable));
+      bufferToWrite.addBuffer(
+              ReadableBuffers.wrap(uncompressedBuf, 0, uncompressedBytesAvailable));
+      uncompressedBytesAvailable = 0; // reset
+    }
+
+    return bytesProcessed;
+  }
+
+
+  // We are requesting bytesToInflate.
+  private int inflate(int bytesToInflate) {
+    int bytesConsumed = 0;
+    try {
+      int n = inflater.inflate(uncompressedBuf, uncompressedBytesAvailable, bytesToInflate);
+      bytesConsumed += (int) inflater.getBytesRead(); // TODO resolve cast
+      if (n == 0) {
+        if (inflater.finished()) {
+          System.out.println("Finished! Inflater needs input: " + inflater.needsInput());
+          // TODO harvest extra bytes given to inflater from trailers/next gzip stream
+          // TODO transition to next stream
+          state = State.INFLATER_FINISHED;
+        } else if (inflater.needsInput()) {
+          state = State.INFLATER_NEEDS_INPUT;
+        } else {
+          throw new AssertionError("inflater stalled");
+        }
+      } else {
+        uncompressedBytesAvailable += n;
+        System.out.println("INFLATED (" + n + " bytes = " + uncompressedBytesAvailable
+                + " total) " +
+                bytesToHex(uncompressedBuf, uncompressedBytesAvailable));
+      }
+    } catch (DataFormatException e) {
+      // TODO properly abort when this happens
+      System.out.println("DataFormatException");
+      e.printStackTrace(System.out);
+    }
+    return bytesConsumed;
+  }
+
+  private void inflaterFinished() {
+    state = State.TRAILER;
+    return;
+  }
+
+  private void fill() {
+    // TODO: remove checkState
+    checkState(inflater.needsInput(), "inflater not empty");
+
+    int bytesToAdd = Math.min(compressedData.readableBytes(), INFLATE_BUFFER_SIZE);
+    if (bytesToAdd > 0) {
+      compressedData.readBytes(inflaterBuf, 0, bytesToAdd);
+      System.out.println("Raw bytes read and set as inflater input: " +
+              bytesToHex(inflaterBuf, bytesToAdd));
+      inflater.setInput(inflaterBuf, 0, bytesToAdd);
+      state = State.INFLATING;
     } else {
-      return false;
+      throw new AssertionError("no bytes to fill");
     }
   }
 
-  public void addCompressedBytes(ReadableBuffer buffer) {
-    compressedData.addBuffer(buffer);
+  /** GZIP header magic number. */
+  public static final int GZIP_MAGIC = 0x8b1f;
+
+  /*
+   * File header flags.
+   */
+  private static final int FTEXT = 1; // Extra text
+  private static final int FHCRC = 2; // Header CRC
+  private static final int FEXTRA = 4; // Extra field
+  private static final int FNAME = 8; // File name
+  private static final int FCOMMENT = 16; // File comment
+
+  /** CRC-32 for uncompressed data. */
+  protected CRC32 crc = new CRC32();
+
+  private int processHeader() {
+    // TODO - handle header CRC
+    crc.reset();
+
+    // Check header magic
+    if (readUShort() != GZIP_MAGIC) {
+      System.out.println("Not in GZIP Format");
+      throw new RuntimeException("Not in GZIP format");
+      //throw new ZipException("Not in GZIP format");
+    }
+
+    // Check compression method
+    if (compressedData.readUnsignedByte() != 8) {
+      System.out.println("Unsupported compression method");
+      throw new RuntimeException("Unsupported compression method");
+      //throw new ZipException("Unsupported compression method");
+    }
+    // Read flags
+    int flg = compressedData.readUnsignedByte();
+    // Skip MTIME, XFL, and OS fields
+    compressedData.readBytes(6); // TODO crc
+    int n = 2 + 2 + 6;
+
+    // TODO handle optional extra fields here (some with given length, otherwise zero terminated)
+    // + optional header crc
+    state = State.INFLATING;
+
+    return n;
   }
+
+  private int processTrailer() {
+    byte[] trailer = new byte[GZIP_TRAILER_SIZE]; // TODO: avoid allocation
+    compressedData.readBytes(trailer, 0, GZIP_TRAILER_SIZE);
+
+    // TODO check trailer CRC etc
+
+    state = State.HEADER;
+
+    return GZIP_TRAILER_SIZE;
+  }
+
+  /*
+   * Reads unsigned short in Intel byte order.
+   */
+  private int readUShort() {
+    int b = compressedData.readUnsignedByte();
+    return (compressedData.readUnsignedByte() << 8) | b;
+  }
+
+  // TODO - remove
+  private static final char[] hexArray = "0123456789ABCDEF".toCharArray();
+
+  /** Javadoc. */
+  // TODO - remove
+  public static String bytesToHex(byte[] bytes) {
+    return bytesToHex(bytes, bytes.length);
+  }
+
+  /** Javadoc. */
+  // TODO - remove
+  public static String bytesToHex(byte[] bytes, int len) {
+    char[] hexChars = new char[len * 3];
+    for (int j = 0; j < len; j++) {
+      int v = bytes[j] & 0xFF;
+      hexChars[j * 3] = hexArray[v >>> 4];
+      hexChars[j * 3 + 1] = hexArray[v & 0x0F];
+      hexChars[j * 3 + 2] = '-';
+    }
+    return new String(hexChars);
+  }
+
+
+  //  private void processBody() {
+  //    System.out.println("processBody() called");
+  //    checkState(inflater.needsInput(), "inflater not empty");
+  //
+  //    // TODO - avoid allocation here each time
+  //    byte[] inputBuf = new byte[nextBlock.readableBytes()];
+  //    nextBlock.readBytes(inputBuf, 0, nextBlock.readableBytes());
+  //    System.out.println("Raw bytes read and set as inflater input: " + bytesToHex(inputBuf));
+  //    inflater.setInput(inputBuf);
+  //  }
 
   //  public boolean uncompressedBytesReady(int bytesRequested) {
   //    checkState(bytesRequested >= 0, "bytes must be non-negative");
@@ -137,106 +304,29 @@ public class GZipInflatingBuffer {
   //    }
   //  }
 
-  // We are requesting bytesToInflate.
-  private void inflate(int bytesToInflate) {
-    while (uncompressedBytesAvailable < bytesToInflate) {
-      // TODO - should call finished() and needsInput() only when inflate() returns 0 - that's
-      // what InflaterInputStream and Inflater javadoc suggest.
-      //      if (inflater.finished()) {
-      //        System.out.println("Finished! Inflater needs input: " + inflater.needsInput());
-      //        // TODO harvest extra bytes given to inflater from trailers/next gzip stream
-      //        // TODO transition to next stream
-      //        state = State.TRAILER;
-      //        requiredLength = GZIP_TRAILER_SIZE;
-      //        return;
-      //      }
-      //
-      //      if (inflater.needsInput()) {
-      //        addBytesToInflater();
-      //      }
-
-      // But we can also have inflater.needsInput() && inflater.finished(), or !inflated.needsInput()
-      // && inflater.finished().
-      //      if (inflater.finished()) {
-      //        // TODO harvest extra bytes given to inflater from trailers/next gzip stream
-      //        state = State.TRAILER;
-      //        requiredLength = GZIP_TRAILER_SIZE;
-      //        processCompressedBytes();
-      //      } else if (inflater.needsInput()) {
-      //        processCompressedBytes();
-      //      } else {
-      //      // TODO - use bytesRequested to avoid this re-allocation every time
-      //      byte[] decompressedBuf = new byte[INFLATE_BUFFER_SIZE];
-      try {
-        int n = inflater.inflate(uncompressedBuf, uncompressedBytesAvailable, bytesToInflate);
-        if (n == 0) {
-          if (inflater.finished()) {
-            System.out.println("Finished! Inflater needs input: " + inflater.needsInput());
-            // TODO harvest extra bytes given to inflater from trailers/next gzip stream
-            // TODO transition to next stream
-            state = State.TRAILER;
-            requiredLength = GZIP_TRAILER_SIZE;
-            return;
-          } else {
-            checkState(inflater.needsInput(), "inflater is not finished but does not need input");
-            checkState(state == State.BODY, "not in gzipped block");
-            if (!addBytesToInflater()) {
-              return;
-            }
-          }
-        }
-        uncompressedBytesAvailable += n;
-        System.out.println("INFLATED (" + n + " bytes) " +
-            bytesToHex(uncompressedBuf, uncompressedBytesAvailable));
-        //        uncompressedData.addBuffer(ReadableBuffers.wrap(uncompressedBuf, 0, n));
-      } catch (DataFormatException e) {
-        // TODO properly abort when this happens
-        System.out.println("DataFormatException");
-        e.printStackTrace(System.out);
-      }
-      //      }
-    }
-  }
-
-  private void processUncompressedBytes() {
-    System.out.println("processCompressedBytes() called");
-    switch (state) {
-      case HEADER:
-        if (uncompressedData.readableBytes() >= GZIP_BASE_HEADER_SIZE) {
-          processHeader();
-        }
-        break;
-      case HEADER_EXTRA:
-        // TODO break down HEADER_EXTRA into FEXTRA, FNAME, FCOMMENT, and FHCRC
-        throw new AssertionError("Reached HEADER_EXTRA");
-      case BODY:
-        // Pass the body bytes to the inflater
-        processBody();
-        break;
-      case TRAILER:
-        // TODO get bytes back from inflater if necessary
-        processTrailer();
-        break;
-      default:
-        throw new AssertionError("Invalid state: " + state);
-    }
-  }
-
-  private void processBody() {
-    System.out.println("processBody() called");
-    checkState(inflater.needsInput(), "inflater not empty");
-
-    //    // TODO - avoid allocation here each time
-    //    byte[] inputBuf = new byte[nextBlock.readableBytes()];
-    //    nextBlock.readBytes(inputBuf, 0, nextBlock.readableBytes());
-    int bytesToAdd = Math.min(uncompressedData.readableBytes(), INFLATE_BUFFER_SIZE);
-    if (bytesToAdd > 0) {
-      uncompressedData.readBytes(compressedBuf, 0, bytesToAdd);
-      System.out.println("Raw bytes read and set as inflater input: " +
-          bytesToHex(compressedBuf, bytesToAdd));
-      inflater.setInput(compressedBuf);
-    }
-  }
+  //  private void processUncompressedBytes() {
+  //    System.out.println("processCompressedBytes() called");
+  //    switch (state) {
+  //      case HEADER:
+  //        if (uncompressedData.readableBytes() >= GZIP_BASE_HEADER_SIZE) {
+  //          processHeader();
+  //        }
+  //        break;
+  //      case HEADER_EXTRA:
+  //        // TODO break down HEADER_EXTRA into FEXTRA, FNAME, FCOMMENT, and FHCRC
+  //        throw new AssertionError("Reached HEADER_EXTRA");
+  //      case INFLATING:
+  //        // Pass the body bytes to the inflater
+  //        processBody();
+  //        break;
+  //      case TRAILER:
+  //        // TODO get bytes back from inflater if necessary
+  //        processTrailer();
+  //        break;
+  //      default:
+  //        throw new AssertionError("Invalid state: " + state);
+  //    }
+  //  }
 
   //  private boolean processCompressedBytes() {
   //    System.out.println("processCompressedBytes() called");
@@ -272,127 +362,33 @@ public class GZipInflatingBuffer {
    */
   // TODO - delete. This is wrong abstraction (we don't know required length of header extra
   // fields OR compressed body).
-  private boolean readRequiredBytes() {
-    // TODO get rid of totalBytesRead here, or drop nextBlock altogether?
-    int totalBytesRead = 0;
-    int maxToRead = requiredLength;
-    if (state == State.BODY) {
-      maxToRead = INFLATE_BUFFER_SIZE;
-    }
-    if (nextBlock == null) {
-      nextBlock = new CompositeReadableBuffer();
-    }
-
-    // Read until the buffer contains all the required bytes.
-    int missingBytes;
-    while ((missingBytes = maxToRead - nextBlock.readableBytes()) > 0) {
-      if (compressedData.readableBytes() == 0) {
-        if (state == State.BODY && totalBytesRead > 0) {
-          // We've read at least one byte, pass it to inflater
-          break;
-        } else {
-          // No more data is available.
-          return false;
-        }
-      }
-      int toRead = Math.min(missingBytes, compressedData.readableBytes());
-      totalBytesRead += toRead;
-      nextBlock.addBuffer(compressedData.readBytes(toRead));
-    }
-    return true;
-  }
-
-  /** GZIP header magic number. */
-  public static final int GZIP_MAGIC = 0x8b1f;
-
-  /*
-   * File header flags.
-   */
-  private static final int FTEXT = 1; // Extra text
-  private static final int FHCRC = 2; // Header CRC
-  private static final int FEXTRA = 4; // Extra field
-  private static final int FNAME = 8; // File name
-  private static final int FCOMMENT = 16; // File comment
-
-  /** CRC-32 for uncompressed data. */
-  protected CRC32 crc = new CRC32();
-
-  private void processHeader() {
-    crc.reset();
-
-    // TODO - handle CRC (here it's just for header, also need it for compressed bytes)
-
-    // Check header magic
-    if (readUShort() != GZIP_MAGIC) {
-      System.out.println("Not in GZIP Format");
-      throw new RuntimeException("Not in GZIP format");
-      //throw new ZipException("Not in GZIP format");
-    }
-
-    // Check compression method
-    if (nextBlock.readUnsignedByte() != 8) {
-      System.out.println("Unsupported compression method");
-      throw new RuntimeException("Unsupported compression method");
-      //throw new ZipException("Unsupported compression method");
-    }
-    // Read flags
-    int flg = nextBlock.readUnsignedByte();
-    // Skip MTIME, XFL, and OS fields
-    nextBlock.readBytes(6); // TODO crc
-    int n = 2 + 2 + 6;
-
-    // TODO handle optional extra fields here (some with given length, otherwise zero terminated)
-    // + optional header crc
-    state = State.BODY;
-  }
-
-  //  private void processBody() {
-  //    System.out.println("processBody() called");
-  //    checkState(inflater.needsInput(), "inflater not empty");
+  //  private boolean readRequiredBytes() {
+  //    // TODO get rid of totalBytesRead here, or drop nextBlock altogether?
+  //    int totalBytesRead = 0;
+  //    int maxToRead = requiredLength;
+  //    if (state == State.INFLATING) {
+  //      maxToRead = INFLATE_BUFFER_SIZE;
+  //    }
+  //    if (nextBlock == null) {
+  //      nextBlock = new CompositeReadableBuffer();
+  //    }
   //
-  //    // TODO - avoid allocation here each time
-  //    byte[] inputBuf = new byte[nextBlock.readableBytes()];
-  //    nextBlock.readBytes(inputBuf, 0, nextBlock.readableBytes());
-  //    System.out.println("Raw bytes read and set as inflater input: " + bytesToHex(inputBuf));
-  //    inflater.setInput(inputBuf);
+  //    // Read until the buffer contains all the required bytes.
+  //    int missingBytes;
+  //    while ((missingBytes = maxToRead - nextBlock.readableBytes()) > 0) {
+  //      if (compressedData.readableBytes() == 0) {
+  //        if (state == State.INFLATING && totalBytesRead > 0) {
+  //          // We've read at least one byte, pass it to inflater
+  //          break;
+  //        } else {
+  //          // No more data is available.
+  //          return false;
+  //        }
+  //      }
+  //      int toRead = Math.min(missingBytes, compressedData.readableBytes());
+  //      totalBytesRead += toRead;
+  //      nextBlock.addBuffer(compressedData.readBytes(toRead));
+  //    }
+  //    return true;
   //  }
-
-  private void processTrailer() {
-    byte[] trailer = new byte[GZIP_TRAILER_SIZE];
-    nextBlock.readBytes(trailer, 0, GZIP_TRAILER_SIZE);
-
-    // TODO check trailer CRC etc
-
-    state = State.HEADER;
-    requiredLength = GZIP_BASE_HEADER_SIZE;
-  }
-
-  /*
-   * Reads unsigned short in Intel byte order.
-   */
-  private int readUShort() {
-    int b = nextBlock.readUnsignedByte();
-    return (nextBlock.readUnsignedByte() << 8) | b;
-  }
-
-  // TODO - remove
-  private static final char[] hexArray = "0123456789ABCDEF".toCharArray();
-
-  /** Javadoc. */
-  // TODO - remove
-  public static String bytesToHex(byte[] bytes) {
-    return bytesToHex(bytes, bytes.length);
-  }
-
-  /** Javadoc. */
-  // TODO - remove
-  public static String bytesToHex(byte[] bytes, int len) {
-    char[] hexChars = new char[len * 2];
-    for (int j = 0; j < len; j++) {
-      int v = bytes[j] & 0xFF;
-      hexChars[j * 2] = hexArray[v >>> 4];
-      hexChars[j * 2 + 1] = hexArray[v & 0x0F];
-    }
-    return new String(hexChars);
-  }
 }

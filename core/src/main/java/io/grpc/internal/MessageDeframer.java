@@ -302,17 +302,14 @@ public class MessageDeframer implements Closeable, Deframer {
 
       // Read until the buffer contains all the required bytes.
       int missingBytes;
+      int previousMissingBytes = 0; // TODO - improve this
       while ((missingBytes = requiredLength - nextFrame.readableBytes()) > 0) {
         if (gzipInflater != null) {
-          // TODO handle ~4K max buffer size in gzipInflater - so if asking for 10MB, only returned
-          // in 4K (preallocated) chunks.
-          //          int compressedBytesRead
-          //              = gzipInflater.readUncompressedBytes(missingBytes, nextFrame);
-          //          if (compressedBytesRead > 0) {
-          //            totalBytesRead += compressedBytesRead;
-          //          } else {
-          //            return false;
-          //          }
+          if (previousMissingBytes == missingBytes) {
+            // No forward progress
+            return false;
+          }
+          previousMissingBytes = missingBytes;
 
           // TODO how do we know if we are making progress...We know we are making progress if the
           // inflater reads some uncompressed bytes. This does *not* mean that it read more
@@ -321,15 +318,10 @@ public class MessageDeframer implements Closeable, Deframer {
           // gzipInflater - this can't happen (single-threaded) and also would trigger another call
           // to deliver, which would pick up the data. Here we just need to know if the block is
           // ready.
-          boolean uncompressedBlockRead
-              = gzipInflater.readUncompressedBytes(missingBytes, nextFrame);
           // even if we are or are not ready, the inflater may have consumed more compressed bytes,
           // so return these to flow control
-          int compressedBytesRead = gzipInflater.getAndResetCompressedBytesConsumed();
+          int compressedBytesRead = gzipInflater.readUncompressedBytes(missingBytes, nextFrame);
           totalBytesRead += compressedBytesRead;
-          if (!uncompressedBlockRead) {
-            return false;
-          }
 
           //          int compressedBytesRead = gzipInflater.uncompressedBytesReady(missingBytes);
           //          if (compressedBytesRead > 0) {
