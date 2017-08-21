@@ -470,6 +470,11 @@ public abstract class AbstractInteropTest {
     asyncStub.streamingOutputCall(request, recorder);
     recorder.awaitCompletion();
     assertSuccess(recorder);
+//    for (int i = 0; i < 4; i++) {
+//      System.out.println("i: " + i);
+//      assertEquals(goldenResponses.get(i), recorder.getValues().get(i));
+//    }
+    assertEquals(goldenResponses.size(), recorder.getValues().size());
     assertEquals(goldenResponses, recorder.getValues());
   }
 

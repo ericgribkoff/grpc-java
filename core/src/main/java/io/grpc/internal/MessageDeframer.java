@@ -116,19 +116,6 @@ public class MessageDeframer implements Closeable, Deframer {
     this.debugString = debugString;
   }
 
-  // TODO Replace this and following method with lazy/settable equivalent (probably in constructor,
-  // done via AbstractStream)
-  public void setUnprocessedBuffer(CompositeBuffer buffer) {
-    unprocessed = buffer;
-  }
-
-  private boolean reportBytesRead = true;
-
-  // TODO remove
-  public void setReportBytesRead(boolean report) {
-    this.reportBytesRead = report;
-  }
-
   private GZipInflatingBuffer gzipInflater;
 
   public void setGZipInflater(GZipInflatingBuffer gzipInflater) {
@@ -179,12 +166,11 @@ public class MessageDeframer implements Closeable, Deframer {
 
   @Override
   public void closeWhenComplete() {
+    // TODO unprocessed == null doesn't make the most sense to check with stream compression
     if (unprocessed == null) {
       return;
     }
-    // TODO handle this with compressed data
-    boolean stalled = unprocessed.readableBytes() == 0;
-    if (stalled) {
+    if (isStalled()) {
       close();
     } else {
       closeWhenComplete = true;
@@ -203,6 +189,8 @@ public class MessageDeframer implements Closeable, Deframer {
 
   @Override
   public void close() {
+    System.out.println("close() invoked");
+    new Exception().printStackTrace(System.out);
     if (isClosed()) {
       return;
     }
@@ -231,6 +219,14 @@ public class MessageDeframer implements Closeable, Deframer {
   /** Returns true if this deframer has already been closed or scheduled to close. */
   private boolean isClosedOrScheduledToClose() {
     return isClosed() || closeWhenComplete;
+  }
+
+  private boolean isStalled() {
+    if (gzipInflater != null) {
+      return gzipInflater.isStalled();
+    } else {
+      return unprocessed.readableBytes() == 0;
+    }
   }
 
   /**
@@ -276,9 +272,7 @@ public class MessageDeframer implements Closeable, Deframer {
        * frame and not in unprocessed.  If there is extra data but no pending deliveries, it will
        * be in unprocessed.
        */
-      // TODO handle this with compressed data
-      boolean stalled = unprocessed.readableBytes() == 0;
-      if (closeWhenComplete && stalled) {
+      if (closeWhenComplete && isStalled()) {
         close();
       }
     } finally {
@@ -346,7 +340,7 @@ public class MessageDeframer implements Closeable, Deframer {
       }
       return true;
     } finally {
-      if (totalBytesRead > 0 && reportBytesRead) {
+      if (totalBytesRead > 0) {
         listener.bytesRead(totalBytesRead);
         if (state == State.BODY) {
           statsTraceCtx.inboundWireSize(totalBytesRead);

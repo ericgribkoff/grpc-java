@@ -55,6 +55,10 @@ public class GZipInflatingBuffer {
   // TODO - decide if need long - probably not since requiredLength in MessageDeframer is int
   private int uncompressedBytesAvailable;
 
+  public boolean isStalled() {
+    return compressedData.readableBytes() == 0 && state != State.INFLATING;
+  }
+
   public void addCompressedBytes(ReadableBuffer buffer) {
     compressedData.addBuffer(buffer);
   }
@@ -122,8 +126,8 @@ public class GZipInflatingBuffer {
     // TODO assert can't be greater than
     checkState(uncompressedBytesAvailable <= bytesToUncompress, "too many bytes inflated");
     if (uncompressedBytesAvailable == bytesToUncompress) {
-      System.out.println("All " + bytesToUncompress + " bytes inflated: " +
-              bytesToHex(uncompressedBuf, uncompressedBytesAvailable));
+//      System.out.println("All " + bytesToUncompress + " bytes inflated: " +
+//              bytesToHex(uncompressedBuf, uncompressedBytesAvailable));
       bufferToWrite.addBuffer(
               ReadableBuffers.wrap(uncompressedBuf, 0, uncompressedBytesAvailable));
       uncompressedBytesAvailable = 0; // reset
@@ -152,9 +156,9 @@ public class GZipInflatingBuffer {
         }
       } else {
         uncompressedBytesAvailable += n;
-        System.out.println("INFLATED (" + n + " bytes = " + uncompressedBytesAvailable
-                + " total) " +
-                bytesToHex(uncompressedBuf, uncompressedBytesAvailable));
+//        System.out.println("INFLATED (" + n + " bytes = " + uncompressedBytesAvailable
+//                + " total) " +
+//                bytesToHex(uncompressedBuf, uncompressedBytesAvailable));
       }
     } catch (DataFormatException e) {
       // TODO properly abort when this happens
