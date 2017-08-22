@@ -18,9 +18,7 @@ package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkState;
 
-import com.sun.xml.internal.ws.server.sei.MessageFiller.Header;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.zip.CRC32;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
@@ -45,7 +43,11 @@ public class GZipInflatingBuffer {
 
   private enum State {
     HEADER,
-    HEADER_EXTRA, // TODO break down further
+    HEADER_EXTRA_LEN,
+    HEADER_EXTRA,
+    HEADER_NAME,
+    HEADER_COMMENT,
+    HEADER_CRC,
     INFLATING,
     INFLATER_NEEDS_INPUT,
     TRAILER
@@ -54,8 +56,6 @@ public class GZipInflatingBuffer {
   private enum HeaderExtraStates {
     FEXTRA, FNAME, FCOMMENT, FHCRC
   }
-
-  private boolean[] headerExtraStates = new boolean[4];
 
   private static final int INFLATE_BUFFER_SIZE = 1;// 512;
   private static final int MAX_BUFFER_SIZE = 1024 * 4;
@@ -66,13 +66,16 @@ public class GZipInflatingBuffer {
   private byte[] uncompressedBuf;
   private int uncompressedBufWriterIndex;
 
+  private int headerExtraToRead;
+
+  private static final int USHORT_LEN = 2;
+
   /** GZIP header magic number. */
   public static final int GZIP_MAGIC = 0x8b1f;
 
   /*
-   * File header flags.
+   * File header flags. (FTEXT intentionally omitted)
    */
-  private static final int FTEXT = 1; // Extra text
   private static final int FHCRC = 2; // Header CRC
   private static final int FEXTRA = 4; // Extra field
   private static final int FNAME = 8; // File name
@@ -133,9 +136,7 @@ public class GZipInflatingBuffer {
       System.out.println("State: " + state);
       switch (state) {
         case HEADER:
-          if (inflater.getRemaining() + compressedData.readableBytes() >= GZIP_BASE_HEADER_SIZE) {
-            bytesConsumed += processHeader();
-          } else {
+          if (!processHeader()) {
             System.out.println("Returning...");
             System.out.println("uncompressedBufWriterIndex: " + uncompressedBufWriterIndex);
             System.out.println(inflater.getRemaining());
@@ -143,9 +144,31 @@ public class GZipInflatingBuffer {
             return 0;
           }
           break;
+        case HEADER_EXTRA_LEN:
+          if (!processHeaderExtraLen()) {
+            return 0;
+          }
+          break;
         case HEADER_EXTRA:
-          // TODO break down HEADER_EXTRA into FEXTRA, FNAME, FCOMMENT, and FHCRC
-          throw new AssertionError("Reached HEADER_EXTRA");
+          if (!processHeaderExtra()) {
+            return 0;
+          }
+          break;
+        case HEADER_NAME:
+          if (!processHeaderName()) {
+            return 0;
+          }
+          break;
+        case HEADER_COMMENT:
+          if (!processHeaderComment()) {
+            return 0;
+          }
+          break;
+        case HEADER_CRC:
+          if (!processHeaderCrc()) {
+            return 0;
+          }
+          break;
         case INFLATING:
           // Pass the body bytes to the inflater
           inflate(bytesNeeded);
@@ -158,9 +181,7 @@ public class GZipInflatingBuffer {
           }
           break;
         case TRAILER:
-          if (inflater.getRemaining() + compressedData.readableBytes() >= GZIP_TRAILER_SIZE) {
-            bytesConsumed += processTrailer();
-          } else {
+          if (!processTrailer()) {
             return 0;
           }
           break;
@@ -232,22 +253,25 @@ public class GZipInflatingBuffer {
     }
   }
 
-  private int processHeader() {
-    // TODO - handle header CRC
-    crc.reset();
+  private boolean pendingHeaderExtra;
+  private boolean pendingHeaderName;
+  private boolean pendingHeaderComment;
+  private boolean pendingHeaderCRC;
 
+  private boolean readBytesFromInflaterBufOrCompressedData(int n, byte[] returnBuffer) {
     int bytesRemainingInInflater = inflater.getRemaining();
+    int compressedDataReadableByes = compressedData.readableBytes();
+
+    if (bytesRemainingInInflater + compressedDataReadableByes < n) {
+      return false;
+    }
+
     int inflaterBufHeaderStartIndex = inflaterBufLen - bytesRemainingInInflater;
-    int bytesToGetFromInflater = Math.min(GZIP_BASE_HEADER_SIZE, bytesRemainingInInflater);
-
-    System.out.println("bytesRemainingInInflater: " + bytesRemainingInInflater);
-    System.out.println("bytesToGetFromInflater: " + bytesToGetFromInflater);
-    System.out.println("compressedData.readableBytes(): " + compressedData.readableBytes());
-
-    inflater.reset(); // TODO - make this more obviously required here!
+    int bytesToGetFromInflater = Math.min(n, bytesRemainingInInflater);
 
     if (bytesToGetFromInflater > 0) {
-      System.out.println("Setting inflater input: start=" + (inflaterBufHeaderStartIndex + bytesToGetFromInflater) + " len=" +
+      System.out.println("Setting inflater input: start="
+          + (inflaterBufHeaderStartIndex + bytesToGetFromInflater) + " len=" +
           (bytesRemainingInInflater - bytesToGetFromInflater));
       inflater.setInput(
           inflaterBuf,
@@ -256,12 +280,25 @@ public class GZipInflatingBuffer {
     }
 
     for (int i = 0; i < bytesToGetFromInflater; i++) {
-      tmpBuffer[i] = inflaterBuf[inflaterBufHeaderStartIndex + i];
+      returnBuffer[i] = inflaterBuf[inflaterBufHeaderStartIndex + i];
     }
 
-    int bytesToGetFromCompressedData = GZIP_BASE_HEADER_SIZE - bytesToGetFromInflater;
+    int bytesToGetFromCompressedData = n - bytesToGetFromInflater;
     System.out.println("bytesToGetFromCompressedData: " + bytesToGetFromCompressedData);
-    compressedData.readBytes(tmpBuffer, bytesToGetFromInflater, bytesToGetFromCompressedData);
+    compressedData.readBytes(returnBuffer, bytesToGetFromInflater, bytesToGetFromCompressedData);
+
+    return true;
+  }
+
+  private boolean processHeader() {
+    if (!readBytesFromInflaterBufOrCompressedData(GZIP_BASE_HEADER_SIZE, tmpBuffer)) {
+      return false;
+    }
+
+    inflater.reset(); // TODO - make this more obviously required here!
+
+    // TODO - handle header CRC
+    crc.reset();
 
     crc.update(tmpBuffer, 0, GZIP_BASE_HEADER_SIZE);
 
@@ -284,33 +321,106 @@ public class GZipInflatingBuffer {
     //    // Skip MTIME, XFL, and OS fields
     int n = 2 + 2 + 6;
 
-    // TODO handle optional extra fields here (some with given length, otherwise zero terminated)
-    if ((flg & FEXTRA) == FEXTRA) {
-      headerExtraStates[HeaderExtraStates.FEXTRA.ordinal()] = true;
-      state = State.HEADER_EXTRA;
-    }
+    pendingHeaderExtra = (flg & FEXTRA) == FEXTRA;
+    pendingHeaderName = (flg & FNAME) == FNAME;
+    pendingHeaderComment = (flg & FCOMMENT) == FCOMMENT;
+    pendingHeaderCRC = (flg & FHCRC) == FHCRC;
 
-    if ((flg & FNAME) == FNAME) {
-      headerExtraStates[HeaderExtraStates.FNAME.ordinal()] = true;
-      state = State.HEADER_EXTRA;
-    }
+    state = State.HEADER_EXTRA_LEN;
+    bytesConsumed += n;
+    return true;
+  }
 
-    if ((flg & FCOMMENT) == FCOMMENT) {
-      headerExtraStates[HeaderExtraStates.FCOMMENT.ordinal()] = true;
-      state = State.HEADER_EXTRA;
-    }
 
-    if ((flg & FHCRC) == FHCRC) {
-      headerExtraStates[HeaderExtraStates.FHCRC.ordinal()] = true;
-      state = State.HEADER_EXTRA;
+  // TODO - all of these need to add to bytesConsumed...
+  private boolean processHeaderExtraLen() {
+    if (!pendingHeaderExtra) {
+      // TODO extract transitions into function of current state? e.g., state = nextState(State...)
+      // Could also do this just for headers (separate enum)
+      state = State.HEADER_NAME;
+      return true;
     }
+    if (!readBytesFromInflaterBufOrCompressedData(USHORT_LEN, tmpBuffer)) {
+      return false;
+    }
+    crc.update(tmpBuffer, 0, USHORT_LEN);
+    headerExtraToRead = readUnsignedShort(tmpBuffer[0], tmpBuffer[1]);
+    state = State.HEADER_EXTRA;
+    return true;
+  }
 
-    if (state == State.HEADER) {
-      state = State.INFLATING;
+  private boolean processHeaderExtra() {
+    if (!pendingHeaderExtra) {
+      // TODO extract transitions into function of current state? e.g., state = nextState(State...)
+      // Could also do this just for headers (separate enum)
+      state = State.HEADER_NAME;
+      return true;
+    }
+//    int bytesAvailable = readableBytesFromInflaterBufOrCompressedData();
+    while (headerExtraToRead > 0) {
+      int bytesToRead = Math.min(headerExtraToRead, tmpBuffer.length);
+      if (!readBytesFromInflaterBufOrCompressedData(bytesToRead, tmpBuffer)) {
+        return false;
+      } else {
+        headerExtraToRead -= bytesToRead;
+        crc.update(tmpBuffer, 0, bytesToRead);
+      }
+    }
+    state = State.HEADER_NAME;
+    return true;
+  }
+
+  private boolean processHeaderName() {
+    if (!pendingHeaderName) {
+      // TODO extract transitions into function of current state? e.g., state = nextState(State...)
+      // Could also do this just for headers (separate enum)
+      state = State.HEADER_COMMENT;
+      return true;
+    }
+    while (!readBytesFromInflaterBufOrCompressedData(1, tmpBuffer)) {
+      crc.update(tmpBuffer[0]);
+      if (readUnsignedByte(tmpBuffer[0]) == 0) {
+        state = State.HEADER_COMMENT;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private boolean processHeaderComment() {
+    if (!pendingHeaderComment) {
+      // TODO extract transitions into function of current state? e.g., state = nextState(State...)
+      // Could also do this just for headers (separate enum)
+      state = State.HEADER_CRC;
+      return true;
+    }
+    while (!readBytesFromInflaterBufOrCompressedData(1, tmpBuffer)) {
+      crc.update(tmpBuffer[0]);
+      if (readUnsignedByte(tmpBuffer[0]) == 0) {
+        state = State.HEADER_CRC;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private boolean processHeaderCrc() {
+    if (!pendingHeaderCRC) {
+      // TODO extract transitions into function of current state? e.g., state = nextState(State...)
+      // Could also do this just for headers (separate enum)
+      // TODO Definitely a good idea due to need to do things like crc.reset(), inflater.reset()
       crc.reset();
+      state = State.INFLATER_NEEDS_INPUT;
+      return true;
     }
-
-    return n; // TODO: should be variable
+    if (readBytesFromInflaterBufOrCompressedData(USHORT_LEN, tmpBuffer)) {
+      int v = (int) crc.getValue() & 0xffff;
+      checkState(v == readUnsignedShort(tmpBuffer[0], tmpBuffer[1]), "corrupt gzip header");
+      crc.reset();
+      state = State.INFLATER_NEEDS_INPUT;
+      return true;
+    }
+    return false;
   }
 
   private int readUnsignedByte(byte b) {
@@ -333,34 +443,14 @@ public class GZipInflatingBuffer {
   }
 
 
-  private int processTrailer() {
-    int bytesRemainingInInflater = inflater.getRemaining();
-    int inflaterBufTrailerStartIndex = inflaterBufLen - bytesRemainingInInflater;
-    int bytesToGetFromInflater = Math.min(GZIP_TRAILER_SIZE, bytesRemainingInInflater);
-
-    System.out.println("bytesRemainingInInflater: " + bytesRemainingInInflater);
-    System.out.println("bytesToGetFromInflater: " + bytesToGetFromInflater);
-    System.out.println("compressedData.readableBytes(): " + compressedData.readableBytes());
-    if (bytesToGetFromInflater > 0) {
-      System.out.println("Setting inflater input: start=" + (inflaterBufTrailerStartIndex + bytesToGetFromInflater) + " len=" +
-          (bytesRemainingInInflater - bytesToGetFromInflater));
-      inflater.setInput(
-          inflaterBuf,
-          inflaterBufTrailerStartIndex + bytesToGetFromInflater,
-          bytesRemainingInInflater - bytesToGetFromInflater);
-      System.out.println("Remaining in inflater: " + inflater.getRemaining());
+  private boolean processTrailer() {
+    if (!readBytesFromInflaterBufOrCompressedData(GZIP_TRAILER_SIZE, tmpBuffer)) {
+      return false;
     }
-
-    // TODO check CRC
-    for (int i = 0; i < bytesToGetFromInflater; i++) {
-      tmpBuffer[i] = inflaterBuf[inflaterBufTrailerStartIndex + i];
-    }
-    int bytesToGetFromCompressedData = GZIP_TRAILER_SIZE - bytesToGetFromInflater;
-    System.out.println("bytesToGetFromCompressedData: " + bytesToGetFromCompressedData);
-    compressedData.readBytes(tmpBuffer, bytesToGetFromInflater, bytesToGetFromCompressedData);
 
     try {
-      System.out.println("unsigned int that should be checksum: " + readUnsignedInt(tmpBuffer[0], tmpBuffer[1], tmpBuffer[2],   tmpBuffer[3]));
+      System.out.println("unsigned int that should be checksum: "
+          + readUnsignedInt(tmpBuffer[0], tmpBuffer[1], tmpBuffer[2],   tmpBuffer[3]));
       System.out.println("crc.getValue() " + crc.getValue());
 
       if ((readUnsignedInt(tmpBuffer[0], tmpBuffer[1], tmpBuffer[2], tmpBuffer[3])
@@ -377,7 +467,8 @@ public class GZipInflatingBuffer {
 
     state = State.HEADER;
 
-    return GZIP_TRAILER_SIZE;
+    bytesConsumed += GZIP_TRAILER_SIZE;
+    return true;
   }
 
   // TODO - remove
