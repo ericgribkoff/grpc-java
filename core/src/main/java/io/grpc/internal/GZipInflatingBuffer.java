@@ -134,59 +134,49 @@ public class GZipInflatingBuffer {
     // TODO - better stopping condition for this loop (embedded returns are confusing)
     while ((bytesNeeded = uncompressedBuf.length - uncompressedBufWriterIndex) > 0) {
       System.out.println("State: " + state);
+      // TODO - could also see if new state != old state to measure progress...
+      boolean madeProgress;
       switch (state) {
         case HEADER:
-          if (!processHeader()) {
-            System.out.println("Returning...");
-            System.out.println("uncompressedBufWriterIndex: " + uncompressedBufWriterIndex);
-            System.out.println(inflater.getRemaining());
-            System.out.println(compressedData.readableBytes());
-            return 0;
-          }
+          madeProgress = processHeader();
           break;
         case HEADER_EXTRA_LEN:
-          if (!processHeaderExtraLen()) {
-            return 0;
-          }
+          madeProgress = processHeaderExtraLen();
           break;
         case HEADER_EXTRA:
-          if (!processHeaderExtra()) {
-            return 0;
-          }
+          madeProgress = processHeaderExtra();
           break;
         case HEADER_NAME:
-          if (!processHeaderName()) {
-            return 0;
-          }
+          madeProgress = processHeaderName();
           break;
         case HEADER_COMMENT:
-          if (!processHeaderComment()) {
-            return 0;
-          }
+          madeProgress = processHeaderComment();
           break;
         case HEADER_CRC:
-          if (!processHeaderCrc()) {
-            return 0;
-          }
+          madeProgress = processHeaderCrc();
           break;
         case INFLATING:
           // Pass the body bytes to the inflater
           inflate(bytesNeeded);
+          // inflate will either produce needed bytes or transition to another state
+          madeProgress = true;
           break;
         case INFLATER_NEEDS_INPUT:
-          if (compressedData.readableBytes() > 0) {
-            fill();
-          } else {
-            return 0;
-          }
+          madeProgress = fill();
           break;
         case TRAILER:
-          if (!processTrailer()) {
-            return 0;
-          }
+          madeProgress = processTrailer();
           break;
         default:
           throw new AssertionError("Invalid state: " + state);
+      }
+
+      if (!madeProgress) {
+        System.out.println("Returning...");
+        System.out.println("uncompressedBufWriterIndex: " + uncompressedBufWriterIndex);
+        System.out.println(inflater.getRemaining());
+        System.out.println(compressedData.readableBytes());
+        return 0;
       }
     }
 
@@ -206,7 +196,7 @@ public class GZipInflatingBuffer {
   }
 
   // We are requesting bytesToInflate.
-  private int inflate(int bytesToInflate) {
+  private void inflate(int bytesToInflate) {
     System.out.println("bytesToInflate: " + bytesToInflate);
     int bytesAlreadyConsumed = inflater.getTotalIn();
     try {
@@ -236,10 +226,10 @@ public class GZipInflatingBuffer {
       System.out.println("DataFormatException");
       e.printStackTrace(System.out);
     }
-    return bytesConsumed;
+    return;
   }
 
-  private void fill() {
+  private boolean fill() {
     int bytesToAdd = Math.min(compressedData.readableBytes(), INFLATE_BUFFER_SIZE);
     if (bytesToAdd > 0) {
       compressedData.readBytes(inflaterBuf, 0, bytesToAdd);
@@ -248,8 +238,9 @@ public class GZipInflatingBuffer {
       inflaterBufLen = bytesToAdd;
       inflater.setInput(inflaterBuf, 0, inflaterBufLen);
       state = State.INFLATING;
+      return true;
     } else {
-      throw new AssertionError("no bytes to fill");
+      return false;
     }
   }
 
@@ -286,6 +277,8 @@ public class GZipInflatingBuffer {
     int bytesToGetFromCompressedData = n - bytesToGetFromInflater;
     System.out.println("bytesToGetFromCompressedData: " + bytesToGetFromCompressedData);
     compressedData.readBytes(returnBuffer, bytesToGetFromInflater, bytesToGetFromCompressedData);
+
+    bytesConsumed += n;
 
     return true;
   }
@@ -327,12 +320,10 @@ public class GZipInflatingBuffer {
     pendingHeaderCRC = (flg & FHCRC) == FHCRC;
 
     state = State.HEADER_EXTRA_LEN;
-    bytesConsumed += n;
     return true;
   }
 
 
-  // TODO - all of these need to add to bytesConsumed...
   private boolean processHeaderExtraLen() {
     if (!pendingHeaderExtra) {
       // TODO extract transitions into function of current state? e.g., state = nextState(State...)
@@ -467,7 +458,6 @@ public class GZipInflatingBuffer {
 
     state = State.HEADER;
 
-    bytesConsumed += GZIP_TRAILER_SIZE;
     return true;
   }
 
