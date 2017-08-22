@@ -53,10 +53,6 @@ public class GZipInflatingBuffer {
     TRAILER
   }
 
-  private enum HeaderExtraStates {
-    FEXTRA, FNAME, FCOMMENT, FHCRC
-  }
-
   private static final int INFLATE_BUFFER_SIZE = 1;// 512;
   private static final int MAX_BUFFER_SIZE = 1024 * 4;
 
@@ -67,6 +63,7 @@ public class GZipInflatingBuffer {
   private int uncompressedBufWriterIndex;
 
   private int headerExtraToRead;
+  private int gzipHeaderFlag;
 
   private static final int USHORT_LEN = 2;
 
@@ -244,6 +241,7 @@ public class GZipInflatingBuffer {
     }
   }
 
+  // TODO - reduce copying :(
   private boolean readBytesFromInflaterBufOrCompressedData(int n, byte[] returnBuffer) {
     int bytesRemainingInInflater = inflater.getRemaining();
     int compressedDataReadableByes = compressedData.readableBytes();
@@ -277,8 +275,6 @@ public class GZipInflatingBuffer {
 
     return true;
   }
-
-  private int gzipHeaderFlag;
 
   private boolean processHeader() {
     if (!readBytesFromInflaterBufOrCompressedData(GZIP_BASE_HEADER_SIZE, tmpBuffer)) {

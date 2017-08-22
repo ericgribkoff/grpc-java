@@ -301,15 +301,8 @@ public class MessageDeframer implements Closeable, Deframer {
 
       // Read until the buffer contains all the required bytes.
       int missingBytes;
-      int previousMissingBytes = 0; // TODO - improve this
       while ((missingBytes = requiredLength - nextFrame.readableBytes()) > 0) {
         if (gzipInflater != null) {
-          if (previousMissingBytes == missingBytes) {
-            // No forward progress
-            return false;
-          }
-          previousMissingBytes = missingBytes;
-
           // TODO how do we know if we are making progress...We know we are making progress if the
           // inflater outputs some uncompressed bytes. This does *not* mean that it read more
           // compressed bytes, AFAICT.
