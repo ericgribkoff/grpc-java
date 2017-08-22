@@ -84,7 +84,7 @@ public class GZipInflatingBuffer {
   /** CRC-32 for uncompressed data. */
   protected CRC32 crc = new CRC32();
 
-  private byte[] tmpBuffer = new byte[10]; // for skipping/parsing(?) header/trailer
+  private byte[] tmpBuffer = new byte[128]; // for skipping/parsing(?) header, trailer data
 
   public boolean isStalled() {
     // TODO - not quite right, but want to verify finish state.
@@ -244,11 +244,6 @@ public class GZipInflatingBuffer {
     }
   }
 
-  private boolean pendingHeaderExtra;
-  private boolean pendingHeaderName;
-  private boolean pendingHeaderComment;
-  private boolean pendingHeaderCRC;
-
   private boolean readBytesFromInflaterBufOrCompressedData(int n, byte[] returnBuffer) {
     int bytesRemainingInInflater = inflater.getRemaining();
     int compressedDataReadableByes = compressedData.readableBytes();
@@ -283,6 +278,8 @@ public class GZipInflatingBuffer {
     return true;
   }
 
+  private int gzipHeaderFlag;
+
   private boolean processHeader() {
     if (!readBytesFromInflaterBufOrCompressedData(GZIP_BASE_HEADER_SIZE, tmpBuffer)) {
       return false;
@@ -309,15 +306,8 @@ public class GZipInflatingBuffer {
       //throw new ZipException("Unsupported compression method");
     }
 
-    // Read flags
-    int flg = readUnsignedByte(tmpBuffer[3]);
-    //    // Skip MTIME, XFL, and OS fields
-    int n = 2 + 2 + 6;
-
-    pendingHeaderExtra = (flg & FEXTRA) == FEXTRA;
-    pendingHeaderName = (flg & FNAME) == FNAME;
-    pendingHeaderComment = (flg & FCOMMENT) == FCOMMENT;
-    pendingHeaderCRC = (flg & FHCRC) == FHCRC;
+    // Read flags, ignore MTIME, XFL, and OS fields.
+    gzipHeaderFlag = readUnsignedByte(tmpBuffer[3]);
 
     state = State.HEADER_EXTRA_LEN;
     return true;
@@ -325,7 +315,8 @@ public class GZipInflatingBuffer {
 
 
   private boolean processHeaderExtraLen() {
-    if (!pendingHeaderExtra) {
+    // TODO - check flag directly here :-)
+    if ((gzipHeaderFlag & FEXTRA) != FEXTRA) {
       // TODO extract transitions into function of current state? e.g., state = nextState(State...)
       // Could also do this just for headers (separate enum)
       state = State.HEADER_NAME;
@@ -341,12 +332,6 @@ public class GZipInflatingBuffer {
   }
 
   private boolean processHeaderExtra() {
-    if (!pendingHeaderExtra) {
-      // TODO extract transitions into function of current state? e.g., state = nextState(State...)
-      // Could also do this just for headers (separate enum)
-      state = State.HEADER_NAME;
-      return true;
-    }
 //    int bytesAvailable = readableBytesFromInflaterBufOrCompressedData();
     while (headerExtraToRead > 0) {
       int bytesToRead = Math.min(headerExtraToRead, tmpBuffer.length);
@@ -362,7 +347,7 @@ public class GZipInflatingBuffer {
   }
 
   private boolean processHeaderName() {
-    if (!pendingHeaderName) {
+    if ((gzipHeaderFlag & FNAME) != FNAME) {
       // TODO extract transitions into function of current state? e.g., state = nextState(State...)
       // Could also do this just for headers (separate enum)
       state = State.HEADER_COMMENT;
@@ -379,7 +364,7 @@ public class GZipInflatingBuffer {
   }
 
   private boolean processHeaderComment() {
-    if (!pendingHeaderComment) {
+    if ((gzipHeaderFlag & FCOMMENT) != FCOMMENT) {
       // TODO extract transitions into function of current state? e.g., state = nextState(State...)
       // Could also do this just for headers (separate enum)
       state = State.HEADER_CRC;
@@ -396,7 +381,7 @@ public class GZipInflatingBuffer {
   }
 
   private boolean processHeaderCrc() {
-    if (!pendingHeaderCRC) {
+    if ((gzipHeaderFlag & FHCRC) != FHCRC) {
       // TODO extract transitions into function of current state? e.g., state = nextState(State...)
       // Could also do this just for headers (separate enum)
       // TODO Definitely a good idea due to need to do things like crc.reset(), inflater.reset()
