@@ -18,7 +18,10 @@ package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkState;
 
+import com.google.common.primitives.Ints;
+import com.google.common.primitives.Longs;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.zip.CRC32;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
@@ -53,7 +56,7 @@ public class GZipInflatingBuffer {
     TRAILER
   }
 
-  private static final int INFLATE_BUFFER_SIZE = 1;// 512;
+  private static final int INFLATE_BUFFER_SIZE = 512;
   private static final int MAX_BUFFER_SIZE = 1024 * 4;
 
   private byte[] inflaterBuf = new byte[INFLATE_BUFFER_SIZE];
@@ -85,6 +88,8 @@ public class GZipInflatingBuffer {
 
   public boolean isStalled() {
     // TODO - not quite right, but want to verify finish state.
+    // TODO state != State.INFLATING is not sufficient if we are eagerly parsing TRAILERS...
+    // but inflater.getRemaining() may have junk data and we are stalled.
     return compressedData.readableBytes() == 0 && state != State.INFLATING;
   }
 
@@ -180,6 +185,16 @@ public class GZipInflatingBuffer {
     System.out.println("uncompressedBufWriterIndex (after): " + uncompressedBufWriterIndex);
 
     if (uncompressedBufWriterIndex == uncompressedBuf.length) {
+      // TODO fix this - we just want to eagerly parse the trailer when available, but if we are
+      // requesting *exactly* the number of bytes available, we won't otherwise parse the trailer.
+      //      if (inflater.finished()) {
+      //        state = State.TRAILER;
+      //        processTrailer();
+      //      }
+      System.out.println("Returning with data!...");
+      System.out.println("uncompressedBufWriterIndex: " + uncompressedBufWriterIndex);
+      System.out.println(inflater.getRemaining());
+      System.out.println(compressedData.readableBytes());
       int bytesToWrite = uncompressedBuf.length;
 //      System.out.println("All " + bytesToUncompress + " bytes inflated: " +
 //              bytesToHex(uncompressedBuf, uncompressedBufWriterIndex));
@@ -254,9 +269,13 @@ public class GZipInflatingBuffer {
     int bytesToGetFromInflater = Math.min(n, bytesRemainingInInflater);
 
     if (bytesToGetFromInflater > 0) {
+      System.out.println("bytesToGetFromInflater: " + bytesToGetFromInflater);
       System.out.println("Setting inflater input: start="
           + (inflaterBufHeaderStartIndex + bytesToGetFromInflater) + " len=" +
           (bytesRemainingInInflater - bytesToGetFromInflater));
+      // Can't reset here when this is invoked from trailer - we'll need inflater's # bytes written
+      // later...well, we can just save it first.
+      inflater.reset();
       inflater.setInput(
           inflaterBuf,
           inflaterBufHeaderStartIndex + bytesToGetFromInflater,
@@ -281,7 +300,11 @@ public class GZipInflatingBuffer {
       return false;
     }
 
-    inflater.reset(); // TODO - make this more obviously required here!
+    // TODO - isn't this broken with extra flags? We need to reset after we've consumed additional
+    // header data out of buffer too...
+    // Not to mention we may have updated the inflater's buffer in
+    // readBytesFromInflaterBufOrCompressedData...
+//    inflater.reset(); // TODO - make this more obviously required here!
 
     // TODO - handle header CRC
     crc.reset();
@@ -382,14 +405,14 @@ public class GZipInflatingBuffer {
       // Could also do this just for headers (separate enum)
       // TODO Definitely a good idea due to need to do things like crc.reset(), inflater.reset()
       crc.reset();
-      state = State.INFLATER_NEEDS_INPUT;
+      state = State.INFLATING;
       return true;
     }
     if (readBytesFromInflaterBufOrCompressedData(USHORT_LEN, tmpBuffer)) {
       int v = (int) crc.getValue() & 0xffff;
       checkState(v == readUnsignedShort(tmpBuffer[0], tmpBuffer[1]), "corrupt gzip header");
       crc.reset();
-      state = State.INFLATER_NEEDS_INPUT;
+      state = State.INFLATING;
       return true;
     }
     return false;
@@ -416,6 +439,8 @@ public class GZipInflatingBuffer {
 
 
   private boolean processTrailer() {
+    long bytesWritten = inflater.getBytesWritten(); // save because the read may reset inflater
+
     if (!readBytesFromInflaterBufOrCompressedData(GZIP_TRAILER_SIZE, tmpBuffer)) {
       return false;
     }
@@ -424,14 +449,24 @@ public class GZipInflatingBuffer {
       System.out.println("unsigned int that should be checksum: "
           + readUnsignedInt(tmpBuffer[0], tmpBuffer[1], tmpBuffer[2],   tmpBuffer[3]));
       System.out.println("crc.getValue() " + crc.getValue());
+      long desiredCrc = crc.getValue();
+      System.out.println("as byte array: " + Arrays.toString(Longs.toByteArray(desiredCrc)));
+      System.out.println("-13 as unsigned int: " + readUnsignedByte((byte) -13));
+      long desiredBytesWritten  = (bytesWritten & 0xffffffffL);
+      System.out.println("inflater.getBytesWritten() & 0xffffffffL: "
+          + desiredBytesWritten);
+      System.out.println("as byte array: " + Arrays.toString(Longs.toByteArray(desiredBytesWritten)));
+      System.out.println("what should be ^: "
+          + readUnsignedInt(tmpBuffer[4], tmpBuffer[5], tmpBuffer[6], tmpBuffer[7]));
 
       if ((readUnsignedInt(tmpBuffer[0], tmpBuffer[1], tmpBuffer[2], tmpBuffer[3])
               != crc.getValue())
           ||
           // rfc1952; ISIZE is the input size modulo 2^32
           (readUnsignedInt(tmpBuffer[4], tmpBuffer[5], tmpBuffer[6], tmpBuffer[7])
-              != (inflater.getBytesWritten() & 0xffffffffL)))
+              != (bytesWritten & 0xffffffffL))) {
         throw new RuntimeException("Checksum failed or corrupt GZIP trailer");
+      }
     } catch (IOException e) {
       System.out.println("IOException on trailer");
       throw new RuntimeException(e);
