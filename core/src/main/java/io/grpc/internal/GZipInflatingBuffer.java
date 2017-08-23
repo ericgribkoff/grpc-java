@@ -189,7 +189,7 @@ public class GZipInflatingBuffer {
     }
 
     System.out.println("uncompressedBufWriterIndex (after): " + uncompressedBufWriterIndex);
-    
+
     if (uncompressedBufWriterIndex > 0) {
       // TODO fix this - we just want to eagerly parse the trailer when available, but if we are
       // requesting *exactly* the number of bytes available, we won't otherwise parse the trailer.

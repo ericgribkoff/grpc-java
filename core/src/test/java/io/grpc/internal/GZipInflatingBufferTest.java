@@ -42,6 +42,9 @@ public class GZipInflatingBufferTest {
   private byte[] deflatedBytes;
   private byte[] gZipTrailerBytes;
 
+  private byte[] littleGZipCompressedBytes;
+  private byte[] littleGZipUncompressedBytes;
+
   private GZipInflatingBuffer gzipBuffer;
 
   private static final int GZIP_BASE_HEADER_SIZE = 10;
@@ -76,6 +79,9 @@ public class GZipInflatingBufferTest {
       ByteArrayOutputStream uncompressedOutputStream = new ByteArrayOutputStream();
       ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
       OutputStream outputStream = new GZIPOutputStream(byteArrayOutputStream);
+
+      ByteArrayOutputStream smallerGzippedOutputStream = new ByteArrayOutputStream();
+      OutputStream smallerGzipCompressingStream = new GZIPOutputStream(smallerGzippedOutputStream);
       byte buffer[] = new byte[512];
       int total = 0;
       int n;
@@ -83,7 +89,11 @@ public class GZipInflatingBufferTest {
         total += n;
         uncompressedOutputStream.write(buffer, 0, n);
         outputStream.write(buffer, 0, n);
-        // TODO - gZipInflateWorks passed with 7926 as the bound here, fails with most others (e.g., 10000)
+        if (littleGZipCompressedBytes == null) {
+          smallerGzipCompressingStream.close();
+          littleGZipCompressedBytes = smallerGzippedOutputStream.toByteArray();
+          littleGZipUncompressedBytes = uncompressedOutputStream.toByteArray();
+        }
 //        if (total > 7926) {//0000) {
         if (total > 10000) {
           break;
@@ -386,6 +396,52 @@ public class GZipInflatingBufferTest {
   }
 
   @Test
+  public void concatenatedStreamsWorks() throws Exception {
+    CompositeReadableBuffer outputBuffer = new CompositeReadableBuffer();
+    gzipBuffer.addCompressedBytes(ReadableBuffers.wrap(gZipCompressedBytes));
+    gzipBuffer.addCompressedBytes(ReadableBuffers.wrap(littleGZipCompressedBytes));
+    gzipBuffer.addCompressedBytes(ReadableBuffers.wrap(gZipCompressedBytes));
+    gzipBuffer.addCompressedBytes(ReadableBuffers.wrap(littleGZipCompressedBytes));
+
+    assertTrue(readBytesIfPossible(uncompressedBytes.length, outputBuffer));
+
+
+    System.out.println("Readable bytes: ");
+    System.out.println(outputBuffer.readableBytes());
+    System.out.println("uncompressedBytes.length: " + uncompressedBytes.length);
+
+    assertTrue(readBytesIfPossible(littleGZipUncompressedBytes.length, outputBuffer));
+
+
+    System.out.println("Readable bytes: ");
+    System.out.println(outputBuffer.readableBytes());
+    System.out.println("littleGZipUncompressedBytes.length: " + littleGZipUncompressedBytes.length);
+
+    assertTrue(readBytesIfPossible(uncompressedBytes.length, outputBuffer));
+    assertTrue(readBytesIfPossible(littleGZipUncompressedBytes.length, outputBuffer));
+//
+//    System.out.println("Readable bytes: ");
+//    System.out.println(outputBuffer.readableBytes());
+//    System.out.println("uncompressedBytes.length: " + uncompressedBytes.length);
+
+    byte[] byteBuf = new byte[uncompressedBytes.length];
+    outputBuffer.readBytes(byteBuf, 0, uncompressedBytes.length);
+    assertTrue("inflated data does not match original", Arrays.equals(uncompressedBytes, byteBuf));
+
+    byteBuf = new byte[littleGZipUncompressedBytes.length];
+    outputBuffer.readBytes(byteBuf, 0, littleGZipUncompressedBytes.length);
+    assertTrue("inflated data does not match original", Arrays.equals(littleGZipUncompressedBytes, byteBuf));
+
+    byteBuf = new byte[uncompressedBytes.length];
+    outputBuffer.readBytes(byteBuf, 0, uncompressedBytes.length);
+    assertTrue("inflated data does not match original", Arrays.equals(uncompressedBytes, byteBuf));
+
+    byteBuf = new byte[littleGZipUncompressedBytes.length];
+    outputBuffer.readBytes(byteBuf, 0, littleGZipUncompressedBytes.length);
+    assertTrue("inflated data does not match original", Arrays.equals(littleGZipUncompressedBytes, byteBuf));
+  }
+
+  @Test
   // TODO this is ugly to have to test. Should we change the API to return whatever it has
   // (up to the requested amount) each time? Is this hard to do?
   public void requestingTooManyBytesStillReturnsEndOfBlock() throws Exception {
@@ -413,8 +469,6 @@ public class GZipInflatingBufferTest {
     outputBuffer.readBytes(byteBuf, 0, uncompressedBytes.length);
     assertTrue("inflated data does not match original", Arrays.equals(uncompressedBytes, byteBuf));
   }
-
-  // TODO - concatenated streams
 
   @Test
   // TODO - remove need for reading 1 extra byte to trigger exception
@@ -478,22 +532,20 @@ public class GZipInflatingBufferTest {
   }
 
   private boolean readBytesIfPossible(int n, CompositeReadableBuffer buffer) throws Exception {
-    int bytesNeeded;
-    int bytesRead = 0;
-    while ((bytesNeeded = n - bytesRead) > 0) {
-      // TODO - this is the bug. If we request MORE than the number of uncompressed data left (n,
-      // after some number of iterations) then the last remaining data in the gzip inflater is
-      // never returned.
-      // Fixed, and changing call here, as not appropriate for all tests here.
-      // TODO But need to add test coverage for this case.
-      bytesRead += gzipBuffer.readUncompressedBytes(bytesNeeded, buffer);
-//      if (bytesRead == 0) {
-//        System.out.println("Giving up readBytesIfPossible with bytesNeeded=" + bytesNeeded + " and readableBytes in buffer=" +
-//        buffer.readableBytes());
-//        return false;
-//      }
+    System.out.println("ReadBytesIfPossible called with n=" + n);
+    int bytesNeeded = n;
+    while (bytesNeeded > 0) {
+      int bytesRead;
+      System.out.println("Requesting " + bytesNeeded + " bytes");
+      if ((bytesRead = gzipBuffer.readUncompressedBytes(bytesNeeded, buffer)) == 0) {
+        System.out.println("Giving up readBytesIfPossible with bytesNeeded=" + bytesNeeded + " and readableBytes in buffer=" +
+        buffer.readableBytes());
+        return false;
+      }
+      System.out.println("received " + bytesRead + " bytesRead");
+      bytesNeeded -= bytesRead;
     }
-    return bytesNeeded == 0;
+    return true;
   }
 
   // TODO - remove
