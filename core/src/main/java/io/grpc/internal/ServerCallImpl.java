@@ -218,7 +218,6 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
   @Override
   public void setCompression(String compressorName) {
     System.out.println("setCompression called");
-    new Exception().printStackTrace();
     // Added here to give a better error message.
     checkState(!sendHeadersCalled, "sendHeaders has been called");
 

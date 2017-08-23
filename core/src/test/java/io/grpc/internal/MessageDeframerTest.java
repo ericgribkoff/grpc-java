@@ -75,14 +75,12 @@ public class MessageDeframerTest {
     });
   }
 
-  @Parameter // Automatically set by test runner
-  public /* NOT private */ boolean useGzipInflatingBuffer;
+  @Parameter // Automatically set by test runner, must be public
+  public boolean useGzipInflatingBuffer;
 
   private Listener listener = mock(Listener.class);
   private TestBaseStreamTracer tracer = new TestBaseStreamTracer();
   private StatsTraceContext statsTraceCtx = new StatsTraceContext(new StreamTracer[]{tracer});
-  private ArgumentCaptor<Long> wireSizeCaptor = ArgumentCaptor.forClass(Long.class);
-  private ArgumentCaptor<Long> uncompressedSizeCaptor = ArgumentCaptor.forClass(Long.class);
 
   private MessageDeframer deframer = new MessageDeframer(listener, Codec.Identity.NONE,
       DEFAULT_MAX_MESSAGE_SIZE, statsTraceCtx, "test");

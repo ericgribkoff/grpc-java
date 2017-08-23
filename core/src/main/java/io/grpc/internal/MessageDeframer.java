@@ -83,7 +83,7 @@ public class MessageDeframer implements Closeable, Deframer {
     HEADER, BODY
   }
 
-  private final Listener listener;
+  private Listener listener;
   private int maxInboundMessageSize;
   private final StatsTraceContext statsTraceCtx;
   private final String debugString;
@@ -121,6 +121,10 @@ public class MessageDeframer implements Closeable, Deframer {
 
   public void setGZipInflater(GZipInflatingBuffer gzipInflater) {
     this.gzipInflater = gzipInflater;
+  }
+
+  public void setListener(Listener listener) {
+    this.listener = listener;
   }
 
   @Override
@@ -190,8 +194,6 @@ public class MessageDeframer implements Closeable, Deframer {
 
   @Override
   public void close() {
-    System.out.println("close() invoked");
-    new Exception().printStackTrace(System.out);
     if (isClosed()) {
       return;
     }

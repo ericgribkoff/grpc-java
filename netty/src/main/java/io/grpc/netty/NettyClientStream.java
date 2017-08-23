@@ -266,7 +266,6 @@ class NettyClientStream extends AbstractClientStream {
     @Override
     public void deframeFailed(Throwable cause) {
       System.out.println("deframeFailed");
-      cause.printStackTrace(System.out);
       http2ProcessingFailed(Status.fromThrowable(cause), true, new Metadata());
     }
 
