@@ -25,7 +25,9 @@ import java.util.Arrays;
 import java.util.zip.CRC32;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
+import java.util.zip.ZipException;
 import javax.annotation.concurrent.NotThreadSafe;
+import javax.xml.crypto.Data;
 
 /**
  * Created by ericgribkoff on 8/18/17.
@@ -102,6 +104,11 @@ public class GZipInflatingBuffer {
     compressedData.addBuffer(buffer);
   }
 
+  // TODO Need some kind of close method here
+  public void close() {
+
+  }
+
   int bytesConsumed = 0; // to be removed from flow control
 
   public int getAndResetCompressedBytesConsumed() {
@@ -122,7 +129,7 @@ public class GZipInflatingBuffer {
    * @param bufferToWrite
    * @return the number of bytes read into bufferToWrite
    */
-  public int readUncompressedBytes(int bytesRequested, CompositeReadableBuffer bufferToWrite) {
+  public int readUncompressedBytes(int bytesRequested, CompositeReadableBuffer bufferToWrite) throws DataFormatException, ZipException {
     if (uncompressedBuf == null) {
       uncompressedBuf = new byte[Math.min(bytesRequested, MAX_BUFFER_SIZE)];
     }
@@ -208,7 +215,7 @@ public class GZipInflatingBuffer {
   }
 
   // We are requesting bytesToInflate.
-  private void inflate(int bytesToInflate) {
+  private void inflate(int bytesToInflate) throws DataFormatException {
     System.out.println("bytesToInflate: " + bytesToInflate);
     int bytesAlreadyConsumed = inflater.getTotalIn();
     try {
@@ -222,7 +229,7 @@ public class GZipInflatingBuffer {
         } else if (inflater.needsInput()) {
           state = State.INFLATER_NEEDS_INPUT;
         } else {
-          throw new AssertionError("inflater stalled");
+          throw new AssertionError("inflater produced no output");
         }
       } else {
         System.out.println("pre: crc.getValue() " + crc.getValue());
@@ -237,6 +244,7 @@ public class GZipInflatingBuffer {
       // TODO properly abort when this happens
       System.out.println("DataFormatException");
       e.printStackTrace(System.out);
+      throw new DataFormatException("Inflater data format exception: " + e.getMessage());
     }
     return;
   }
@@ -295,7 +303,7 @@ public class GZipInflatingBuffer {
     return true;
   }
 
-  private boolean processHeader() {
+  private boolean processHeader() throws ZipException {
     if (!readBytesFromInflaterBufOrCompressedData(GZIP_BASE_HEADER_SIZE, tmpBuffer)) {
       return false;
     }
@@ -313,16 +321,16 @@ public class GZipInflatingBuffer {
 
     // Check header magic
     if (readUnsignedShort(tmpBuffer[0], tmpBuffer[1]) != GZIP_MAGIC) {
-      System.out.println("Not in GZIP Format");
-      throw new RuntimeException("Not in GZIP format");
-      //throw new ZipException("Not in GZIP format");
+      System.out.println(readUnsignedShort(tmpBuffer[0], tmpBuffer[1]));
+      System.out.println(readUnsignedByte(tmpBuffer[0]));
+      System.out.println(readUnsignedByte(tmpBuffer[1]));
+      System.out.println("not matched");
+      throw new ZipException("Not in GZIP format");
     }
 
     // Check compression method
     if (readUnsignedByte(tmpBuffer[2]) != 8) {
-      System.out.println("Unsupported compression method");
-      throw new RuntimeException("Unsupported compression method");
-      //throw new ZipException("Unsupported compression method");
+      throw new ZipException("Unsupported compression method");
     }
 
     // Read flags, ignore MTIME, XFL, and OS fields.
@@ -335,6 +343,7 @@ public class GZipInflatingBuffer {
 
   private boolean processHeaderExtraLen() {
     // TODO - check flag directly here :-)
+    System.out.println("gzipHeaderFlag: " + gzipHeaderFlag);
     if ((gzipHeaderFlag & FEXTRA) != FEXTRA) {
       // TODO extract transitions into function of current state? e.g., state = nextState(State...)
       // Could also do this just for headers (separate enum)
@@ -372,8 +381,9 @@ public class GZipInflatingBuffer {
       state = State.HEADER_COMMENT;
       return true;
     }
-    while (!readBytesFromInflaterBufOrCompressedData(1, tmpBuffer)) {
+    while (readBytesFromInflaterBufOrCompressedData(1, tmpBuffer)) {
       crc.update(tmpBuffer[0]);
+      System.out.println(tmpBuffer[0]);
       if (readUnsignedByte(tmpBuffer[0]) == 0) {
         state = State.HEADER_COMMENT;
         return true;
@@ -389,7 +399,7 @@ public class GZipInflatingBuffer {
       state = State.HEADER_CRC;
       return true;
     }
-    while (!readBytesFromInflaterBufOrCompressedData(1, tmpBuffer)) {
+    while (readBytesFromInflaterBufOrCompressedData(1, tmpBuffer)) {
       crc.update(tmpBuffer[0]);
       if (readUnsignedByte(tmpBuffer[0]) == 0) {
         state = State.HEADER_CRC;
@@ -399,7 +409,7 @@ public class GZipInflatingBuffer {
     return false;
   }
 
-  private boolean processHeaderCrc() {
+  private boolean processHeaderCrc() throws ZipException {
     if ((gzipHeaderFlag & FHCRC) != FHCRC) {
       // TODO extract transitions into function of current state? e.g., state = nextState(State...)
       // Could also do this just for headers (separate enum)
@@ -410,7 +420,10 @@ public class GZipInflatingBuffer {
     }
     if (readBytesFromInflaterBufOrCompressedData(USHORT_LEN, tmpBuffer)) {
       int v = (int) crc.getValue() & 0xffff;
-      checkState(v == readUnsignedShort(tmpBuffer[0], tmpBuffer[1]), "corrupt gzip header");
+      System.out.println("Expecting header CRC16 of " + v);
+      if (v != readUnsignedShort(tmpBuffer[0], tmpBuffer[1])) {
+        throw new ZipException("Corrupt GZIP header");
+      }
       crc.reset();
       state = State.INFLATING;
       return true;
@@ -418,6 +431,7 @@ public class GZipInflatingBuffer {
     return false;
   }
 
+  // TODO - throw exception if out of range??
   private int readUnsignedByte(byte b) {
     return b & 0xFF;
   }
@@ -432,20 +446,20 @@ public class GZipInflatingBuffer {
   /*
    * Reads unsigned integer in Intel byte order.
    */
-  private long readUnsignedInt(byte b1, byte b2, byte b3, byte b4) throws IOException {
+  private long readUnsignedInt(byte b1, byte b2, byte b3, byte b4) {
     long s = readUnsignedShort(b1, b2);
     return ((long) readUnsignedShort(b3, b4) << 16) | s;
   }
 
 
-  private boolean processTrailer() {
+  private boolean processTrailer() throws ZipException {
     long bytesWritten = inflater.getBytesWritten(); // save because the read may reset inflater
 
     if (!readBytesFromInflaterBufOrCompressedData(GZIP_TRAILER_SIZE, tmpBuffer)) {
       return false;
     }
 
-    try {
+//    try {
       System.out.println("unsigned int that should be checksum: "
           + readUnsignedInt(tmpBuffer[0], tmpBuffer[1], tmpBuffer[2],   tmpBuffer[3]));
       System.out.println("crc.getValue() " + crc.getValue());
@@ -465,12 +479,13 @@ public class GZipInflatingBuffer {
           // rfc1952; ISIZE is the input size modulo 2^32
           (readUnsignedInt(tmpBuffer[4], tmpBuffer[5], tmpBuffer[6], tmpBuffer[7])
               != (bytesWritten & 0xffffffffL))) {
-        throw new RuntimeException("Checksum failed or corrupt GZIP trailer");
+        throw new ZipException("Corrupt GZIP trailer");
       }
-    } catch (IOException e) {
-      System.out.println("IOException on trailer");
-      throw new RuntimeException(e);
-    }
+//    }
+//    catch (IOException e) {
+//      System.out.println("IOException on trailer");
+//      throw new RuntimeException(e);
+//    }
 
     state = State.HEADER;
 

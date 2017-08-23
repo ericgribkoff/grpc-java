@@ -27,6 +27,7 @@ import java.io.Closeable;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.zip.DataFormatException;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -312,10 +313,22 @@ public class MessageDeframer implements Closeable, Deframer {
           // ready.
           // even if we are or are not ready, the inflater may have consumed more compressed bytes,
           // so return these to flow control
-          int uncompressedBytesRead = gzipInflater.readUncompressedBytes(missingBytes, nextFrame);
-          totalBytesRead += gzipInflater.getAndResetCompressedBytesConsumed();
-          if (uncompressedBytesRead == 0) {
-            return false;
+          try {
+            int uncompressedBytesRead = gzipInflater.readUncompressedBytes(missingBytes, nextFrame);
+            totalBytesRead += gzipInflater.getAndResetCompressedBytesConsumed();
+            if (uncompressedBytesRead == 0) {
+              return false;
+            }
+          } catch (IOException e) {
+            // TODO handle properly (just re-throw?)
+            System.out.println("Gzip exception");
+            e.printStackTrace(System.out);
+            throw new RuntimeException(e);
+          } catch (DataFormatException e) {
+            // TODO handle properly (just re-throw?)
+            System.out.println("Data format exception");
+            e.printStackTrace(System.out);
+            throw new RuntimeException(e);
           }
 
           //          int compressedBytesRead = gzipInflater.uncompressedBytesReady(missingBytes);
