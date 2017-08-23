@@ -58,6 +58,17 @@ public class GZipInflatingBufferTest {
    */
   public final static int GZIP_MAGIC = 0x8b1f;
 
+  /*
+   * File header flags.
+   */
+  private final static int FTEXT      = 1;    // Extra text
+  private final static int FHCRC      = 2;    // Header CRC
+  private final static int FEXTRA     = 4;    // Extra field
+  private final static int FNAME      = 8;    // File name
+  private final static int FCOMMENT   = 16;   // File comment
+
+  private final static int HEADER_FLAG_INDEX = 3;
+
   @Before
   public void setUp() {
     gzipBuffer = new GZipInflatingBuffer();
@@ -127,19 +138,6 @@ public class GZipInflatingBufferTest {
       assertEquals("Unsupported compression method", expectedException.getMessage());
     }
   }
-
-  /*
-   * File header flags.
-   */
-  private final static int FTEXT      = 1;    // Extra text
-  private final static int FHCRC      = 2;    // Header CRC
-  private final static int FEXTRA     = 4;    // Extra field
-  private final static int FNAME      = 8;    // File name
-  private final static int FCOMMENT   = 16;   // File comment
-
-  private final static int HEADER_FLAG_INDEX = 3;
-
-  // TODO - test flags, including CRC
 
   @Test
   public void headerFTextFlagIsIgnored() throws Exception {
@@ -362,10 +360,10 @@ public class GZipInflatingBufferTest {
   // TODO - remove need for reading 1 extra byte to trigger exception
   public void wrongTrailerCrcShouldFail() throws Exception {
     CompositeReadableBuffer outputBuffer = new CompositeReadableBuffer();
+    gZipTrailerBytes[0] = (byte) ~gZipTrailerBytes[0];
     gzipBuffer.addCompressedBytes(ReadableBuffers.wrap(gZipHeaderBytes));
     gzipBuffer.addCompressedBytes(ReadableBuffers.wrap(deflatedBytes));
-    gzipBuffer.addCompressedBytes(ReadableBuffers.wrap(new byte[GZIP_TRAILER_SIZE/2]));
-    gzipBuffer.addCompressedBytes(ReadableBuffers.wrap(gZipTrailerBytes, GZIP_TRAILER_SIZE/2, GZIP_TRAILER_SIZE/2));
+    gzipBuffer.addCompressedBytes(ReadableBuffers.wrap(gZipTrailerBytes));
 
     assertTrue(readBytesIfPossible(uncompressedBytes.length, outputBuffer));
 
@@ -381,10 +379,10 @@ public class GZipInflatingBufferTest {
   // TODO - remove need for reading 1 extra byte to trigger exception
   public void wrongTrailerISizeShouldFail() throws Exception {
     CompositeReadableBuffer outputBuffer = new CompositeReadableBuffer();
+    gZipTrailerBytes[GZIP_TRAILER_SIZE-1] = (byte) ~gZipTrailerBytes[GZIP_TRAILER_SIZE-1];
     gzipBuffer.addCompressedBytes(ReadableBuffers.wrap(gZipHeaderBytes));
     gzipBuffer.addCompressedBytes(ReadableBuffers.wrap(deflatedBytes));
-    gzipBuffer.addCompressedBytes(ReadableBuffers.wrap(gZipTrailerBytes, 0, GZIP_TRAILER_SIZE/2));
-    gzipBuffer.addCompressedBytes(ReadableBuffers.wrap(new byte[GZIP_TRAILER_SIZE/2]));
+    gzipBuffer.addCompressedBytes(ReadableBuffers.wrap(gZipTrailerBytes));
 
     assertTrue(readBytesIfPossible(uncompressedBytes.length, outputBuffer));
     try {
