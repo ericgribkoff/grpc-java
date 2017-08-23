@@ -120,12 +120,7 @@ public class GZipInflatingBuffer {
   }
 
   /**
-   * If min(bytesToRead, MAX_BUFFER_SIZE) of uncompressed data are available, adds them to
-   * bufferToWrite and returns true. Otherwise returns false. UNLESS AT END OF INFLATE BLOCK?
-   *
-   * <p>This may write MORE than bytesRequested into bufferToWrite if a previous call requested more
-   * bytes, which were not fully available, and a subsequent call requests fewer bytes than
-   * previously prepared.
+   * Reads up to min(bytesToRead, MAX_BUFFER_SIZE) of uncompressed data into bufferToWrite.
    *
    * @param bytesRequested
    * @param bufferToWrite
@@ -194,10 +189,8 @@ public class GZipInflatingBuffer {
     }
 
     System.out.println("uncompressedBufWriterIndex (after): " + uncompressedBufWriterIndex);
-
-    if (uncompressedBufWriterIndex == uncompressedBuf.length ||
-        // Check if we've finished a gzip stream and don't have partial data available yet, roughly
-        (uncompressedBufWriterIndex > 0 && state == state.HEADER)) {
+    
+    if (uncompressedBufWriterIndex > 0) {
       // TODO fix this - we just want to eagerly parse the trailer when available, but if we are
       // requesting *exactly* the number of bytes available, we won't otherwise parse the trailer.
       //      if (inflater.finished()) {
@@ -208,7 +201,7 @@ public class GZipInflatingBuffer {
       System.out.println("uncompressedBufWriterIndex: " + uncompressedBufWriterIndex);
       System.out.println(inflater.getRemaining());
       System.out.println(compressedData.readableBytes());
-      int bytesToWrite = uncompressedBuf.length;
+      int bytesToWrite = uncompressedBufWriterIndex; //uncompressedBuf.length;
 //      System.out.println("All " + bytesToUncompress + " bytes inflated: " +
 //              bytesToHex(uncompressedBuf, uncompressedBufWriterIndex));
       bufferToWrite.addBuffer(ReadableBuffers.wrap(uncompressedBuf, 0, bytesToWrite));
