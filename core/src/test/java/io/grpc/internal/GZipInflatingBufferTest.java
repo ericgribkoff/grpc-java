@@ -71,11 +71,11 @@ public class GZipInflatingBufferTest {
     gzipBuffer = new GZipInflatingBuffer();
     try {
       // TODO: see if asStream works without intellij
-      InputStream inputStream = getClass().getResourceAsStream(UNCOMPRESSABLE_FILE);
-//      InputStream inputStream =
-//          new BufferedInputStream(
-//              new FileInputStream(
-//                  "/usr/local/google/home/ericgribkoff/github/ericgribkoff/grpc-java/core/src/test/resources/io/grpc/internal/uncompressable.bin"));
+//      InputStream inputStream = getClass().getResourceAsStream(UNCOMPRESSABLE_FILE);
+      InputStream inputStream =
+          new BufferedInputStream(
+              new FileInputStream(
+                  "/usr/local/google/home/ericgribkoff/github/ericgribkoff/grpc-java/core/src/test/resources/io/grpc/internal/uncompressable.bin"));
       ByteArrayOutputStream uncompressedOutputStream = new ByteArrayOutputStream();
       ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
       OutputStream outputStream = new GZIPOutputStream(byteArrayOutputStream);
@@ -90,6 +90,7 @@ public class GZipInflatingBufferTest {
         uncompressedOutputStream.write(buffer, 0, n);
         outputStream.write(buffer, 0, n);
         if (littleGZipCompressedBytes == null) {
+          smallerGzipCompressingStream.write(buffer, 0, n);
           smallerGzipCompressingStream.close();
           littleGZipCompressedBytes = smallerGzippedOutputStream.toByteArray();
           littleGZipUncompressedBytes = uncompressedOutputStream.toByteArray();
@@ -108,6 +109,7 @@ public class GZipInflatingBufferTest {
       gZipTrailerBytes = Arrays.copyOfRange(gZipCompressedBytes, gZipCompressedBytes.length - 8,
           gZipCompressedBytes.length);
     } catch (Exception e) {
+      e.printStackTrace(System.out);
       fail("Failed to set up compressed data");
     }
   }
@@ -404,25 +406,9 @@ public class GZipInflatingBufferTest {
     gzipBuffer.addCompressedBytes(ReadableBuffers.wrap(littleGZipCompressedBytes));
 
     assertTrue(readBytesIfPossible(uncompressedBytes.length, outputBuffer));
-
-
-    System.out.println("Readable bytes: ");
-    System.out.println(outputBuffer.readableBytes());
-    System.out.println("uncompressedBytes.length: " + uncompressedBytes.length);
-
     assertTrue(readBytesIfPossible(littleGZipUncompressedBytes.length, outputBuffer));
-
-
-    System.out.println("Readable bytes: ");
-    System.out.println(outputBuffer.readableBytes());
-    System.out.println("littleGZipUncompressedBytes.length: " + littleGZipUncompressedBytes.length);
-
     assertTrue(readBytesIfPossible(uncompressedBytes.length, outputBuffer));
     assertTrue(readBytesIfPossible(littleGZipUncompressedBytes.length, outputBuffer));
-//
-//    System.out.println("Readable bytes: ");
-//    System.out.println(outputBuffer.readableBytes());
-//    System.out.println("uncompressedBytes.length: " + uncompressedBytes.length);
 
     byte[] byteBuf = new byte[uncompressedBytes.length];
     outputBuffer.readBytes(byteBuf, 0, uncompressedBytes.length);
