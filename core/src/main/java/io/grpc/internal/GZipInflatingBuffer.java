@@ -69,8 +69,10 @@ public class GZipInflatingBuffer {
   private byte[] uncompressedBuf;
   private int uncompressedBufWriterIndex;
 
-  private int headerExtraToRead;
   private int gzipHeaderFlag;
+  private int headerExtraToRead;
+
+  private boolean closed = false;
 
   private static final int USHORT_LEN = 2;
 
@@ -91,29 +93,43 @@ public class GZipInflatingBuffer {
   private byte[] tmpBuffer = new byte[128]; // for skipping/parsing(?) header, trailer data
 
   public boolean isStalled() {
+    checkState(!closed, "GZipInflatingBuffer is closed");
     // TODO - not quite right, but want to verify finish state.
     // TODO state != State.INFLATING is not sufficient if we are eagerly parsing TRAILERS...
     // but inflater.getRemaining() may have junk data and we are stalled.
-    return compressedData.readableBytes() == 0 && state != State.INFLATING;
+    // Actually...how can we differentiate between junk data and real extra data that is only
+    // partially received?
+    return compressedData.readableBytes() == 0 && (inflater.needsInput() || inflater.finished());
+       // state != State.INFLATING;
   }
 
+  // TODO - is this right? MessageDeframer looks at partial data *only* in nextFrame...because
+  // that's all that matters when forcing a close, maybe?
+  // It's because we only care about partial data when compressedData.readableBytes() == 0
   public boolean hasPartialData() {
+    checkState(!closed, "GZipInflatingBuffer is closed");
     return compressedData.readableBytes() != 0 || inflater.getRemaining() != 0;
   }
 
   public void addCompressedBytes(ReadableBuffer buffer) {
+    checkState(!closed, "GZipInflatingBuffer is closed");
     System.out.println("Adding " + buffer.readableBytes() + " bytes to compressedData");
     compressedData.addBuffer(buffer);
   }
 
-  // TODO Need some kind of close method here
   public void close() {
-
+    if (!closed) {
+      closed = true;
+      compressedData.close();
+      inflater.end();
+    }
   }
 
   int bytesConsumed = 0; // to be removed from flow control
 
   public int getAndResetCompressedBytesConsumed() {
+    checkState(!closed, "GZipInflatingBuffer is closed");
+
     int ret = bytesConsumed;
     bytesConsumed = 0;
     return ret;
@@ -127,6 +143,8 @@ public class GZipInflatingBuffer {
    * @return the number of bytes read into bufferToWrite
    */
   public int readUncompressedBytes(int bytesRequested, CompositeReadableBuffer bufferToWrite) throws DataFormatException, ZipException {
+    checkState(!closed, "GZipInflatingBuffer is closed");
+
     if (uncompressedBuf == null) {
       uncompressedBuf = new byte[Math.min(bytesRequested, MAX_BUFFER_SIZE)];
     }
@@ -193,11 +211,11 @@ public class GZipInflatingBuffer {
     if (uncompressedBufWriterIndex > 0) {
       // TODO fix this - we just want to eagerly parse the trailer when available, but if we are
       // requesting *exactly* the number of bytes available, we won't otherwise parse the trailer.
-      //      if (inflater.finished()) {
-      //        state = State.TRAILER;
-      //        processTrailer();
-      //      }
-      System.out.println("Returning with data!...");
+      if (inflater.finished()) {
+        state = State.TRAILER;
+        processTrailer();
+      }
+      System.out.println("Returning with data!..." + state);
       System.out.println("uncompressedBufWriterIndex: " + uncompressedBufWriterIndex);
       System.out.println(inflater.getRemaining());
       System.out.println(compressedData.readableBytes());
@@ -221,6 +239,10 @@ public class GZipInflatingBuffer {
       int n = inflater.inflate(uncompressedBuf, uncompressedBufWriterIndex, bytesToInflate);
       bytesConsumed += inflater.getTotalIn() - bytesAlreadyConsumed;
       if (n == 0) {
+//      System.out.println("pre: crc.getValue() " + crc.getValue());
+//      crc.update(uncompressedBuf, uncompressedBufWriterIndex, n);
+//      System.out.println("post: crc.getValue() " + crc.getValue());
+//      uncompressedBufWriterIndex += n;
         if (inflater.finished()) {
           System.out.println("Finished! Inflater needs input: " + inflater.needsInput());
           System.out.println("uncompressedBufWriterIndex: " + uncompressedBufWriterIndex);
