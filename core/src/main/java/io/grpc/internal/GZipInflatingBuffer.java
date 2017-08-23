@@ -20,6 +20,8 @@ import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.primitives.Ints;
 import com.google.common.primitives.Longs;
+
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.zip.CRC32;
@@ -119,7 +121,7 @@ public class GZipInflatingBuffer {
 
   /**
    * If min(bytesToRead, MAX_BUFFER_SIZE) of uncompressed data are available, adds them to
-   * bufferToWrite and returns true. Otherwise returns false.
+   * bufferToWrite and returns true. Otherwise returns false. UNLESS AT END OF INFLATE BLOCK?
    *
    * <p>This may write MORE than bytesRequested into bufferToWrite if a previous call requested more
    * bytes, which were not fully available, and a subsequent call requests fewer bytes than
@@ -143,6 +145,8 @@ public class GZipInflatingBuffer {
     // TODO - better stopping condition for this loop (embedded returns are confusing)
     while ((bytesNeeded = uncompressedBuf.length - uncompressedBufWriterIndex) > 0) {
       System.out.println("State: " + state);
+      System.out.println("uncompressedBufWriterIndex: " + uncompressedBufWriterIndex);
+      System.out.println("uncompressedBufLen = " + uncompressedBuf.length);
       // TODO - could also see if new state != old state to measure progress...
       boolean madeProgress;
       switch (state) {
@@ -181,17 +185,19 @@ public class GZipInflatingBuffer {
       }
 
       if (!madeProgress) {
-        System.out.println("Returning...");
+        System.out.println("Exiting processing loop...");
         System.out.println("uncompressedBufWriterIndex: " + uncompressedBufWriterIndex);
         System.out.println(inflater.getRemaining());
         System.out.println(compressedData.readableBytes());
-        return 0;
+        break;
       }
     }
 
     System.out.println("uncompressedBufWriterIndex (after): " + uncompressedBufWriterIndex);
 
-    if (uncompressedBufWriterIndex == uncompressedBuf.length) {
+    if (uncompressedBufWriterIndex == uncompressedBuf.length ||
+        // Check if we've finished a gzip stream and don't have partial data available yet, roughly
+        (uncompressedBufWriterIndex > 0 && state == state.HEADER)) {
       // TODO fix this - we just want to eagerly parse the trailer when available, but if we are
       // requesting *exactly* the number of bytes available, we won't otherwise parse the trailer.
       //      if (inflater.finished()) {
@@ -303,6 +309,7 @@ public class GZipInflatingBuffer {
     return true;
   }
 
+
   private boolean processHeader() throws ZipException {
     if (!readBytesFromInflaterBufOrCompressedData(GZIP_BASE_HEADER_SIZE, tmpBuffer)) {
       return false;
@@ -376,11 +383,13 @@ public class GZipInflatingBuffer {
 
   private boolean processHeaderName() {
     if ((gzipHeaderFlag & FNAME) != FNAME) {
+      System.out.println("Skipping FNAME");
       // TODO extract transitions into function of current state? e.g., state = nextState(State...)
       // Could also do this just for headers (separate enum)
       state = State.HEADER_COMMENT;
       return true;
     }
+    // TODO - this should read as much as possible at a time, then put it back if necessary?
     while (readBytesFromInflaterBufOrCompressedData(1, tmpBuffer)) {
       crc.update(tmpBuffer[0]);
       System.out.println(tmpBuffer[0]);
@@ -394,6 +403,7 @@ public class GZipInflatingBuffer {
 
   private boolean processHeaderComment() {
     if ((gzipHeaderFlag & FCOMMENT) != FCOMMENT) {
+      System.out.println("Skipping FCOMMENT");
       // TODO extract transitions into function of current state? e.g., state = nextState(State...)
       // Could also do this just for headers (separate enum)
       state = State.HEADER_CRC;
@@ -421,6 +431,8 @@ public class GZipInflatingBuffer {
     if (readBytesFromInflaterBufOrCompressedData(USHORT_LEN, tmpBuffer)) {
       int v = (int) crc.getValue() & 0xffff;
       System.out.println("Expecting header CRC16 of " + v);
+      System.out.println("Actual header CRC16: " + readUnsignedShort(tmpBuffer[0], tmpBuffer[1]));
+      System.out.println("As byte array: " + bytesToHex(tmpBuffer, USHORT_LEN));
       if (v != readUnsignedShort(tmpBuffer[0], tmpBuffer[1])) {
         throw new ZipException("Corrupt GZIP header");
       }
