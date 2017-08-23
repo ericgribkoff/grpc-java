@@ -197,7 +197,7 @@ public class MessageDeframer implements Closeable, Deframer {
     }
     boolean hasPartialMessage;
     if (gzipInflater != null) {
-      hasPartialMessage = gzipInflater.hasPartialData();
+      hasPartialMessage = (nextFrame != null && nextFrame.readableBytes() > 0) || gzipInflater.hasPartialData();
     } else {
       hasPartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
     }
