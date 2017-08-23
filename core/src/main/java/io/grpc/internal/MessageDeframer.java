@@ -315,7 +315,9 @@ public class MessageDeframer implements Closeable, Deframer {
           // so return these to flow control
           try {
             int uncompressedBytesRead = gzipInflater.readUncompressedBytes(missingBytes, nextFrame);
-            totalBytesRead += gzipInflater.getAndResetCompressedBytesConsumed();
+            int bytesRead = gzipInflater.getAndResetCompressedBytesConsumed();
+            System.out.println("DEFRAMER: bytesRead = " + bytesRead);
+            totalBytesRead += bytesRead;
             if (uncompressedBytesRead == 0) {
               return false;
             }
