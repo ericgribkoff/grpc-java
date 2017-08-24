@@ -92,7 +92,7 @@ public class MessageDeframer implements Closeable, Deframer {
   private int requiredLength = HEADER_LENGTH; // TODO - Does int capture max size?
   private boolean compressedFlag;
   private CompositeReadableBuffer nextFrame;
-  private CompositeBuffer unprocessed = new CompositeReadableBuffer();
+  private CompositeReadableBuffer unprocessed = new CompositeReadableBuffer();
   private long pendingDeliveries;
   private boolean inDelivery = false;
 
