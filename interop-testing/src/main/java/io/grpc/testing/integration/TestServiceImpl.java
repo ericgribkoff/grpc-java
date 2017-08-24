@@ -95,8 +95,7 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
         System.out.println("Setting gzip");
         obs.setCompression("gzip");
       } else {
-        System.out.println("Setting identity");
-        obs.setCompression("identity");
+        obs.setMessageCompression(false);
       }
     } catch (IllegalArgumentException e) {
       obs.onError(Status.UNIMPLEMENTED
@@ -492,7 +491,8 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
         echoRequestMetadataInTrailers(Util.ECHO_TRAILING_METADATA_KEY));
   }
 
-  private static ServerInterceptor turnOnStreamCompressionInterceptor() {
+  /** Returns interceptor to enable full stream compression on outgoing messages. */
+  public static ServerInterceptor turnOnStreamCompressionInterceptor() {
     return new ServerInterceptor() {
       @Override
       public <ReqT, RespT> Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
@@ -507,6 +507,7 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
         // TODO remove this by fixing enabling/disabling of stream compression
         System.out.println("Calling setStreamCompression(true)");
         call.setStreamCompression(true);
+        call.setCompression("gzip");
 
         return next.startCall(call, headers);
       }

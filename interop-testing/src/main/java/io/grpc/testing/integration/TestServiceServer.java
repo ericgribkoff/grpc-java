@@ -17,13 +17,16 @@
 package io.grpc.testing.integration;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.grpc.Server;
+import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptors;
 import io.grpc.internal.testing.TestUtils;
 import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NettyServerBuilder;
 import io.netty.handler.ssl.SslContext;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -124,12 +127,18 @@ public class TestServiceServer {
       sslContext = GrpcSslContexts.forServer(
               TestUtils.loadCert("server1.pem"), TestUtils.loadCert("server1.key")).build();
     }
+
+    List<ServerInterceptor> allInterceptors = ImmutableList.<ServerInterceptor>builder()
+        .addAll(TestServiceImpl.interceptors())
+        .add(TestServiceImpl.turnOnStreamCompressionInterceptor())
+        .build();
+
     server = NettyServerBuilder.forPort(port)
         .sslContext(sslContext)
         .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
         .addService(ServerInterceptors.intercept(
             new TestServiceImpl(executor),
-            TestServiceImpl.interceptors()))
+            allInterceptors))
         .build().start();
   }
 
