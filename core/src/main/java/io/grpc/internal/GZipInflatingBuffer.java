@@ -58,12 +58,13 @@ public class GZipInflatingBuffer implements Closeable {
     HEADER_NAME,
     HEADER_COMMENT,
     HEADER_CRC,
+    INITIALIZE_INFLATER,
     INFLATING,
     INFLATER_NEEDS_INPUT,
     TRAILER
   }
 
-  private static final int INFLATE_BUFFER_SIZE = 3;// 512;
+  private static final int INFLATE_BUFFER_SIZE = 512;
   private static final int MAX_BUFFER_SIZE = 1024 * 4;
 
   private final CompositeReadableBuffer compressedData = new CompositeReadableBuffer();
@@ -182,6 +183,9 @@ public class GZipInflatingBuffer implements Closeable {
         case HEADER_CRC:
           madeProgress = processHeaderCrc();
           break;
+        case INITIALIZE_INFLATER:
+          madeProgress = initializeInflater();
+          break;
         case INFLATING:
           madeProgress = inflate(bytesNeeded);
           break;
@@ -240,9 +244,27 @@ public class GZipInflatingBuffer implements Closeable {
     }
   }
 
+  private boolean initializeInflater() {
+    crc.reset();
+    int bytesRemainingInInflater = inflater.getRemaining();
+    inflater.reset();
+    if (bytesRemainingInInflater > 0) {
+      int inflaterBufHeaderStartIndex = inflaterBufLen - bytesRemainingInInflater;
+      inflater.setInput(
+          inflaterBuf,
+          inflaterBufHeaderStartIndex,
+          bytesRemainingInInflater);
+      state = State.INFLATING;
+    } else {
+      state = State.INFLATER_NEEDS_INPUT;
+    }
+    return true;
+  }
+
   private boolean fill() {
     int bytesToAdd = Math.min(compressedData.readableBytes(), INFLATE_BUFFER_SIZE);
     if (bytesToAdd > 0) {
+      // What if inflaterBuf isn't empty?
       compressedData.readBytes(inflaterBuf, 0, bytesToAdd);
       loggingHack(
           "Raw bytes read and set as inflater input: " + bytesToHex(inflaterBuf, bytesToAdd));
@@ -281,8 +303,10 @@ public class GZipInflatingBuffer implements Closeable {
               + (inflaterBufHeaderStartIndex + bytesToGetFromInflater)
               + " len="
               + (bytesRemainingInInflater - bytesToGetFromInflater));
-//      System.arraycopy(inflaterBuf, inflaterBufHeaderStartIndex, tmpBuffer, 0, bytesToGetFromInflater);
+      //System.arraycopy(inflaterBuf, inflaterBufHeaderStartIndex,
+      // tmpBuffer, 0, bytesToGetFromInflater);
       inflater.reset();
+      //if (bytesToGetFromInflater < bytesRemainingInInflater) {
       inflater.setInput(
           inflaterBuf,
           inflaterBufHeaderStartIndex + bytesToGetFromInflater,
@@ -407,9 +431,7 @@ public class GZipInflatingBuffer implements Closeable {
     if ((gzipHeaderFlag & FHCRC) != FHCRC) {
       // TODO extract transitions into function of current state? e.g., state = nextState(State...)
       // Could also do this just for headers (separate enum)
-      // TODO Definitely a good idea due to need to do things like crc.reset(), inflater.reset()
-      crc.reset();
-      state = State.INFLATING;
+      state = State.INITIALIZE_INFLATER;
       return true;
     }
     if (readBytesFromInflaterBufOrCompressedData(USHORT_LEN)) {
@@ -420,8 +442,7 @@ public class GZipInflatingBuffer implements Closeable {
       if (v != readUnsignedShort(tmpBuffer[0], tmpBuffer[1])) {
         throw new ZipException("Corrupt GZIP header");
       }
-      crc.reset();
-      state = State.INFLATING;
+      state = State.INITIALIZE_INFLATER;
       return true;
     }
     return false;
@@ -447,6 +468,8 @@ public class GZipInflatingBuffer implements Closeable {
   }
 
   private boolean processTrailer() throws ZipException {
+    // TODO - resetting in the read definitely throws off the count of bytesWritten here...
+    // But should it matter if we didn't have all the data available?
     long bytesWritten = inflater.getBytesWritten(); // save because the read may reset inflater
 
     if (!readBytesFromInflaterBufOrCompressedData(GZIP_TRAILER_SIZE)) {
@@ -481,7 +504,7 @@ public class GZipInflatingBuffer implements Closeable {
   }
 
   // TODO - remove all of this
-  private boolean outputLogs = true;
+  private boolean outputLogs = false;
 
   private void loggingHack(Object s) {
     if (outputLogs) {
