@@ -18,7 +18,6 @@ package io.grpc.netty;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.common.io.ByteStreams;
 import io.grpc.Attributes;
 import io.grpc.Codec;
 import io.grpc.Metadata;
@@ -33,7 +32,6 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.EventLoop;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Stream;
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -72,7 +70,7 @@ class NettyServerStream extends AbstractServerStream {
       System.out.println("Readable bytes: " + bytebuf.readableBytes());
       byte[] rawBytes = new byte[bytebuf.readableBytes()];
       bytebuf.readBytes(rawBytes);
-//      System.out.println("Raw bytes:" + bytesToHex(rawBytes));
+      //      System.out.println("Raw bytes:" + bytesToHex(rawBytes));
       bytebuf.resetReaderIndex();
       System.out.println("Readable bytes: " + bytebuf.readableBytes());
       bytebuf.readBytes(os, bytebuf.readableBytes());

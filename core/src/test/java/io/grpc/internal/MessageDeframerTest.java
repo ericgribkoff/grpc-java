@@ -51,7 +51,6 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
@@ -68,6 +67,9 @@ import org.mockito.stubbing.Answer;
 public class MessageDeframerTest {
   @Rule public final ExpectedException thrown = ExpectedException.none();
 
+  /**
+   * Auto called by test.
+   */
   @Parameters(name = "{index}: useGzipInflatingBuffer={0}")
   public static Collection<Object[]> data() {
     return Arrays.asList(new Object[][] {
@@ -204,7 +206,12 @@ public class MessageDeframerTest {
     verifyNoMoreInteractions(listener);
 
     if (useGzipInflatingBuffer) {
-      checkStats(1, 30 /* first GZIP stream size */ - 17 /* bytes consumed to get msg header */ + 22 /* second GZIP stream size */, 7);
+      checkStats(
+          1,
+          30 /* first GZIP stream size */
+            - 17 /* bytes consumed to get msg header */
+            + 22 /* second GZIP stream size */,
+          7);
     } else {
       checkStats(1, 7, 7);
     }

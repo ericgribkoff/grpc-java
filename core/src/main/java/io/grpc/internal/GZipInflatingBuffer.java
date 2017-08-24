@@ -18,18 +18,13 @@ package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkState;
 
-import com.google.common.primitives.Ints;
 import com.google.common.primitives.Longs;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.zip.CRC32;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 import java.util.zip.ZipException;
 import javax.annotation.concurrent.NotThreadSafe;
-import javax.xml.crypto.Data;
 
 /**
  * Created by ericgribkoff on 8/18/17.
@@ -92,6 +87,7 @@ public class GZipInflatingBuffer {
 
   private byte[] tmpBuffer = new byte[128]; // for skipping/parsing(?) header, trailer data
 
+  /** Javadoc. */
   public boolean isStalled() {
     checkState(!closed, "GZipInflatingBuffer is closed");
     // TODO - not quite right, but want to verify finish state.
@@ -100,23 +96,26 @@ public class GZipInflatingBuffer {
     // Actually...how can we differentiate between junk data and real extra data that is only
     // partially received?
     return compressedData.readableBytes() == 0 && (inflater.needsInput() || inflater.finished());
-       // state != State.INFLATING;
+    // state != State.INFLATING;
   }
 
   // TODO - is this right? MessageDeframer looks at partial data *only* in nextFrame...because
   // that's all that matters when forcing a close, maybe?
   // It's because we only care about partial data when compressedData.readableBytes() == 0
+  /** Javadoc. */
   public boolean hasPartialData() {
     checkState(!closed, "GZipInflatingBuffer is closed");
     return compressedData.readableBytes() != 0 || inflater.getRemaining() != 0;
   }
 
+  /** Javadoc. */
   public void addCompressedBytes(ReadableBuffer buffer) {
     checkState(!closed, "GZipInflatingBuffer is closed");
     System.out.println("Adding " + buffer.readableBytes() + " bytes to compressedData");
     compressedData.addBuffer(buffer);
   }
 
+  /** Javadoc. */
   public void close() {
     if (!closed) {
       closed = true;
@@ -127,6 +126,7 @@ public class GZipInflatingBuffer {
 
   int bytesConsumed = 0; // to be removed from flow control
 
+  /** Javadoc. */
   public int getAndResetCompressedBytesConsumed() {
     checkState(!closed, "GZipInflatingBuffer is closed");
 
@@ -138,11 +138,12 @@ public class GZipInflatingBuffer {
   /**
    * Reads up to min(bytesToRead, MAX_BUFFER_SIZE) of uncompressed data into bufferToWrite.
    *
-   * @param bytesRequested
-   * @param bufferToWrite
+   * @param bytesRequested max number of bytes to decompress
+   * @param bufferToWrite destination for uncompressed data
    * @return the number of bytes read into bufferToWrite
    */
-  public int readUncompressedBytes(int bytesRequested, CompositeReadableBuffer bufferToWrite) throws DataFormatException, ZipException {
+  public int readUncompressedBytes(int bytesRequested, CompositeReadableBuffer bufferToWrite)
+      throws DataFormatException, ZipException {
     checkState(!closed, "GZipInflatingBuffer is closed");
 
     if (uncompressedBuf == null) {
@@ -219,9 +220,9 @@ public class GZipInflatingBuffer {
       System.out.println("uncompressedBufWriterIndex: " + uncompressedBufWriterIndex);
       System.out.println(inflater.getRemaining());
       System.out.println(compressedData.readableBytes());
-      int bytesToWrite = uncompressedBufWriterIndex; //uncompressedBuf.length;
-//      System.out.println("All " + bytesToUncompress + " bytes inflated: " +
-//              bytesToHex(uncompressedBuf, uncompressedBufWriterIndex));
+      int bytesToWrite = uncompressedBufWriterIndex; // uncompressedBuf.length;
+      //      System.out.println("All " + bytesToUncompress + " bytes inflated: " +
+      //              bytesToHex(uncompressedBuf, uncompressedBufWriterIndex));
       bufferToWrite.addBuffer(ReadableBuffers.wrap(uncompressedBuf, 0, bytesToWrite));
       uncompressedBufWriterIndex = 0; // reset
       uncompressedBuf = null;
@@ -239,10 +240,10 @@ public class GZipInflatingBuffer {
       int n = inflater.inflate(uncompressedBuf, uncompressedBufWriterIndex, bytesToInflate);
       bytesConsumed += inflater.getTotalIn() - bytesAlreadyConsumed;
       if (n == 0) {
-//      System.out.println("pre: crc.getValue() " + crc.getValue());
-//      crc.update(uncompressedBuf, uncompressedBufWriterIndex, n);
-//      System.out.println("post: crc.getValue() " + crc.getValue());
-//      uncompressedBufWriterIndex += n;
+        //      System.out.println("pre: crc.getValue() " + crc.getValue());
+        //      crc.update(uncompressedBuf, uncompressedBufWriterIndex, n);
+        //      System.out.println("post: crc.getValue() " + crc.getValue());
+        //      uncompressedBufWriterIndex += n;
         if (inflater.finished()) {
           System.out.println("Finished! Inflater needs input: " + inflater.needsInput());
           System.out.println("uncompressedBufWriterIndex: " + uncompressedBufWriterIndex);
@@ -299,9 +300,11 @@ public class GZipInflatingBuffer {
 
     if (bytesToGetFromInflater > 0) {
       System.out.println("bytesToGetFromInflater: " + bytesToGetFromInflater);
-      System.out.println("Setting inflater input: start="
-          + (inflaterBufHeaderStartIndex + bytesToGetFromInflater) + " len=" +
-          (bytesRemainingInInflater - bytesToGetFromInflater));
+      System.out.println(
+          "Setting inflater input: start="
+              + (inflaterBufHeaderStartIndex + bytesToGetFromInflater)
+              + " len="
+              + (bytesRemainingInInflater - bytesToGetFromInflater));
       // Can't reset here when this is invoked from trailer - we'll need inflater's # bytes written
       // later...well, we can just save it first.
       inflater.reset();
@@ -324,7 +327,6 @@ public class GZipInflatingBuffer {
     return true;
   }
 
-
   private boolean processHeader() throws ZipException {
     if (!readBytesFromInflaterBufOrCompressedData(GZIP_BASE_HEADER_SIZE, tmpBuffer)) {
       return false;
@@ -334,7 +336,7 @@ public class GZipInflatingBuffer {
     // header data out of buffer too...
     // Not to mention we may have updated the inflater's buffer in
     // readBytesFromInflaterBufOrCompressedData...
-//    inflater.reset(); // TODO - make this more obviously required here!
+    //    inflater.reset(); // TODO - make this more obviously required here!
 
     // TODO - handle header CRC
     crc.reset();
@@ -362,7 +364,6 @@ public class GZipInflatingBuffer {
     return true;
   }
 
-
   private boolean processHeaderExtraLen() {
     // TODO - check flag directly here :-)
     System.out.println("gzipHeaderFlag: " + gzipHeaderFlag);
@@ -382,7 +383,7 @@ public class GZipInflatingBuffer {
   }
 
   private boolean processHeaderExtra() {
-//    int bytesAvailable = readableBytesFromInflaterBufOrCompressedData();
+    //    int bytesAvailable = readableBytesFromInflaterBufOrCompressedData();
     while (headerExtraToRead > 0) {
       int bytesToRead = Math.min(headerExtraToRead, tmpBuffer.length);
       if (!readBytesFromInflaterBufOrCompressedData(bytesToRead, tmpBuffer)) {
@@ -478,7 +479,6 @@ public class GZipInflatingBuffer {
     return ((long) readUnsignedShort(b3, b4) << 16) | s;
   }
 
-
   private boolean processTrailer() throws ZipException {
     long bytesWritten = inflater.getBytesWritten(); // save because the read may reset inflater
 
@@ -486,33 +486,33 @@ public class GZipInflatingBuffer {
       return false;
     }
 
-//    try {
-      System.out.println("unsigned int that should be checksum: "
-          + readUnsignedInt(tmpBuffer[0], tmpBuffer[1], tmpBuffer[2],   tmpBuffer[3]));
-      System.out.println("crc.getValue() " + crc.getValue());
-      long desiredCrc = crc.getValue();
-      System.out.println("as byte array: " + Arrays.toString(Longs.toByteArray(desiredCrc)));
-      System.out.println("-13 as unsigned int: " + readUnsignedByte((byte) -13));
-      long desiredBytesWritten  = (bytesWritten & 0xffffffffL);
-      System.out.println("inflater.getBytesWritten() & 0xffffffffL: "
-          + desiredBytesWritten);
-      System.out.println("as byte array: " + Arrays.toString(Longs.toByteArray(desiredBytesWritten)));
-      System.out.println("what should be ^: "
-          + readUnsignedInt(tmpBuffer[4], tmpBuffer[5], tmpBuffer[6], tmpBuffer[7]));
+    //    try {
+    System.out.println(
+        "unsigned int that should be checksum: "
+            + readUnsignedInt(tmpBuffer[0], tmpBuffer[1], tmpBuffer[2], tmpBuffer[3]));
+    System.out.println("crc.getValue() " + crc.getValue());
+    long desiredCrc = crc.getValue();
+    System.out.println("as byte array: " + Arrays.toString(Longs.toByteArray(desiredCrc)));
+    System.out.println("-13 as unsigned int: " + readUnsignedByte((byte) -13));
+    long desiredBytesWritten = (bytesWritten & 0xffffffffL);
+    System.out.println("inflater.getBytesWritten() & 0xffffffffL: " + desiredBytesWritten);
+    System.out.println("as byte array: " + Arrays.toString(Longs.toByteArray(desiredBytesWritten)));
+    System.out.println(
+        "what should be ^: "
+            + readUnsignedInt(tmpBuffer[4], tmpBuffer[5], tmpBuffer[6], tmpBuffer[7]));
 
-      if ((readUnsignedInt(tmpBuffer[0], tmpBuffer[1], tmpBuffer[2], tmpBuffer[3])
-              != crc.getValue())
-          ||
-          // rfc1952; ISIZE is the input size modulo 2^32
-          (readUnsignedInt(tmpBuffer[4], tmpBuffer[5], tmpBuffer[6], tmpBuffer[7])
-              != (bytesWritten & 0xffffffffL))) {
-        throw new ZipException("Corrupt GZIP trailer");
-      }
-//    }
-//    catch (IOException e) {
-//      System.out.println("IOException on trailer");
-//      throw new RuntimeException(e);
-//    }
+    if ((readUnsignedInt(tmpBuffer[0], tmpBuffer[1], tmpBuffer[2], tmpBuffer[3]) != crc.getValue())
+        ||
+        // rfc1952; ISIZE is the input size modulo 2^32
+        (readUnsignedInt(tmpBuffer[4], tmpBuffer[5], tmpBuffer[6], tmpBuffer[7])
+            != (bytesWritten & 0xffffffffL))) {
+      throw new ZipException("Corrupt GZIP trailer");
+    }
+    //    }
+    //    catch (IOException e) {
+    //      System.out.println("IOException on trailer");
+    //      throw new RuntimeException(e);
+    //    }
 
     state = State.HEADER;
 

@@ -161,8 +161,6 @@ public abstract class AbstractStream implements Stream {
 
     // TODO replace this with a lazy/settable deframer object
     protected void enableFullStreamDecompression() {
-//      ((MessageDeframer) deframer).setUnprocessedBuffer(new GzipInflatingCompositeBuffer(this));
-//      ((MessageDeframer) deframer).setReportBytesRead(false);
       ((MessageDeframer) deframer).setGZipInflater(new GZipInflatingBuffer());
       this.deframer = new ApplicationThreadDeframer(this, (MessageDeframer) deframer, this);
     }
