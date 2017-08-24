@@ -85,8 +85,6 @@ public class GZipInflatingBuffer implements Closeable {
   /** CRC-32 for uncompressed data. */
   protected CRC32 crc = new CRC32();
 
-  // TODO Replace with composite readable compositeReadableBuffer? => nextFrame
-  private byte[] tmpBuffer = new byte[128]; // for skipping/parsing(?) header, trailer data
   private final CrcCompositeReadableBuffer nextFrame =
       new CrcCompositeReadableBuffer(crc, new CompositeReadableBuffer());
 
@@ -366,11 +364,7 @@ public class GZipInflatingBuffer implements Closeable {
 
       loggingHack("bytesToGetFromCompressedData: " + bytesToGetFromCompressedData);
       // These are gzip header/trailer bytes
-      compressedData.readBytes(tmpBuffer, 0, bytesToGetFromCompressedData);
-      nextFrame.addBuffer(ReadableBuffers.wrap(tmpBuffer, 0, bytesToGetFromCompressedData));
-      loggingHack(
-          "Hex bytes read from compressed data: "
-              + bytesToHex(tmpBuffer, bytesToGetFromCompressedData));
+      nextFrame.addBuffer(compressedData.readBytes(bytesToGetFromCompressedData));
     }
 
     bytesConsumed += bytesRead;
@@ -434,15 +428,11 @@ public class GZipInflatingBuffer implements Closeable {
   }
 
   private boolean processHeaderExtra() {
-    //    int bytesAvailable = readableBytesFromInflaterBufOrCompressedData();
-    while (headerExtraToRead > 0) {
-      int bytesToRead = Math.min(headerExtraToRead, tmpBuffer.length);
-      if (!nextFrameHasRequiredBytes(bytesToRead)) {
-        return false;
-      } else {
-        headerExtraToRead -= bytesToRead;
-        nextFrame.skipBytes(bytesToRead);
-      }
+    // TODO this is awkward
+    if (!nextFrameHasRequiredBytes(headerExtraToRead)) {
+      return false;
+    } else {
+      nextFrame.skipBytes(headerExtraToRead);
     }
     state = State.HEADER_NAME;
     return true;
@@ -542,7 +532,7 @@ public class GZipInflatingBuffer implements Closeable {
   }
 
   // TODO - remove all of this
-  private boolean outputLogs = true;
+  private boolean outputLogs = false;
 
   private void loggingHack(Object s) {
     if (outputLogs) {
