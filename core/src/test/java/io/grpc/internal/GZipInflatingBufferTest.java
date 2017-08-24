@@ -127,6 +127,9 @@ public class GZipInflatingBufferTest {
       gzipTrailerBytes =
           Arrays.copyOfRange(
               gzipCompressedBytes, gzipCompressedBytes.length - 8, gzipCompressedBytes.length);
+
+      System.out.println("Correct big header: " + bytesToHex(gzipHeaderBytes));
+      System.out.println("Correct big trailer: " + bytesToHex(gzipTrailerBytes));
     } catch (Exception e) {
       e.printStackTrace(System.out);
       fail("Failed to set up compressed data");
