@@ -150,6 +150,8 @@ public class GZipInflatingBufferTest {
     assertTrue("inflated data does not match original", Arrays.equals(uncompressedBytes, byteBuf));
   }
 
+  // TODO - one byte at a time test
+
   @Test
   public void concatenatedStreamsWorks() throws Exception {
     gzipBuffer.addCompressedBytes(ReadableBuffers.wrap(gzipCompressedBytes));
