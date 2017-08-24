@@ -23,6 +23,7 @@ import com.google.protobuf.EmptyProtos;
 import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
 import io.grpc.Metadata;
 import io.grpc.ServerCall;
+import io.grpc.ServerCall.Listener;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.Status;
@@ -89,24 +90,21 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
         (ServerCallStreamObserver<SimpleResponse>) responseObserver;
     SimpleResponse.Builder responseBuilder = SimpleResponse.newBuilder();
 
-    // TODO - these break my command line tests for large_unary with stream compression,
-    // because the same mechanism disables stream compression too. But without this,
-    // TransportCompressionTest fails
-    //    try {
-    //      if (req.hasResponseCompressed() && req.getResponseCompressed().getValue()) {
-    //        System.out.println("Setting gzip");
-    //        obs.setCompression("gzip");
-    //      } else {
-    //        System.out.println("Setting identity");
-    //        obs.setCompression("identity");
-    //      }
-    //    } catch (IllegalArgumentException e) {
-    //      obs.onError(Status.UNIMPLEMENTED
-    //          .withDescription("compression not supported.")
-    //          .withCause(e)
-    //          .asRuntimeException());
-    //      return;
-    //    }
+    try {
+      if (req.hasResponseCompressed() && req.getResponseCompressed().getValue()) {
+        System.out.println("Setting gzip");
+        obs.setCompression("gzip");
+      } else {
+        System.out.println("Setting identity");
+        obs.setCompression("identity");
+      }
+    } catch (IllegalArgumentException e) {
+      obs.onError(Status.UNIMPLEMENTED
+          .withDescription("compression not supported.")
+          .withCause(e)
+          .asRuntimeException());
+      return;
+    }
 
     if (req.getResponseSize() != 0) {
       boolean compressable = compressableResponse(req.getResponseType());
@@ -494,6 +492,27 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
         echoRequestMetadataInTrailers(Util.ECHO_TRAILING_METADATA_KEY));
   }
 
+  private static ServerInterceptor turnOnStreamCompressionInterceptor() {
+    return new ServerInterceptor() {
+      @Override
+      public <ReqT, RespT> Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
+          Metadata headers, ServerCallHandler<ReqT, RespT> next) {
+
+        //        byte[] acceptEncoding = requestHeaders.get(CONTENT_ACCEPT_ENCODING_KEY);
+        //        List<String> acceptedEncodingsList = ACCEPT_ENCODING_SPLITTER.splitToList(
+        //            new String(acceptEncoding, GrpcUtil.US_ASCII));
+        //        if (acceptedEncodingsList.contains("gzip")) {
+        //          System.out.println("gzip stream compression accepted");
+
+        // TODO remove this by fixing enabling/disabling of stream compression
+        System.out.println("Calling setStreamCompression(true)");
+        call.setStreamCompression(true);
+
+        return next.startCall(call, headers);
+      }
+    };
+  }
+
   /**
    * Echo the request headers from a client into response headers and trailers. Useful for
    * testing end-to-end metadata propagation.
@@ -506,18 +525,6 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
           ServerCall<ReqT, RespT> call,
           final Metadata requestHeaders,
           ServerCallHandler<ReqT, RespT> next) {
-        //        byte[] acceptEncoding = requestHeaders.get(CONTENT_ACCEPT_ENCODING_KEY);
-        //        List<String> acceptedEncodingsList = ACCEPT_ENCODING_SPLITTER.splitToList(
-        //            new String(acceptEncoding, GrpcUtil.US_ASCII));
-        //        if (acceptedEncodingsList.contains("gzip")) {
-        //          System.out.println("gzip stream compression accepted");
-
-                System.out.println("Calling setStreamCompression(true)");
-                call.setStreamCompression(true);
-                System.out.println("call class: " + call);
-                call.setCompression("gzip");
-
-        //        }
         return next.startCall(new SimpleForwardingServerCall<ReqT, RespT>(call) {
               @Override
               public void sendHeaders(Metadata responseHeaders) {
