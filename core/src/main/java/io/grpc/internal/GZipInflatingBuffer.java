@@ -87,7 +87,34 @@ public class GZipInflatingBuffer implements Closeable {
 
   // TODO Replace with composite readable buffer? => nextFrame
   private byte[] tmpBuffer = new byte[128]; // for skipping/parsing(?) header, trailer data
-  private CompositeReadableBuffer nextFrame = new CompositeReadableBuffer();
+  private final CompositeReadableBuffer nextFrame = new CrcCompositeReadableBuffer(crc);
+
+  private static class CrcCompositeReadableBuffer extends CompositeReadableBuffer {
+    private final CRC32 crc;
+
+    private CrcCompositeReadableBuffer(CRC32 crc) {
+      this.crc = crc;
+    }
+
+    @Override
+    public int readUnsignedByte() {
+      int b = super.readUnsignedByte();
+      crc.update(b);
+      return b;
+    }
+
+    @Override
+    public void skipBytes(int length) {
+      byte[] buf = new byte[512];
+      int total = 0;
+      while (total < length) {
+        int toRead = Math.min(length - total, buf.length);
+        super.readBytes(buf, 0, toRead);
+        crc.update(buf, 0, toRead);
+        total += toRead;
+      }
+    }
+  }
 
   /**
    * Returns true when all compressedData has been input to the inflater and the inflater is unable
@@ -312,7 +339,6 @@ public class GZipInflatingBuffer implements Closeable {
               + bytesToGetFromInflater);
       nextFrame.addBuffer(
           ReadableBuffers.wrap(inflaterBuf, inflaterBufHeaderStartIndex, bytesToGetFromInflater));
-      crc.update(inflaterBuf, inflaterBufHeaderStartIndex, bytesToGetFromInflater);
 
       loggingHack(
           "Hex bytes read from inflated buffer: "
@@ -336,7 +362,6 @@ public class GZipInflatingBuffer implements Closeable {
       loggingHack(
           "Hex bytes read from compressed data: "
               + bytesToHex(tmpBuffer, bytesToGetFromCompressedData));
-      crc.update(tmpBuffer, 0, bytesToGetFromCompressedData);
     }
 
     bytesConsumed += bytesRead;
