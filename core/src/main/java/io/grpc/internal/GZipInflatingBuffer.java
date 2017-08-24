@@ -109,7 +109,7 @@ public class GZipInflatingBuffer implements Closeable {
   /** Adds additional compressed data. */
   public void addCompressedBytes(ReadableBuffer buffer) {
     checkState(!closed, "GZipInflatingBuffer is closed");
-    System.out.println("Adding " + buffer.readableBytes() + " bytes to compressedData");
+    loggingHack("Adding " + buffer.readableBytes() + " bytes to compressedData");
     compressedData.addBuffer(buffer);
   }
 
@@ -151,19 +151,18 @@ public class GZipInflatingBuffer implements Closeable {
       uncompressedBuf = new byte[Math.min(bytesRequested, MAX_BUFFER_SIZE)];
     }
 
-    System.out.println("bytesRequested: " + bytesRequested);
-    System.out.println("uncompressedBufWriterIndex: " + uncompressedBufWriterIndex);
-    System.out.println("uncompressedBufLen = " + uncompressedBuf.length);
-    System.out.println("uncompressedBufWriterIndex (before): " + uncompressedBufWriterIndex);
+    loggingHack("bytesRequested: " + bytesRequested);
+    loggingHack("uncompressedBufWriterIndex: " + uncompressedBufWriterIndex);
+    loggingHack("uncompressedBufLen = " + uncompressedBuf.length);
+    loggingHack("uncompressedBufWriterIndex (before): " + uncompressedBufWriterIndex);
 
     int bytesNeeded;
-    // TODO - better stopping condition for this loop (embedded returns are confusing)
-    while ((bytesNeeded = uncompressedBuf.length - uncompressedBufWriterIndex) > 0) {
-      System.out.println("State: " + state);
-      System.out.println("uncompressedBufWriterIndex: " + uncompressedBufWriterIndex);
-      System.out.println("uncompressedBufLen = " + uncompressedBuf.length);
-      // TODO - could also see if new state != old state to measure progress...
-      boolean madeProgress;
+    boolean madeProgress = true;
+    while (madeProgress
+        && (bytesNeeded = uncompressedBuf.length - uncompressedBufWriterIndex) > 0) {
+      loggingHack("State: " + state);
+      loggingHack("uncompressedBufWriterIndex: " + uncompressedBufWriterIndex);
+      loggingHack("uncompressedBufLen = " + uncompressedBuf.length);
       switch (state) {
         case HEADER:
           madeProgress = processHeader();
@@ -184,10 +183,7 @@ public class GZipInflatingBuffer implements Closeable {
           madeProgress = processHeaderCrc();
           break;
         case INFLATING:
-          // Pass the body bytes to the inflater
-          inflate(bytesNeeded);
-          // inflate will either produce needed bytes or transition to another state
-          madeProgress = true;
+          madeProgress = inflate(bytesNeeded);
           break;
         case INFLATER_NEEDS_INPUT:
           madeProgress = fill();
@@ -198,30 +194,16 @@ public class GZipInflatingBuffer implements Closeable {
         default:
           throw new AssertionError("Invalid state: " + state);
       }
-
-      if (!madeProgress) {
-        System.out.println("Exiting processing loop...");
-        System.out.println("uncompressedBufWriterIndex: " + uncompressedBufWriterIndex);
-        System.out.println(inflater.getRemaining());
-        System.out.println(compressedData.readableBytes());
-        break;
-      }
     }
 
-    System.out.println("uncompressedBufWriterIndex (after): " + uncompressedBufWriterIndex);
+    loggingHack("uncompressedBufWriterIndex (after): " + uncompressedBufWriterIndex);
 
     if (uncompressedBufWriterIndex > 0) {
-      if (inflater.finished()) {
-        state = State.TRAILER;
-        processTrailer();
-      }
-      System.out.println("Returning with data!..." + state);
-      System.out.println("uncompressedBufWriterIndex: " + uncompressedBufWriterIndex);
-      System.out.println(inflater.getRemaining());
-      System.out.println(compressedData.readableBytes());
+      loggingHack("Returning with data!..." + state);
+      loggingHack("uncompressedBufWriterIndex: " + uncompressedBufWriterIndex);
+      loggingHack(inflater.getRemaining());
+      loggingHack(compressedData.readableBytes());
       int bytesToWrite = uncompressedBufWriterIndex; // uncompressedBuf.length;
-      //      System.out.println("All " + bytesToUncompress + " bytes inflated: " +
-      //              bytesToHex(uncompressedBuf, uncompressedBufWriterIndex));
       bufferToWrite.addBuffer(ReadableBuffers.wrap(uncompressedBuf, 0, bytesToWrite));
       uncompressedBufWriterIndex = 0; // reset
       uncompressedBuf = null;
@@ -232,48 +214,38 @@ public class GZipInflatingBuffer implements Closeable {
   }
 
   // We are requesting bytesToInflate.
-  private void inflate(int bytesToInflate) throws DataFormatException {
-    System.out.println("bytesToInflate: " + bytesToInflate);
+  private boolean inflate(int bytesToInflate) throws DataFormatException, ZipException {
+    loggingHack("bytesToInflate: " + bytesToInflate);
     int bytesAlreadyConsumed = inflater.getTotalIn();
     try {
       int n = inflater.inflate(uncompressedBuf, uncompressedBufWriterIndex, bytesToInflate);
       bytesConsumed += inflater.getTotalIn() - bytesAlreadyConsumed;
-      if (n == 0) {
-        //      System.out.println("pre: crc.getValue() " + crc.getValue());
-        //      crc.update(uncompressedBuf, uncompressedBufWriterIndex, n);
-        //      System.out.println("post: crc.getValue() " + crc.getValue());
-        //      uncompressedBufWriterIndex += n;
-        if (inflater.finished()) {
-          System.out.println("Finished! Inflater needs input: " + inflater.needsInput());
-          System.out.println("uncompressedBufWriterIndex: " + uncompressedBufWriterIndex);
-          state = State.TRAILER;
-        } else if (inflater.needsInput()) {
-          state = State.INFLATER_NEEDS_INPUT;
-        } else {
-          throw new AssertionError("inflater produced no output");
-        }
-      } else {
-        System.out.println("pre: crc.getValue() " + crc.getValue());
-        crc.update(uncompressedBuf, uncompressedBufWriterIndex, n);
-        System.out.println("post: crc.getValue() " + crc.getValue());
-        uncompressedBufWriterIndex += n;
-        //        System.out.println("INFLATED (" + n + " bytes = " + uncompressedBufWriterIndex
-        //                + " total) " +
-        //                bytesToHex(uncompressedBuf, uncompressedBufWriterIndex));
+      crc.update(uncompressedBuf, uncompressedBufWriterIndex, n);
+      uncompressedBufWriterIndex += n;
+
+      if (inflater.finished()) {
+        loggingHack("Finished! Inflater needs input: " + inflater.needsInput());
+        loggingHack("uncompressedBufWriterIndex: " + uncompressedBufWriterIndex);
+        state = State.TRAILER;
+        // Eagerly parse trailer, if possible, to detect CRC errors
+        return processTrailer();
+      } else if (inflater.needsInput()) {
+        state = State.INFLATER_NEEDS_INPUT;
       }
+
+      return true;
     } catch (DataFormatException e) {
       // Wrap the exception so tests can check for a specific prefix
       throw new DataFormatException("Inflater data format exception: " + e.getMessage());
     }
-    return;
   }
 
   private boolean fill() {
     int bytesToAdd = Math.min(compressedData.readableBytes(), INFLATE_BUFFER_SIZE);
     if (bytesToAdd > 0) {
       compressedData.readBytes(inflaterBuf, 0, bytesToAdd);
-      //      System.out.println("Raw bytes read and set as inflater input: " +
-      //              bytesToHex(inflaterBuf, bytesToAdd));
+      loggingHack(
+          "Raw bytes read and set as inflater input: " + bytesToHex(inflaterBuf, bytesToAdd));
       inflaterBufLen = bytesToAdd;
       inflater.setInput(inflaterBuf, 0, inflaterBufLen);
       state = State.INFLATING;
@@ -284,6 +256,14 @@ public class GZipInflatingBuffer implements Closeable {
   }
 
   // TODO - reduce copying :(
+  /**
+   * If the requested number of bytes are available, writes them at offset 0 to returnBuffer and
+   * returns true. Otherwise, returns false.
+   *
+   * @param n number of bytes to read
+   * @param returnBuffer destination where the bytes will be written, only if all n are available
+   * @return true if the bytes were all available and written.
+   */
   private boolean readBytesFromInflaterBufOrCompressedData(int n, byte[] returnBuffer) {
     int bytesRemainingInInflater = inflater.getRemaining();
     int compressedDataReadableByes = compressedData.readableBytes();
@@ -296,14 +276,12 @@ public class GZipInflatingBuffer implements Closeable {
     int bytesToGetFromInflater = Math.min(n, bytesRemainingInInflater);
 
     if (bytesToGetFromInflater > 0) {
-      System.out.println("bytesToGetFromInflater: " + bytesToGetFromInflater);
-      System.out.println(
+      loggingHack("bytesToGetFromInflater: " + bytesToGetFromInflater);
+      loggingHack(
           "Setting inflater input: start="
               + (inflaterBufHeaderStartIndex + bytesToGetFromInflater)
               + " len="
               + (bytesRemainingInInflater - bytesToGetFromInflater));
-      // Can't reset here when this is invoked from trailer - we'll need inflater's # bytes written
-      // later...well, we can just save it first.
       inflater.reset();
       inflater.setInput(
           inflaterBuf,
@@ -316,7 +294,7 @@ public class GZipInflatingBuffer implements Closeable {
     }
 
     int bytesToGetFromCompressedData = n - bytesToGetFromInflater;
-    System.out.println("bytesToGetFromCompressedData: " + bytesToGetFromCompressedData);
+    loggingHack("bytesToGetFromCompressedData: " + bytesToGetFromCompressedData);
     compressedData.readBytes(returnBuffer, bytesToGetFromInflater, bytesToGetFromCompressedData);
 
     bytesConsumed += n;
@@ -335,10 +313,10 @@ public class GZipInflatingBuffer implements Closeable {
 
     // Check header magic
     if (readUnsignedShort(tmpBuffer[0], tmpBuffer[1]) != GZIP_MAGIC) {
-      System.out.println(readUnsignedShort(tmpBuffer[0], tmpBuffer[1]));
-      System.out.println(readUnsignedByte(tmpBuffer[0]));
-      System.out.println(readUnsignedByte(tmpBuffer[1]));
-      System.out.println("not matched");
+      loggingHack(readUnsignedShort(tmpBuffer[0], tmpBuffer[1]));
+      loggingHack(readUnsignedByte(tmpBuffer[0]));
+      loggingHack(readUnsignedByte(tmpBuffer[1]));
+      loggingHack("not matched");
       throw new ZipException("Not in GZIP format");
     }
 
@@ -355,7 +333,7 @@ public class GZipInflatingBuffer implements Closeable {
   }
 
   private boolean processHeaderExtraLen() {
-    System.out.println("gzipHeaderFlag: " + gzipHeaderFlag);
+    loggingHack("gzipHeaderFlag: " + gzipHeaderFlag);
     if ((gzipHeaderFlag & FEXTRA) != FEXTRA) {
       // TODO extract transitions into function of current state? e.g., state = nextState(State...)
       // Could also do this just for headers (separate enum)
@@ -388,7 +366,7 @@ public class GZipInflatingBuffer implements Closeable {
 
   private boolean processHeaderName() {
     if ((gzipHeaderFlag & FNAME) != FNAME) {
-      System.out.println("Skipping FNAME");
+      loggingHack("Skipping FNAME");
       // TODO extract transitions into function of current state? e.g., state = nextState(State...)
       // Could also do this just for headers (separate enum)
       state = State.HEADER_COMMENT;
@@ -397,7 +375,7 @@ public class GZipInflatingBuffer implements Closeable {
     // TODO - this should read as much as possible at a time, then put it back if necessary?
     while (readBytesFromInflaterBufOrCompressedData(1, tmpBuffer)) {
       crc.update(tmpBuffer[0]);
-      System.out.println(tmpBuffer[0]);
+      loggingHack(tmpBuffer[0]);
       if (readUnsignedByte(tmpBuffer[0]) == 0) {
         state = State.HEADER_COMMENT;
         return true;
@@ -408,7 +386,7 @@ public class GZipInflatingBuffer implements Closeable {
 
   private boolean processHeaderComment() {
     if ((gzipHeaderFlag & FCOMMENT) != FCOMMENT) {
-      System.out.println("Skipping FCOMMENT");
+      loggingHack("Skipping FCOMMENT");
       // TODO extract transitions into function of current state? e.g., state = nextState(State...)
       // Could also do this just for headers (separate enum)
       state = State.HEADER_CRC;
@@ -436,9 +414,9 @@ public class GZipInflatingBuffer implements Closeable {
     }
     if (readBytesFromInflaterBufOrCompressedData(USHORT_LEN, tmpBuffer)) {
       int v = (int) crc.getValue() & 0xffff;
-      System.out.println("Expecting header CRC16 of " + v);
-      System.out.println("Actual header CRC16: " + readUnsignedShort(tmpBuffer[0], tmpBuffer[1]));
-      System.out.println("As byte array: " + bytesToHex(tmpBuffer, USHORT_LEN));
+      loggingHack("Expecting header CRC16 of " + v);
+      loggingHack("Actual header CRC16: " + readUnsignedShort(tmpBuffer[0], tmpBuffer[1]));
+      loggingHack("As byte array: " + bytesToHex(tmpBuffer, USHORT_LEN));
       if (v != readUnsignedShort(tmpBuffer[0], tmpBuffer[1])) {
         throw new ZipException("Corrupt GZIP header");
       }
@@ -476,17 +454,17 @@ public class GZipInflatingBuffer implements Closeable {
     }
 
     //    try {
-    System.out.println(
+    loggingHack(
         "unsigned int that should be checksum: "
             + readUnsignedInt(tmpBuffer[0], tmpBuffer[1], tmpBuffer[2], tmpBuffer[3]));
-    System.out.println("crc.getValue() " + crc.getValue());
+    loggingHack("crc.getValue() " + crc.getValue());
     long desiredCrc = crc.getValue();
-    System.out.println("as byte array: " + Arrays.toString(Longs.toByteArray(desiredCrc)));
-    System.out.println("-13 as unsigned int: " + readUnsignedByte((byte) -13));
+    loggingHack("as byte array: " + Arrays.toString(Longs.toByteArray(desiredCrc)));
+    loggingHack("-13 as unsigned int: " + readUnsignedByte((byte) -13));
     long desiredBytesWritten = (bytesWritten & 0xffffffffL);
-    System.out.println("inflater.getBytesWritten() & 0xffffffffL: " + desiredBytesWritten);
-    System.out.println("as byte array: " + Arrays.toString(Longs.toByteArray(desiredBytesWritten)));
-    System.out.println(
+    loggingHack("inflater.getBytesWritten() & 0xffffffffL: " + desiredBytesWritten);
+    loggingHack("as byte array: " + Arrays.toString(Longs.toByteArray(desiredBytesWritten)));
+    loggingHack(
         "what should be ^: "
             + readUnsignedInt(tmpBuffer[4], tmpBuffer[5], tmpBuffer[6], tmpBuffer[7]));
 
@@ -501,6 +479,15 @@ public class GZipInflatingBuffer implements Closeable {
     state = State.HEADER;
 
     return true;
+  }
+
+  // TODO - remove all of this
+  private boolean outputLogs = false;
+
+  private void loggingHack(Object s) {
+    if (outputLogs) {
+      System.out.println(s.toString());
+    }
   }
 
   // TODO - remove

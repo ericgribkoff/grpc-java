@@ -177,6 +177,14 @@ public class GZipInflatingBufferTest {
   }
 
   @Test
+  public void readUncompressedBytesWithLargerRequest_doesNotOverflow() throws Exception {
+    gzipBuffer.readUncompressedBytes(1, outputBuffer);
+    gzipBuffer.addCompressedBytes(ReadableBuffers.wrap(gzipCompressedBytes));
+
+    assertTrue(readBytesIfPossible(uncompressedBytes.length, outputBuffer));
+  }
+
+  @Test
   public void closeStopsDecompression() throws Exception {
     gzipBuffer.addCompressedBytes(ReadableBuffers.wrap(gzipCompressedBytes));
 
