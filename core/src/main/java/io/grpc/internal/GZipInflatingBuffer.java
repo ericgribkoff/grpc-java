@@ -85,31 +85,40 @@ public class GZipInflatingBuffer implements Closeable {
   /** CRC-32 for uncompressed data. */
   protected CRC32 crc = new CRC32();
 
-  // TODO Replace with composite readable buffer? => nextFrame
+  // TODO Replace with composite readable compositeReadableBuffer? => nextFrame
   private byte[] tmpBuffer = new byte[128]; // for skipping/parsing(?) header, trailer data
-  private final CompositeReadableBuffer nextFrame = new CrcCompositeReadableBuffer(crc);
+  private final CrcCompositeReadableBuffer nextFrame =
+      new CrcCompositeReadableBuffer(crc, new CompositeReadableBuffer());
 
-  private static class CrcCompositeReadableBuffer extends CompositeReadableBuffer {
+  private static class CrcCompositeReadableBuffer {
     private final CRC32 crc;
+    private final CompositeReadableBuffer compositeReadableBuffer;
 
-    private CrcCompositeReadableBuffer(CRC32 crc) {
+    private CrcCompositeReadableBuffer(CRC32 crc, CompositeReadableBuffer compositeReadableBuffer) {
       this.crc = crc;
+      this.compositeReadableBuffer = compositeReadableBuffer;
     }
 
-    @Override
+    public void addBuffer(ReadableBuffer buffer) {
+      compositeReadableBuffer.addBuffer(buffer);
+    }
+
+    public int readableBytes() {
+      return compositeReadableBuffer.readableBytes();
+    }
+
     public int readUnsignedByte() {
-      int b = super.readUnsignedByte();
+      int b = compositeReadableBuffer.readUnsignedByte();
       crc.update(b);
       return b;
     }
 
-    @Override
     public void skipBytes(int length) {
       byte[] buf = new byte[512];
       int total = 0;
       while (total < length) {
         int toRead = Math.min(length - total, buf.length);
-        super.readBytes(buf, 0, toRead);
+        compositeReadableBuffer.readBytes(buf, 0, toRead);
         crc.update(buf, 0, toRead);
         total += toRead;
       }
@@ -306,7 +315,7 @@ public class GZipInflatingBuffer implements Closeable {
 
   /**
    * Writes up to the requested number of bytes to nextFrame, consuming bytes first from the
-   * inflater's buffer and then uncompressedData. Updates CRC with the bytes.
+   * inflater's compositeReadableBuffer and then uncompressedData. Updates CRC with the bytes.
    *
    * @param bytesNeeded number of bytes to read
    * @return the number of bytes written
@@ -341,7 +350,7 @@ public class GZipInflatingBuffer implements Closeable {
           ReadableBuffers.wrap(inflaterBuf, inflaterBufHeaderStartIndex, bytesToGetFromInflater));
 
       loggingHack(
-          "Hex bytes read from inflated buffer: "
+          "Hex bytes read from inflated compositeReadableBuffer: "
               + bytesToHex(inflaterBuf, inflaterBufHeaderStartIndex, bytesToGetFromInflater));
       inflater.reset();
       inflater.setInput(
@@ -494,15 +503,16 @@ public class GZipInflatingBuffer implements Closeable {
   /*
    * Reads unsigned short in Intel byte order.
    */
-  private int readUnsignedShort(CompositeReadableBuffer buffer) {
-    loggingHack("readUnsignedShort - buffer.readableBytes(): " + buffer.readableBytes());
+  private int readUnsignedShort(CrcCompositeReadableBuffer buffer) {
+    loggingHack(
+        "readUnsignedShort - compositeReadableBuffer.readableBytes(): " + buffer.readableBytes());
     return buffer.readUnsignedByte() | (buffer.readUnsignedByte() << 8);
   }
 
   /*
    * Reads unsigned integer in Intel byte order.
    */
-  private long readUnsignedInt(CompositeReadableBuffer buffer) {
+  private long readUnsignedInt(CrcCompositeReadableBuffer buffer) {
     long s = readUnsignedShort(buffer);
     return ((long) readUnsignedShort(buffer) << 16) | s;
   }
