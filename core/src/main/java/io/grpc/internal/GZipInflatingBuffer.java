@@ -277,86 +277,16 @@ public class GZipInflatingBuffer implements Closeable {
     }
   }
 
-  // TODO - reduce copying :(
   /**
-   * If the requested number of bytes are available, writes them at offset 0 to tmpBuffer and
-   * returns true, updating CRC with the bytes. Otherwise, returns false.
+   * Writes up to the requested number of bytes to nextFrame, consuming bytes first from the
+   * inflater's buffer and then uncompressedData. Updates CRC with the bytes.
    *
-   * @param n number of bytes to read
-   * @return true if the bytes were available and written
+   * @param bytesNeeded number of bytes to read
+   * @return the number of bytes written
    */
-  // TODO n must be less than tmpBuffer size?
-  private boolean readBytesFromInflaterBufOrCompressedData(int n) {
-    int bytesRemainingInInflater = inflater.getRemaining();
-    int compressedDataReadableByes = compressedData.readableBytes();
-
-    if (bytesRemainingInInflater + compressedDataReadableByes < n) {
-      return false;
-    }
-
-    if (nextFrame != null) {
-      checkState(nextFrame.readableBytes() == 0, "unread bytes in nextFrame");
-    }
-
-    nextFrame = new CompositeReadableBuffer();
-    int inflaterBufHeaderStartIndex = inflaterBufLen - bytesRemainingInInflater;
-    int bytesToGetFromInflater = Math.min(n, bytesRemainingInInflater);
-
-    if (bytesToGetFromInflater > 0) {
-      loggingHack("bytesToGetFromInflater: " + bytesToGetFromInflater);
-      loggingHack(
-          "Setting inflater input: start="
-              + (inflaterBufHeaderStartIndex + bytesToGetFromInflater)
-              + " len="
-              + (bytesRemainingInInflater - bytesToGetFromInflater));
-      // TODO Why copy? We are going to use them before inflater needs them to be overwritten.
-      //      System.arraycopy(inflaterBuf, inflaterBufHeaderStartIndex,
-      //          tmpBuffer, 0, bytesToGetFromInflater);
-      System.out.println(
-          "From inflaterBuf: inflaterBufHeaderStartIndex="
-              + inflaterBufHeaderStartIndex
-              + " bytesToGetFromInflater="
-              + bytesToGetFromInflater);
-      nextFrame.addBuffer(
-          ReadableBuffers.wrap(inflaterBuf, inflaterBufHeaderStartIndex, bytesToGetFromInflater));
-      crc.update(inflaterBuf, inflaterBufHeaderStartIndex, bytesToGetFromInflater);
-
-      loggingHack(
-          "Hex bytes read from inflated buffer: "
-              + bytesToHex(inflaterBuf, inflaterBufHeaderStartIndex, bytesToGetFromInflater));
-      inflater.reset();
-      if (bytesToGetFromInflater < bytesRemainingInInflater) {
-        inflater.setInput(
-            inflaterBuf,
-            inflaterBufHeaderStartIndex + bytesToGetFromInflater,
-            bytesRemainingInInflater - bytesToGetFromInflater);
-      }
-    }
-
-    int bytesToGetFromCompressedData = n - bytesToGetFromInflater;
-    //    if (bytesToGetFromCompressedData > 0) {
-    loggingHack("bytesToGetFromCompressedData: " + bytesToGetFromCompressedData);
-    compressedData.readBytes(tmpBuffer, 0, bytesToGetFromCompressedData);
-    nextFrame.addBuffer(ReadableBuffers.wrap(tmpBuffer, 0, bytesToGetFromCompressedData));
-    loggingHack(
-        "Hex bytes read from compressed data: "
-            + bytesToHex(tmpBuffer, bytesToGetFromCompressedData));
-    crc.update(tmpBuffer, 0, bytesToGetFromCompressedData);
-    //    }
-    bytesConsumed += n;
-
-    return true;
-  }
-
+  // TODO - reduce copying :(
   private int readGzippedBytes(int bytesNeeded) {
     int bytesRead = 0;
-    //    int compressedDataReadableByes = compressedData.readableBytes();
-
-    //    if (bytesRemainingInInflater + compressedDataReadableByes < n) {
-    //      return false;
-    //    }
-
-    //    nextFrame = new CompositeReadableBuffer();
 
     checkState(nextFrame.readableBytes() == 0, "unread bytes in nextFrame");
 
@@ -413,25 +343,24 @@ public class GZipInflatingBuffer implements Closeable {
     return bytesRead;
   }
 
+  private boolean nextFrameHasRequiredBytes(int bytesRequired) {
+    int missingBytes = bytesRequired - nextFrame.readableBytes();
+    loggingHack("missingBytes: " + missingBytes);
+    if (missingBytes == 0 || readGzippedBytes(missingBytes) == missingBytes) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+
   private boolean processHeader() throws ZipException {
     crc.reset();
 
     loggingHack("nextFrame.readableBytes(): " + nextFrame.readableBytes());
 
-    //    if (!readBytesFromInflaterBufOrCompressedData(GZIP_BASE_HEADER_SIZE)) {
-    //      return false;
-    //    }
-
-    int missingBytes = GZIP_BASE_HEADER_SIZE - nextFrame.readableBytes();
-    loggingHack("missingBytes: " + missingBytes);
-    if (missingBytes > 0 && readGzippedBytes(missingBytes) < missingBytes) {
+    if (!nextFrameHasRequiredBytes(GZIP_BASE_HEADER_SIZE)) {
       return false;
     }
-    loggingHack("nextFrame.readableBytes(): " + nextFrame.readableBytes());
-    //    System.out.println(nextFrame.readUnsignedByte());
-    //    System.out.println(nextFrame.readUnsignedByte());
-    //    System.out.println(nextFrame.readUnsignedByte());
-    //    System.out.println(nextFrame.readUnsignedByte());
 
     // Check header magic
     if (readUnsignedShort(nextFrame) != GZIP_MAGIC) {
@@ -460,7 +389,9 @@ public class GZipInflatingBuffer implements Closeable {
       state = State.HEADER_NAME;
       return true;
     }
-    if (!readBytesFromInflaterBufOrCompressedData(USHORT_LEN)) {
+    int missingBytes = USHORT_LEN - nextFrame.readableBytes();
+    loggingHack("missingBytes: " + missingBytes);
+    if (missingBytes > 0 && readGzippedBytes(missingBytes) < missingBytes) {
       return false;
     }
     headerExtraToRead = readUnsignedShort(nextFrame);
@@ -472,7 +403,7 @@ public class GZipInflatingBuffer implements Closeable {
     //    int bytesAvailable = readableBytesFromInflaterBufOrCompressedData();
     while (headerExtraToRead > 0) {
       int bytesToRead = Math.min(headerExtraToRead, tmpBuffer.length);
-      if (!readBytesFromInflaterBufOrCompressedData(bytesToRead)) {
+      if (!nextFrameHasRequiredBytes(bytesToRead)) {
         return false;
       } else {
         headerExtraToRead -= bytesToRead;
@@ -489,7 +420,7 @@ public class GZipInflatingBuffer implements Closeable {
       return true;
     }
     // TODO - this should read as much as possible at a time, then put it back if necessary?
-    while (readBytesFromInflaterBufOrCompressedData(1)) {
+    while (nextFrameHasRequiredBytes(1)) {
       if (nextFrame.readUnsignedByte() == 0) {
         state = State.HEADER_COMMENT;
         return true;
@@ -507,7 +438,7 @@ public class GZipInflatingBuffer implements Closeable {
     // TODO - this should read as much as possible at a time, then put it back if necessary?
     // TODO - requires care with CRC
 
-    while (readBytesFromInflaterBufOrCompressedData(1)) {
+    while (nextFrameHasRequiredBytes(1)) {
       if (nextFrame.readUnsignedByte() == 0) {
         state = State.HEADER_CRC;
         return true;
@@ -524,7 +455,7 @@ public class GZipInflatingBuffer implements Closeable {
       return true;
     }
     int desiredCrc16 = (int) crc.getValue() & 0xffff;
-    if (readBytesFromInflaterBufOrCompressedData(USHORT_LEN)) {
+    if (nextFrameHasRequiredBytes(USHORT_LEN)) {
       loggingHack("Expecting header CRC16 of " + desiredCrc16);
       if (desiredCrc16 != readUnsignedShort(nextFrame)) {
         throw new ZipException("Corrupt GZIP header");
@@ -559,7 +490,7 @@ public class GZipInflatingBuffer implements Closeable {
     long desiredBytesWritten = (bytesWritten & 0xffffffffL);
     loggingHack("inflater.getBytesWritten() & 0xffffffffL: " + desiredBytesWritten);
 
-    if (!readBytesFromInflaterBufOrCompressedData(GZIP_TRAILER_SIZE)) {
+    if (!nextFrameHasRequiredBytes(GZIP_TRAILER_SIZE)) {
       return false;
     }
 
