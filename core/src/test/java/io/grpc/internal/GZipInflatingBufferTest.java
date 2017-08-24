@@ -105,6 +105,13 @@ public class GZipInflatingBufferTest {
           littleGZipUncompressedBytes = smallerUncompressedOutputStream.toByteArray();
           System.out.println("littleGZipCompressedBytes: " + littleGZipCompressedBytes.length);
           System.out.println("littleGZipUncompressedBytes: " + littleGZipUncompressedBytes.length);
+
+          byte[] tmp =
+              Arrays.copyOfRange(
+                  littleGZipCompressedBytes,
+                  littleGZipCompressedBytes.length - 8,
+                  littleGZipCompressedBytes.length);
+          System.out.println("Correct little trailer: " + bytesToHex(tmp));
         }
         ////        if (total > 7926) {//0000) {
         //        if (total > 10000) {
