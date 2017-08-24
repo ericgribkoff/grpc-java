@@ -19,6 +19,7 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.primitives.Longs;
+import com.sun.xml.internal.ws.Closeable;
 import java.util.Arrays;
 import java.util.zip.CRC32;
 import java.util.zip.DataFormatException;
@@ -29,19 +30,26 @@ import javax.annotation.concurrent.NotThreadSafe;
 /**
  * Created by ericgribkoff on 8/18/17.
  *
- * <p>Some GZip parsing code adapted from java.util.zip.GZIPInputStream.
+ * <p>Some gzip parsing code adapted from java.util.zip.GZIPInputStream.
  */
 @NotThreadSafe
-// TODO consistent use of inflate OR decompress terminology
-public class GZipInflatingBuffer {
-  // Equivalent of unprocessed in standard MessageDeframer
-  private final CompositeReadableBuffer compressedData = new CompositeReadableBuffer();
+public class GZipInflatingBuffer implements Closeable {
 
   private static final int GZIP_BASE_HEADER_SIZE = 10;
   private static final int GZIP_TRAILER_SIZE = 8;
 
-  private Inflater inflater = new Inflater(true);
-  private State state = State.HEADER;
+  private static final int USHORT_LEN = 2;
+
+  /** GZIP header magic number. */
+  public static final int GZIP_MAGIC = 0x8b1f;
+
+  /*
+   * File header flags. (FTEXT is ignored)
+   */
+  private static final int FHCRC = 2; // Header CRC
+  private static final int FEXTRA = 4; // Extra field
+  private static final int FNAME = 8; // File name
+  private static final int FCOMMENT = 16; // File comment
 
   private enum State {
     HEADER,
@@ -58,6 +66,10 @@ public class GZipInflatingBuffer {
   private static final int INFLATE_BUFFER_SIZE = 512;
   private static final int MAX_BUFFER_SIZE = 1024 * 4;
 
+  private final CompositeReadableBuffer compressedData = new CompositeReadableBuffer();
+  private Inflater inflater = new Inflater(true);
+  private State state = State.HEADER;
+
   private byte[] inflaterBuf = new byte[INFLATE_BUFFER_SIZE];
   private int inflaterBufLen;
 
@@ -69,53 +81,39 @@ public class GZipInflatingBuffer {
 
   private boolean closed = false;
 
-  private static final int USHORT_LEN = 2;
-
-  /** GZIP header magic number. */
-  public static final int GZIP_MAGIC = 0x8b1f;
-
-  /*
-   * File header flags. (FTEXT intentionally omitted)
-   */
-  private static final int FHCRC = 2; // Header CRC
-  private static final int FEXTRA = 4; // Extra field
-  private static final int FNAME = 8; // File name
-  private static final int FCOMMENT = 16; // File comment
+  int bytesConsumed = 0; // tracks compressed bytes to be removed from flow control
 
   /** CRC-32 for uncompressed data. */
   protected CRC32 crc = new CRC32();
 
   private byte[] tmpBuffer = new byte[128]; // for skipping/parsing(?) header, trailer data
 
-  /** Javadoc. */
+  /**
+   * Returns true when all compressedData has been input to the inflater and the inflater is unable
+   * to produce more output.
+   */
   public boolean isStalled() {
     checkState(!closed, "GZipInflatingBuffer is closed");
-    // TODO - not quite right, but want to verify finish state.
-    // TODO state != State.INFLATING is not sufficient if we are eagerly parsing TRAILERS...
-    // but inflater.getRemaining() may have junk data and we are stalled.
-    // Actually...how can we differentiate between junk data and real extra data that is only
-    // partially received?
     return compressedData.readableBytes() == 0 && (inflater.needsInput() || inflater.finished());
-    // state != State.INFLATING;
   }
 
-  // TODO - is this right? MessageDeframer looks at partial data *only* in nextFrame...because
-  // that's all that matters when forcing a close, maybe?
-  // It's because we only care about partial data when compressedData.readableBytes() == 0
-  /** Javadoc. */
+  /**
+   * Returns true when there is compressedData that has not been input to the inflater or the
+   * inflater has not consumed all of its input.
+   */
   public boolean hasPartialData() {
     checkState(!closed, "GZipInflatingBuffer is closed");
     return compressedData.readableBytes() != 0 || inflater.getRemaining() != 0;
   }
 
-  /** Javadoc. */
+  /** Adds additional compressed data. */
   public void addCompressedBytes(ReadableBuffer buffer) {
     checkState(!closed, "GZipInflatingBuffer is closed");
     System.out.println("Adding " + buffer.readableBytes() + " bytes to compressedData");
     compressedData.addBuffer(buffer);
   }
 
-  /** Javadoc. */
+  @Override
   public void close() {
     if (!closed) {
       closed = true;
@@ -124,9 +122,12 @@ public class GZipInflatingBuffer {
     }
   }
 
-  int bytesConsumed = 0; // to be removed from flow control
-
-  /** Javadoc. */
+  /**
+   * Returns the number of compressed bytes processed since the last invocation of this method.
+   *
+   * <p>This does not maintain a cumulative total count to avoid overflow issues with streams
+   * containing large amounts of data.
+   */
   public int getAndResetCompressedBytesConsumed() {
     checkState(!closed, "GZipInflatingBuffer is closed");
 
@@ -210,8 +211,6 @@ public class GZipInflatingBuffer {
     System.out.println("uncompressedBufWriterIndex (after): " + uncompressedBufWriterIndex);
 
     if (uncompressedBufWriterIndex > 0) {
-      // TODO fix this - we just want to eagerly parse the trailer when available, but if we are
-      // requesting *exactly* the number of bytes available, we won't otherwise parse the trailer.
       if (inflater.finished()) {
         state = State.TRAILER;
         processTrailer();
@@ -263,9 +262,7 @@ public class GZipInflatingBuffer {
         //                bytesToHex(uncompressedBuf, uncompressedBufWriterIndex));
       }
     } catch (DataFormatException e) {
-      // TODO properly abort when this happens
-      System.out.println("DataFormatException");
-      e.printStackTrace(System.out);
+      // Wrap the exception so tests can check for a specific prefix
       throw new DataFormatException("Inflater data format exception: " + e.getMessage());
     }
     return;
@@ -332,13 +329,6 @@ public class GZipInflatingBuffer {
       return false;
     }
 
-    // TODO - isn't this broken with extra flags? We need to reset after we've consumed additional
-    // header data out of buffer too...
-    // Not to mention we may have updated the inflater's buffer in
-    // readBytesFromInflaterBufOrCompressedData...
-    //    inflater.reset(); // TODO - make this more obviously required here!
-
-    // TODO - handle header CRC
     crc.reset();
 
     crc.update(tmpBuffer, 0, GZIP_BASE_HEADER_SIZE);
@@ -365,7 +355,6 @@ public class GZipInflatingBuffer {
   }
 
   private boolean processHeaderExtraLen() {
-    // TODO - check flag directly here :-)
     System.out.println("gzipHeaderFlag: " + gzipHeaderFlag);
     if ((gzipHeaderFlag & FEXTRA) != FEXTRA) {
       // TODO extract transitions into function of current state? e.g., state = nextState(State...)
@@ -425,6 +414,7 @@ public class GZipInflatingBuffer {
       state = State.HEADER_CRC;
       return true;
     }
+    // TODO - this should read as much as possible at a time, then put it back if necessary?
     while (readBytesFromInflaterBufOrCompressedData(1, tmpBuffer)) {
       crc.update(tmpBuffer[0]);
       if (readUnsignedByte(tmpBuffer[0]) == 0) {
@@ -459,7 +449,6 @@ public class GZipInflatingBuffer {
     return false;
   }
 
-  // TODO - throw exception if out of range??
   private int readUnsignedByte(byte b) {
     return b & 0xFF;
   }
@@ -508,11 +497,6 @@ public class GZipInflatingBuffer {
             != (bytesWritten & 0xffffffffL))) {
       throw new ZipException("Corrupt GZIP trailer");
     }
-    //    }
-    //    catch (IOException e) {
-    //      System.out.println("IOException on trailer");
-    //      throw new RuntimeException(e);
-    //    }
 
     state = State.HEADER;
 
