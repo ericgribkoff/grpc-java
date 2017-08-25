@@ -294,7 +294,6 @@ public class MessageDeframer implements Closeable, Deframer {
    *
    * @return {@code true} if all of the required bytes have been read.
    */
-  // TODO handle this with compressed data
   private boolean readRequiredBytes() {
     int totalBytesRead = 0;
     try {
@@ -307,15 +306,6 @@ public class MessageDeframer implements Closeable, Deframer {
       int missingBytes;
       while ((missingBytes = requiredLength - nextFrame.readableBytes()) > 0) {
         if (gzipInflater != null) {
-          // TODO how do we know if we are making progress...We know we are making progress if the
-          // inflater outputs some uncompressed bytes. This does *not* mean that it read more
-          // compressed bytes, AFAICT.
-          // We do not need to loop here on the chance more data was simultaneously written to the
-          // gzipInflater - this can't happen (single-threaded) and also would trigger another call
-          // to deliver, which would pick up the data. Here we just need to know if the block is
-          // ready.
-          // even if we are or are not ready, the inflater may have consumed more compressed bytes,
-          // so return these to flow control
           try {
             int bytesRead = gzipInflater.inflateBytes(missingBytes, nextFrame);
             System.out.println("DEFRAMER: bytesRead = " + bytesRead);
@@ -335,18 +325,6 @@ public class MessageDeframer implements Closeable, Deframer {
             e.printStackTrace(System.out);
             throw new RuntimeException(e);
           }
-
-          //          int compressedBytesRead = gzipInflater.uncompressedBytesReady(missingBytes);
-          //          if (compressedBytesRead > 0) {
-          //            totalBytesRead += 0;
-          //          }
-
-          //if (gzipInflater.uncompressedBytesReady(missingBytes)) {
-          //  int compressedBytesRead = gzipInflater.inflateBytes(missingBytes, nextFrame);
-          //  totalBytesRead += compressedBytesRead;
-          //} else {
-          //  return false;
-          //}
         } else {
           if (unprocessed.readableBytes() == 0) {
             // No more data is available.
