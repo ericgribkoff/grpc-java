@@ -241,8 +241,9 @@ public abstract class ClientCall<ReqT, RespT> {
   /**
    * Enables full-stream compression, if an encoding type has been negotiated.  If no message
    * encoding has been negotiated, this is a no-op. By default full-stream compression is disabled.
+   * Turning on full-stream compression implicitly disabled per-message compression.
    */
-  @ExperimentalApi
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/3399")
   public void setStreamCompression(boolean enabled) {
     // noop
   }
