@@ -317,11 +317,11 @@ public class MessageDeframer implements Closeable, Deframer {
           // even if we are or are not ready, the inflater may have consumed more compressed bytes,
           // so return these to flow control
           try {
-            int uncompressedBytesRead = gzipInflater.inflateBytes(missingBytes, nextFrame);
-            int bytesRead = gzipInflater.getAndResetGzippedBytesConsumed();
+            int bytesRead = gzipInflater.inflateBytes(missingBytes, nextFrame);
             System.out.println("DEFRAMER: bytesRead = " + bytesRead);
             totalBytesRead += bytesRead;
-            if (uncompressedBytesRead == 0) {
+            if (missingBytes == requiredLength - nextFrame.readableBytes()) {
+              // No additional bytes were inflated
               return false;
             }
           } catch (IOException e) {
