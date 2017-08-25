@@ -16,6 +16,7 @@
 
 package io.grpc.internal;
 
+import static io.grpc.internal.GrpcUtil.CONTENT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -233,17 +234,33 @@ public abstract class AbstractClientStream extends AbstractStream
       Preconditions.checkState(!statusReported, "Received headers on closed stream");
       statsTraceCtx.clientInboundHeaders();
 
-      Decompressor decompressor = Codec.Identity.NONE;
-      String encoding = headers.get(MESSAGE_ENCODING_KEY);
-      if (encoding != null) {
-        decompressor = decompressorRegistry.lookupDecompressor(encoding);
-        if (decompressor == null) {
-          deframeFailed(Status.INTERNAL.withDescription(
-              String.format("Can't find decompressor for %s", encoding)).asRuntimeException());
+      String streamEncoding = headers.get(CONTENT_ENCODING_KEY);
+      if (streamEncoding != null && !streamEncoding.equalsIgnoreCase("identity")) {
+        // TODO(ericgribkoff) don't hard code allowed content-encoding values
+        if (!streamEncoding.equalsIgnoreCase("gzip")) {
+          deframeFailed(
+              Status.INTERNAL
+                  .withDescription(
+                      String.format("Can't find full stream decompressor for %s", streamEncoding))
+                  .asRuntimeException());
           return;
+        } else {
+          setFullStreamDecompressor(new GzipInflatingBuffer());
         }
+      } else {
+        // Only obey per-message compression if content-encoding is missing or identity.
+        Decompressor decompressor = Codec.Identity.NONE;
+        String encoding = headers.get(MESSAGE_ENCODING_KEY);
+        if (encoding != null) {
+          decompressor = decompressorRegistry.lookupDecompressor(encoding);
+          if (decompressor == null) {
+            deframeFailed(Status.INTERNAL.withDescription(
+                String.format("Can't find decompressor for %s", encoding)).asRuntimeException());
+            return;
+          }
+        }
+        setDecompressor(decompressor);
       }
-      setDecompressor(decompressor);
 
       listener().headersRead(headers);
     }
