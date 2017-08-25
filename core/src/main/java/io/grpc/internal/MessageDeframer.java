@@ -117,9 +117,9 @@ public class MessageDeframer implements Closeable, Deframer {
     this.debugString = debugString;
   }
 
-  private GZipInflatingBuffer gzipInflater;
+  private GzipInflatingBuffer gzipInflater;
 
-  public void setGZipInflater(GZipInflatingBuffer gzipInflater) {
+  public void setGZipInflater(GzipInflatingBuffer gzipInflater) {
     this.gzipInflater = gzipInflater;
   }
 
@@ -154,7 +154,7 @@ public class MessageDeframer implements Closeable, Deframer {
     try {
       if (!isClosedOrScheduledToClose()) {
         if (gzipInflater != null) {
-          gzipInflater.addCompressedBytes(data);
+          gzipInflater.addGzippedBytes(data);
         } else {
           unprocessed.addBuffer(data);
         }
@@ -298,7 +298,7 @@ public class MessageDeframer implements Closeable, Deframer {
   private boolean readRequiredBytes() {
     int totalBytesRead = 0;
     try {
-      // TODO nextFrame essentially "moves" into GZipInflatingBuffer for a compressed stream
+      // TODO nextFrame essentially "moves" into GzipInflatingBuffer for a compressed stream
       if (nextFrame == null) {
         nextFrame = new CompositeReadableBuffer();
       }

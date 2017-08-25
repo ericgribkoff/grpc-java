@@ -93,9 +93,9 @@ public class MessageDeframerTest {
   @Before
   public void setUp() {
     if (useGzipInflatingBuffer) {
-      deframer.setGZipInflater(new GZipInflatingBuffer() {
+      deframer.setGZipInflater(new GzipInflatingBuffer() {
         @Override
-        public void addCompressedBytes(ReadableBuffer buffer) {
+        public void addGzippedBytes(ReadableBuffer buffer) {
           try {
             ByteArrayOutputStream gzippedOutputStream = new ByteArrayOutputStream();
             OutputStream gzipCompressingStream = new GZIPOutputStream(
@@ -109,7 +109,7 @@ public class MessageDeframerTest {
             gzipCompressingStream.close();
             byte[] gZipCompressedBytes = gzippedOutputStream.toByteArray();
             System.out.println("gZipCompressedBytes: " + gZipCompressedBytes.length);
-            super.addCompressedBytes(ReadableBuffers.wrap(gZipCompressedBytes));
+            super.addGzippedBytes(ReadableBuffers.wrap(gZipCompressedBytes));
           } catch (IOException e) {
             System.out.println("TODO");
           }
