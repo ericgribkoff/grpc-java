@@ -20,6 +20,7 @@ import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.anyInt;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -40,13 +41,19 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.zip.GZIPOutputStream;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Matchers;
 import org.mockito.invocation.InvocationOnMock;
@@ -55,9 +62,22 @@ import org.mockito.stubbing.Answer;
 /**
  * Tests for {@link MessageDeframer}.
  */
-@RunWith(JUnit4.class)
+@RunWith(Parameterized.class)
 public class MessageDeframerTest {
   @Rule public final ExpectedException thrown = ExpectedException.none();
+
+  /**
+   * Auto called by test.
+   */
+  @Parameters(name = "{index}: useGzipInflatingBuffer={0}")
+  public static Collection<Object[]> data() {
+    return Arrays.asList(new Object[][] {
+        { false }, { true }
+    });
+  }
+
+  @Parameter // Automatically set by test runner, must be public
+  public boolean useGzipInflatingBuffer;
 
   private Listener listener = mock(Listener.class);
   private TestBaseStreamTracer tracer = new TestBaseStreamTracer();
@@ -69,6 +89,27 @@ public class MessageDeframerTest {
   private ArgumentCaptor<StreamListener.MessageProducer> producer =
       ArgumentCaptor.forClass(StreamListener.MessageProducer.class);
 
+  @Before
+  public void setUp() {
+    if (useGzipInflatingBuffer) {
+      deframer.setFullStreamDecompressor(new GzipInflatingBuffer() {
+        @Override
+        public void addGzippedBytes(ReadableBuffer buffer) {
+          try {
+            ByteArrayOutputStream gzippedOutputStream = new ByteArrayOutputStream();
+            OutputStream gzipCompressingStream = new GZIPOutputStream(
+                gzippedOutputStream);
+            buffer.readBytes(gzipCompressingStream, buffer.readableBytes());
+            gzipCompressingStream.close();
+            super.addGzippedBytes(ReadableBuffers.wrap(gzippedOutputStream.toByteArray()));
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
+        }
+      });
+    }
+  }
+
   @Test
   public void simplePayload() {
     deframer.request(1);
@@ -77,7 +118,11 @@ public class MessageDeframerTest {
     assertEquals(Bytes.asList(new byte[] {3, 14}), bytes(producer.getValue().next()));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
-    checkStats(1, 2, 2);
+    if (useGzipInflatingBuffer) {
+      checkStats(1, 2 + 8 /* GZIP trailer */, 2);
+    } else {
+      checkStats(1, 2, 2);
+    }
   }
 
   @Test
@@ -91,7 +136,11 @@ public class MessageDeframerTest {
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     assertEquals(Bytes.asList(new byte[] {14, 15}), bytes(streams.get(1).next()));
     verifyNoMoreInteractions(listener);
-    checkStats(2, 3, 3);
+    if (useGzipInflatingBuffer) {
+      checkStats(2, 3 + 8 /* GZIP trailer */, 3);
+    } else {
+      checkStats(2, 3, 3);
+    }
   }
 
   @Test
@@ -104,13 +153,21 @@ public class MessageDeframerTest {
     verify(listener).deframerClosed(false);
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
-    checkStats(1, 1, 1);
+    if (useGzipInflatingBuffer) {
+      checkStats(1, 1 + 8 /* GZIP trailer */, 1);
+    } else {
+      checkStats(1, 1, 1);
+    }
   }
 
   @Test
   public void endOfStreamShouldNotifyEndOfStream() {
     deframer.deframe(buffer(new byte[0]));
     deframer.closeWhenComplete();
+    if (useGzipInflatingBuffer) {
+      deframer.request(1); // process the 20-byte empty GZIP stream, to get stalled=true
+      verify(listener, atLeast(1)).bytesRead(anyInt());
+    }
     verify(listener).deframerClosed(false);
     verifyNoMoreInteractions(listener);
     checkStats(0, 0, 0);
@@ -139,7 +196,17 @@ public class MessageDeframerTest {
         Bytes.asList(new byte[] {3, 14, 1, 5, 9, 2, 6}), bytes(producer.getValue().next()));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
-    checkStats(1, 7, 7);
+
+    if (useGzipInflatingBuffer) {
+      checkStats(
+          1,
+          30 /* first GZIP stream size */
+            - 17 /* bytes consumed to get msg header */
+            + 22 /* second GZIP stream size */,
+          7);
+    } else {
+      checkStats(1, 7, 7);
+    }
   }
 
   @Test
@@ -154,7 +221,11 @@ public class MessageDeframerTest {
     assertEquals(Bytes.asList(new byte[] {3}), bytes(producer.getValue().next()));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
-    checkStats(1, 1, 1);
+    if (useGzipInflatingBuffer) {
+      checkStats(1, 1 + 8 /* GZIP trailer */, 1);
+    } else {
+      checkStats(1, 1, 1);
+    }
   }
 
   @Test
@@ -177,7 +248,11 @@ public class MessageDeframerTest {
     assertEquals(Bytes.asList(new byte[1000]), bytes(producer.getValue().next()));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
-    checkStats(1, 1000, 1000);
+    if (useGzipInflatingBuffer) {
+      checkStats(1, 8 /* compressed size */ + 8 /* GZIP trailer */, 1000);
+    } else {
+      checkStats(1, 1000, 1000);
+    }
   }
 
   @Test
@@ -192,7 +267,11 @@ public class MessageDeframerTest {
     verify(listener).deframerClosed(false);
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
-    checkStats(1, 1, 1);
+    if (useGzipInflatingBuffer) {
+      checkStats(1, 1 + 8 /* GZIP trailer */, 1);
+    } else {
+      checkStats(1, 1, 1);
+    }
   }
 
   @Test
