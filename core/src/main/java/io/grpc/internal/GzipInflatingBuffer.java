@@ -53,10 +53,12 @@ public class GzipInflatingBuffer implements Closeable {
   private static final int FCOMMENT = 16; // File comment
 
   /**
-   * Utility class that returns gzip header and trailer bytes from the inflater's buffer (if bytes
-   * beyond the inflate block were given to the inflater) and then from {@code gzippedData}. This
-   * class also updates the CRC whenever data is read. It is the responsibility of the caller to
-   * verify and reset the CRC as needed.
+   * Reads gzip header and trailer bytes from the inflater's buffer (if bytes beyond the inflate
+   * block were given to the inflater) and then from {@code gzippedData}.
+   *
+   * <p>This class also updates the CRC whenever data is read. It is the responsibility of the
+   * caller to verify and reset the CRC as needed, as well as caching the current CRC value when
+   * necessary before reading further bytes.
    */
   private class GzipMetadataReader {
 
@@ -64,23 +66,12 @@ public class GzipInflatingBuffer implements Closeable {
       return inflater.getRemaining() + gzippedData.readableBytes();
     }
 
+    /** Retrieves the next unsigned byte, adding it to the CRC. */
     private int readUnsignedByte() {
       int bytesRemainingInInflater = inflater.getRemaining();
       int b;
       if (bytesRemainingInInflater > 0) {
-        int bytesToGetFromInflater = 1;
         int inflaterBufHeaderStartIndex = inflaterBufLen - bytesRemainingInInflater;
-        loggingHack("bytesToGetFromInflater: " + bytesToGetFromInflater);
-        loggingHack(
-            "Setting inflater input: start="
-                + (inflaterBufHeaderStartIndex + bytesToGetFromInflater)
-                + " len="
-                + (bytesRemainingInInflater - bytesToGetFromInflater));
-        System.out.println(
-            "From inflaterBuf: inflaterBufHeaderStartIndex="
-                + inflaterBufHeaderStartIndex
-                + " bytesToGetFromInflater="
-                + bytesToGetFromInflater);
 
         b = inflaterBuf[inflaterBufHeaderStartIndex] & 0xFF;
 
@@ -90,12 +81,12 @@ public class GzipInflatingBuffer implements Closeable {
       } else {
         b = gzippedData.readUnsignedByte();
       }
-      loggingHack("Returning unsignedByte = " + bytesToHex((byte) b) + " (" + b + ")");
       crc.update(b);
       bytesConsumed += 1;
       return b;
     }
 
+    /** Skips {@code length} bytes, adding them to the CRC. */
     private void skipBytes(int length) {
       int bytesToSkip = length;
       int bytesRemainingInInflater = inflater.getRemaining();
@@ -104,23 +95,9 @@ public class GzipInflatingBuffer implements Closeable {
         int bytesToGetFromInflater = Math.min(bytesRemainingInInflater, bytesToSkip);
 
         int inflaterBufHeaderStartIndex = inflaterBufLen - bytesRemainingInInflater;
-        loggingHack("bytesToGetFromInflater: " + bytesToGetFromInflater);
-        loggingHack(
-            "Setting inflater input: start="
-                + (inflaterBufHeaderStartIndex + bytesToGetFromInflater)
-                + " len="
-                + (bytesRemainingInInflater - bytesToGetFromInflater));
-        System.out.println(
-            "From inflaterBuf: inflaterBufHeaderStartIndex="
-                + inflaterBufHeaderStartIndex
-                + " bytesToGetFromInflater="
-                + bytesToGetFromInflater);
 
         crc.update(inflaterBuf, inflaterBufHeaderStartIndex, bytesToGetFromInflater);
 
-        loggingHack(
-            "Hex bytes read from inflated compositeReadableBuffer: "
-                + bytesToHex(inflaterBuf, inflaterBufHeaderStartIndex, bytesToGetFromInflater));
         inflater.reset();
         inflater.setInput(
             inflaterBuf,
@@ -131,7 +108,6 @@ public class GzipInflatingBuffer implements Closeable {
       }
 
       if (bytesToSkip > 0) {
-        loggingHack("Skipping " + bytesToSkip + " from gzippedData");
         byte[] buf = new byte[512];
         int total = 0;
         while (total < bytesToSkip) {
@@ -160,9 +136,9 @@ public class GzipInflatingBuffer implements Closeable {
   }
 
   /**
-   * This buffer holds all received data, consisting of blocks of deflated data and the surrounding
-   * gzip headers and trailers. All access to the Gzip headers and trailers must be made via
-   * {@link GzipMetadataReader}.
+   * This buffer holds all input gzipped data, consisting of blocks of deflated data and the
+   * surrounding gzip headers and trailers. All access to the Gzip headers and trailers must be made
+   * via {@link GzipMetadataReader}.
    */
   private final CompositeReadableBuffer gzippedData = new CompositeReadableBuffer();
 
@@ -179,13 +155,15 @@ public class GzipInflatingBuffer implements Closeable {
 
   /** Output buffer for inflated bytes. */
   private byte[] inflatedBuf;
-  private int inflatedBufWriterIndex;
+  private int inflatedBufWriteIndex;
 
   /** Extra state variables for parsing gzip header flags. */
   private int gzipHeaderFlag;
   private int headerExtraToRead;
 
-  /** Tracks gzipped bytes consumed. */
+  /**
+   * Tracks gzipped bytes consumed since last {@link #getAndResetGzippedBytesConsumed()} call.
+   */
   private int bytesConsumed = 0;
 
   /**
@@ -209,7 +187,6 @@ public class GzipInflatingBuffer implements Closeable {
   /** Adds more gzipped data. */
   public void addGzippedBytes(ReadableBuffer buffer) {
     checkState(!closed, "GzipInflatingBuffer is closed");
-    loggingHack("Adding " + buffer.readableBytes() + " bytes to gzippedData");
     gzippedData.addBuffer(buffer);
   }
 
@@ -223,12 +200,13 @@ public class GzipInflatingBuffer implements Closeable {
   }
 
   /**
-   * Returns the number of compressed bytes processed since the last invocation of this method.
+   * Returns the number of gzipped bytes processed since the last invocation of this method, and
+   * resets this counter to 0.
    *
-   * <p>This does not maintain a cumulative total count to avoid overflow issues with streams
+   * <p>This does report maintain a cumulative total count to avoid overflow issues with streams
    * containing large amounts of data.
    */
-  public int getAndResetCompressedBytesConsumed() {
+  public int getAndResetGzippedBytesConsumed() {
     checkState(!closed, "GzipInflatingBuffer is closed");
 
     int ret = bytesConsumed;
@@ -237,13 +215,13 @@ public class GzipInflatingBuffer implements Closeable {
   }
 
   /**
-   * Reads up to min(bytesToRead, MAX_BUFFER_SIZE) of uncompressed data into bufferToWrite.
+   * Reads up to min(bytesToRead, MAX_BUFFER_SIZE) of inflated data into bufferToWrite.
    *
-   * @param bytesRequested max number of bytes to decompress
-   * @param bufferToWrite destination for uncompressed data
-   * @return the number of bytes read into bufferToWrite
+   * @param bytesRequested max number of bytes to inflate
+   * @param bufferToWrite destination for inflated data
+   * @return the number of bytes written into bufferToWrite
    */
-  public int readUncompressedBytes(int bytesRequested, CompositeReadableBuffer bufferToWrite)
+  public int inflateBytes(int bytesRequested, CompositeReadableBuffer bufferToWrite)
       throws DataFormatException, ZipException {
     checkState(!closed, "GzipInflatingBuffer is closed");
 
@@ -251,18 +229,10 @@ public class GzipInflatingBuffer implements Closeable {
       inflatedBuf = new byte[Math.min(bytesRequested, MAX_BUFFER_SIZE)];
     }
 
-    loggingHack("bytesRequested: " + bytesRequested);
-    loggingHack("inflatedBufWriterIndex: " + inflatedBufWriterIndex);
-    loggingHack("uncompressedBufLen = " + inflatedBuf.length);
-    loggingHack("inflatedBufWriterIndex (before): " + inflatedBufWriterIndex);
-
     int bytesNeeded;
     boolean madeProgress = true;
     while (madeProgress
-        && (bytesNeeded = inflatedBuf.length - inflatedBufWriterIndex) > 0) {
-      loggingHack("State: " + state);
-      loggingHack("inflatedBufWriterIndex: " + inflatedBufWriterIndex);
-      loggingHack("uncompressedBufLen = " + inflatedBuf.length);
+        && (bytesNeeded = inflatedBuf.length - inflatedBufWriteIndex) > 0) {
       switch (state) {
         case HEADER:
           madeProgress = processHeader();
@@ -299,22 +269,13 @@ public class GzipInflatingBuffer implements Closeable {
       }
     }
 
-    loggingHack("inflatedBufWriterIndex (after): " + inflatedBufWriterIndex);
 
-    if (inflatedBufWriterIndex > 0) {
-      loggingHack("Returning with data!..." + state);
-      loggingHack("inflatedBufWriterIndex: " + inflatedBufWriterIndex);
-      loggingHack(inflater.getRemaining());
-      loggingHack(gzippedData.readableBytes());
-      int bytesToWrite = inflatedBufWriterIndex; // inflatedBuf.length;
+    if (inflatedBufWriteIndex > 0) {
+      int bytesToWrite = inflatedBufWriteIndex; // inflatedBuf.length;
       bufferToWrite.addBuffer(ReadableBuffers.wrap(inflatedBuf, 0, bytesToWrite));
-      inflatedBufWriterIndex = 0; // reset
+      inflatedBufWriteIndex = 0; // reset
       inflatedBuf = null;
       return bytesToWrite;
-    } else {
-      loggingHack("Giving up..." + state);
-      loggingHack(inflater.getRemaining());
-      loggingHack(gzippedData.readableBytes());
     }
 
     return 0;
@@ -322,17 +283,14 @@ public class GzipInflatingBuffer implements Closeable {
 
   // We are requesting bytesToInflate.
   private boolean inflate(int bytesToInflate) throws DataFormatException, ZipException {
-    loggingHack("bytesToInflate: " + bytesToInflate);
     int bytesAlreadyConsumed = inflater.getTotalIn();
     try {
-      int n = inflater.inflate(inflatedBuf, inflatedBufWriterIndex, bytesToInflate);
+      int n = inflater.inflate(inflatedBuf, inflatedBufWriteIndex, bytesToInflate);
       bytesConsumed += inflater.getTotalIn() - bytesAlreadyConsumed;
-      crc.update(inflatedBuf, inflatedBufWriterIndex, n);
-      inflatedBufWriterIndex += n;
+      crc.update(inflatedBuf, inflatedBufWriteIndex, n);
+      inflatedBufWriteIndex += n;
 
       if (inflater.finished()) {
-        loggingHack("Finished! Inflater needs input: " + inflater.needsInput());
-        loggingHack("inflatedBufWriterIndex: " + inflatedBufWriterIndex);
         state = State.TRAILER;
         // Eagerly parse trailer, if possible, to detect CRC errors
         return processTrailer();
@@ -367,8 +325,6 @@ public class GzipInflatingBuffer implements Closeable {
     int bytesToAdd = Math.min(gzippedData.readableBytes(), INFLATE_BUFFER_SIZE);
     if (bytesToAdd > 0) {
       gzippedData.readBytes(inflaterBuf, 0, bytesToAdd);
-      loggingHack(
-          "Raw bytes read and set as inflater input: " + bytesToHex(inflaterBuf, bytesToAdd));
       inflaterBufLen = bytesToAdd;
       inflater.setInput(inflaterBuf, 0, inflaterBufLen);
       state = State.INFLATING;
@@ -381,7 +337,6 @@ public class GzipInflatingBuffer implements Closeable {
   private boolean processHeader() throws ZipException {
     crc.reset();
 
-    loggingHack("gzipMetadataReader.readableBytes(): " + gzipMetadataReader.readableBytes());
 
     if (GZIP_HEADER_MIN_SIZE > gzipMetadataReader.readableBytes()) {
       return false;
@@ -406,7 +361,6 @@ public class GzipInflatingBuffer implements Closeable {
   }
 
   private boolean processHeaderExtraLen() {
-    loggingHack("gzipHeaderFlag: " + gzipHeaderFlag);
     if ((gzipHeaderFlag & FEXTRA) != FEXTRA) {
       state = State.HEADER_NAME;
       return true;
@@ -463,7 +417,6 @@ public class GzipInflatingBuffer implements Closeable {
     }
     int desiredCrc16 = (int) crc.getValue() & 0xffff;
     if (gzipMetadataReader.readableBytes() >= UNSIGNED_SHORT_SIZE) {
-      loggingHack("Expecting header CRC16 of " + desiredCrc16);
       if (desiredCrc16 != readUnsignedShort(gzipMetadataReader)) {
         throw new ZipException("Corrupt GZIP header");
       }
@@ -487,8 +440,6 @@ public class GzipInflatingBuffer implements Closeable {
    * Reads unsigned short in Intel byte order.
    */
   private int readUnsignedShort(GzipMetadataReader buffer) {
-    loggingHack(
-        "readUnsignedShort - compositeReadableBuffer.readableBytes(): " + buffer.readableBytes());
     return buffer.readUnsignedByte() | (buffer.readUnsignedByte() << 8);
   }
 
@@ -503,20 +454,11 @@ public class GzipInflatingBuffer implements Closeable {
   private boolean processTrailer() throws ZipException {
     long bytesWritten = inflater.getBytesWritten(); // save because the read may reset inflater
 
-    loggingHack("crc.getValue() " + crc.getValue());
-    long desiredCrc = crc.getValue();
-    long desiredBytesWritten = (bytesWritten & 0xffffffffL);
-    loggingHack("inflater.getBytesWritten() & 0xffffffffL: " + desiredBytesWritten);
-
-    loggingHack("State..." + state);
-    loggingHack("inflatedBufWriterIndex: " + inflatedBufWriterIndex);
-    loggingHack(inflater.getRemaining());
-    loggingHack(gzippedData.readableBytes());
     if (GZIP_TRAILER_SIZE > gzipMetadataReader.readableBytes()) {
       return false;
     }
 
-    if ((readUnsignedInt(gzipMetadataReader) != desiredCrc)
+    if (crc.getValue() != (readUnsignedInt(gzipMetadataReader))
         ||
         // rfc1952; ISIZE is the input size modulo 2^32
         (readUnsignedInt(gzipMetadataReader) != (bytesWritten & 0xffffffffL))) {
@@ -526,56 +468,5 @@ public class GzipInflatingBuffer implements Closeable {
     state = State.HEADER;
 
     return true;
-  }
-
-  // TODO - remove all of this
-  private boolean outputLogs = false;
-
-  private void loggingHack(Object s) {
-    if (outputLogs) {
-      System.out.println(s.toString());
-    }
-  }
-
-  // TODO - remove
-  private static final char[] hexArray = "0123456789ABCDEF".toCharArray();
-
-  /** Javadoc. */
-  // TODO - remove
-  public static String bytesToHex(byte[] bytes) {
-    return bytesToHex(bytes, bytes.length);
-  }
-
-  /** Javadoc. */
-  // TODO - remove
-  public static String bytesToHex(byte b) {
-    byte[] bytes = {b};
-    return bytesToHex(bytes);
-  }
-
-  /** Javadoc. */
-  // TODO - remove
-  public static String bytesToHex(byte[] bytes, int len) {
-    char[] hexChars = new char[len * 3];
-    for (int j = 0; j < len; j++) {
-      int v = bytes[j] & 0xFF;
-      hexChars[j * 3] = hexArray[v >>> 4];
-      hexChars[j * 3 + 1] = hexArray[v & 0x0F];
-      hexChars[j * 3 + 2] = '-';
-    }
-    return new String(hexChars) + " (" + len + " bytes)";
-  }
-
-  /** Javadoc. */
-  // TODO - remove
-  public static String bytesToHex(byte[] bytes, int offset, int len) {
-    char[] hexChars = new char[len * 3];
-    for (int j = 0; j < len; j++) {
-      int v = bytes[offset + j] & 0xFF;
-      hexChars[j * 3] = hexArray[v >>> 4];
-      hexChars[j * 3 + 1] = hexArray[v & 0x0F];
-      hexChars[j * 3 + 2] = '-';
-    }
-    return new String(hexChars) + " (" + len + " bytes)";
   }
 }
