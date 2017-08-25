@@ -77,7 +77,7 @@ public class GzipInflatingBufferTest {
     outputBuffer = new CompositeReadableBuffer();
     try {
       // TODO: see if asStream works without intellij
-      //InputStream inputStream =
+      // InputStream inputStream =
       // getClass().getResourceAsStream(UNCOMPRESSABLE_FILE);
       InputStream inputStream =
           new BufferedInputStream(
@@ -99,14 +99,17 @@ public class GzipInflatingBufferTest {
       gzippedData = gzippedOutputStream.toByteArray();
       originalData = originalDataOutputStream.toByteArray();
       gzipHeader = Arrays.copyOf(gzippedData, GZIP_HEADER_MIN_SIZE);
-      deflatedBytes = Arrays.copyOfRange(gzippedData, GZIP_HEADER_MIN_SIZE, gzippedData.length - GZIP_TRAILER_SIZE);
+      deflatedBytes =
+          Arrays.copyOfRange(
+              gzippedData, GZIP_HEADER_MIN_SIZE, gzippedData.length - GZIP_TRAILER_SIZE);
       gzipTrailer =
           Arrays.copyOfRange(
               gzippedData, gzippedData.length - GZIP_TRAILER_SIZE, gzippedData.length);
 
       truncatedData = Arrays.copyOf(originalData, TRUNCATED_DATA_SIZE);
       ByteArrayOutputStream truncatedGzippedOutputStream = new ByteArrayOutputStream();
-      OutputStream smallerGzipCompressingStream = new GZIPOutputStream(truncatedGzippedOutputStream);
+      OutputStream smallerGzipCompressingStream =
+          new GZIPOutputStream(truncatedGzippedOutputStream);
       smallerGzipCompressingStream.write(truncatedData);
       smallerGzipCompressingStream.close();
       gzippedTruncatedData = truncatedGzippedOutputStream.toByteArray();
@@ -150,9 +153,7 @@ public class GzipInflatingBufferTest {
 
     byteBuf = new byte[truncatedData.length];
     outputBuffer.readBytes(byteBuf, 0, truncatedData.length);
-    assertTrue(
-        "inflated data does not match original",
-        Arrays.equals(truncatedData, byteBuf));
+    assertTrue("inflated data does not match original", Arrays.equals(truncatedData, byteBuf));
 
     byteBuf = new byte[originalData.length];
     outputBuffer.readBytes(byteBuf, 0, originalData.length);
@@ -160,9 +161,7 @@ public class GzipInflatingBufferTest {
 
     byteBuf = new byte[truncatedData.length];
     outputBuffer.readBytes(byteBuf, 0, truncatedData.length);
-    assertTrue(
-        "inflated data does not match original",
-        Arrays.equals(truncatedData, byteBuf));
+    assertTrue("inflated data does not match original", Arrays.equals(truncatedData, byteBuf));
   }
 
   @Test
@@ -262,8 +261,7 @@ public class GzipInflatingBufferTest {
     gzipBuffer.addGzippedBytes(ReadableBuffers.wrap(gzippedTruncatedData));
 
     int bytesToWithhold = 1;
-    assertTrue(
-        readBytesIfPossible(truncatedData.length - bytesToWithhold, outputBuffer));
+    assertTrue(readBytesIfPossible(truncatedData.length - bytesToWithhold, outputBuffer));
     assertEquals(
         gzippedTruncatedData.length - bytesToWithhold - GZIP_TRAILER_SIZE,
         gzipBuffer.getAndResetCompressedBytesConsumed());
