@@ -18,6 +18,7 @@ package io.grpc.internal;
 
 import com.google.common.base.Preconditions;
 import io.grpc.Attributes;
+import io.grpc.Codec;
 import io.grpc.Decompressor;
 import io.grpc.InternalStatus;
 import io.grpc.Metadata;
@@ -89,6 +90,8 @@ public abstract class AbstractServerStream extends AbstractStream
     }
 
     private boolean waitTillEndOfStream = false;
+
+    private Codec compressor = new Codec.Gzip();
 
     @Override
     public void deliverFrame(@Nullable WritableBuffer frame, boolean endOfStream, boolean flush) {

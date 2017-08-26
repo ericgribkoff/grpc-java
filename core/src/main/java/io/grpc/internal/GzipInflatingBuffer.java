@@ -235,6 +235,7 @@ class GzipInflatingBuffer implements Closeable {
       throws DataFormatException, ZipException {
     checkState(!closed, "GzipInflatingBuffer is closed");
 
+    System.out.println("Inflating " + bytesRequested + "!");
     int bytesNeeded = bytesRequested;
     while (bytesNeeded > 0) {
       int bytesWritten = fillInflatedBuf(bytesNeeded);

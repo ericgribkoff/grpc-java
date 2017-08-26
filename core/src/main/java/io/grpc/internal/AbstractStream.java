@@ -45,9 +45,7 @@ public abstract class AbstractStream implements Stream {
     framer().setMessageCompression(enable);
   }
 
-
   protected boolean streamCompression;
-  protected Compressor compressor;
 
   @Override
   public final void setStreamCompression(boolean enable) {
@@ -82,7 +80,6 @@ public abstract class AbstractStream implements Stream {
 
   @Override
   public final void setCompressor(Compressor compressor) {
-    this.compressor = compressor;
     framer().setCompressor(checkNotNull(compressor, "compressor"));
   }
 
@@ -150,12 +147,6 @@ public abstract class AbstractStream implements Stream {
     protected void setFullStreamDecompressor(GzipInflatingBuffer fullStreamDecompressor) {
       deframer.setFullStreamDecompressor(fullStreamDecompressor);
       deframer = new ApplicationThreadDeframer(this, this, (MessageDeframer) deframer);
-    }
-
-    // TODO replace this with a lazy/settable deframer object
-    protected void enableFullStreamDecompression() {
-      ((MessageDeframer) deframer).setGZipInflater(new GzipInflatingBuffer());
-      this.deframer = new ApplicationThreadDeframer(this, (MessageDeframer) deframer, this);
     }
 
     final void setMaxInboundMessageSize(int maxSize) {

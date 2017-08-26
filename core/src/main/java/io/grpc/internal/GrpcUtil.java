@@ -158,10 +158,6 @@ public final class GrpcUtil {
    */
   public static final String MESSAGE_ACCEPT_ENCODING = "grpc-accept-encoding";
 
-  public static final String CONTENT_ENCODING = "content-encoding";
-
-  public static final String CONTENT_ACCEPT_ENCODING = "accept-encoding";
-
   /**
    * The content-encoding used to compress the full gRPC stream.
    */

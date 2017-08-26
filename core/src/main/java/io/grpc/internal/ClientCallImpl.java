@@ -137,15 +137,12 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     if (compressor != Codec.Identity.NONE) {
       headers.put(MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
     }
-    headers.discardAll(CONTENT_ENCODING_KEY);
 
     headers.discardAll(MESSAGE_ACCEPT_ENCODING_KEY);
-    headers.discardAll(CONTENT_ACCEPT_ENCODING_KEY);
     byte[] advertisedEncodings =
         InternalDecompressorRegistry.getRawAdvertisedMessageEncodings(decompressorRegistry);
     if (advertisedEncodings.length != 0) {
       headers.put(MESSAGE_ACCEPT_ENCODING_KEY, advertisedEncodings);
-      headers.put(CONTENT_ACCEPT_ENCODING_KEY, advertisedEncodings);
     }
 
     headers.discardAll(CONTENT_ENCODING_KEY);
@@ -415,13 +412,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     checkState(stream != null, "Not started");
     stream.setMessageCompression(enabled);
   }
-
-  @Override
-  public void setStreamCompression(boolean enabled) {
-    checkState(stream != null, "Not started");
-    stream.setStreamCompression(enabled);
-  }
-
 
   @Override
   public boolean isReady() {
