@@ -219,24 +219,23 @@ class GzipInflatingBuffer implements Closeable {
   }
 
   /**
-   * Attempts to inflate up to {@code bytesRequested} bytes of data into {@code bufferToWrite}. This
-   * method will always write as many inflated bytes as it can produce, up to a maximum of {@code
+   * Attempts to inflate up to {@code n} bytes of data into {@code bufferToWrite}. This method will
+   * always write as many inflated bytes as it can produce, up to a maximum of {@code
    * bytesRequested}.
    *
    * <p>This method may consume gzipped bytes without writing any data to {@code bufferToWrite}, and
    * may also write data to {@code bufferToWrite} without consuming additional gzipped bytes (if the
    * inflater on an earlier call consumed the bytes necessary to produce output).
    *
-   * @param bytesRequested max number of bytes to inflate
+   * @param n max number of bytes to inflate
    * @param bufferToWrite destination for inflated data
    * @return gzipped bytes consumed by the call (NOT the number of inflated bytes written)
    */
-  int inflateBytes(int bytesRequested, CompositeReadableBuffer bufferToWrite)
+  int inflateBytes(int n, CompositeReadableBuffer bufferToWrite)
       throws DataFormatException, ZipException {
     checkState(!closed, "GzipInflatingBuffer is closed");
 
-    System.out.println("Inflating " + bytesRequested + "!");
-    int bytesNeeded = bytesRequested;
+    int bytesNeeded = n;
     while (bytesNeeded > 0) {
       int bytesWritten = fillInflatedBuf(bytesNeeded);
       if (bytesWritten == 0) {
@@ -251,14 +250,19 @@ class GzipInflatingBuffer implements Closeable {
     return savedBytesConsumed;
   }
 
-  private int fillInflatedBuf(int bytesRequested) throws DataFormatException, ZipException {
+  private int fillInflatedBuf(int n) throws DataFormatException, ZipException {
+    int bytesToInflate;
     if (inflaterOutput == null) {
-      inflaterOutput = new byte[Math.min(bytesRequested, MAX_OUTPUT_BUFFER_SIZE)];
+      bytesToInflate = Math.min(n, MAX_OUTPUT_BUFFER_SIZE);
+      inflaterOutput = new byte[bytesToInflate];
+    } else {
+      // Empty buffer allocated on previous call
+      bytesToInflate = Math.min(n, inflaterOutput.length);
     }
 
     int bytesNeeded;
     boolean madeProgress = true;
-    while (madeProgress && (bytesNeeded = inflaterOutput.length - inflaterOutputEnd) > 0) {
+    while (madeProgress && (bytesNeeded = bytesToInflate - inflaterOutputEnd) > 0) {
       switch (state) {
         case HEADER:
           madeProgress = processHeader();

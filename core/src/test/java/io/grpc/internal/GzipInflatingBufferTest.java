@@ -185,6 +185,15 @@ public class GzipInflatingBufferTest {
   }
 
   @Test
+  public void decreasingNumberOfBytesRequested_obeysCurrentRequestLimit() throws Exception {
+    gzipInflatingBuffer.inflateBytes(10, outputBuffer);
+    gzipInflatingBuffer.addGzippedBytes(ReadableBuffers.wrap(gzippedTruncatedData));
+    gzipInflatingBuffer.inflateBytes(1, outputBuffer);
+
+    assertEquals(1, outputBuffer.readableBytes());
+  }
+
+  @Test
   public void closeStopsDecompression() throws Exception {
     gzipInflatingBuffer.addGzippedBytes(ReadableBuffers.wrap(gzippedData));
 
