@@ -188,8 +188,6 @@ public abstract class AbstractClientStream extends AbstractStream
     private boolean deframerClosed = false;
     private Runnable deframerClosedTask;
 
-    private Decompressor streamDecompressor;
-
     /**
      * Whether the stream is closed from the transport's perspective. This can differ from {@link
      * #listenerClosed} because there may still be messages buffered to deliver to the application.
@@ -236,29 +234,22 @@ public abstract class AbstractClientStream extends AbstractStream
       Preconditions.checkState(!statusReported, "Received headers on closed stream");
       statsTraceCtx.clientInboundHeaders();
 
-      Decompressor decompressor = Codec.Identity.NONE;
       String streamEncoding = headers.get(CONTENT_ENCODING_KEY);
-      boolean checkPerMessageEncoding = true;
-      if (streamEncoding != null && !streamEncoding.equals("identity")) {
-        checkPerMessageEncoding = false;
-        // Ignore per-message encoding if this is set
-        // TODO What if it's identity?
-        decompressor = decompressorRegistry.lookupDecompressor(streamEncoding);
-        if (decompressor == null) {
-          deframeFailed(Status.INTERNAL.withDescription(
-              String.format("Can't find decompressor for %s", streamEncoding))
-              .asRuntimeException());
+      if (streamEncoding != null && !streamEncoding.equalsIgnoreCase("identity")) {
+        // TODO(ericgribkoff) don't hard code allowed content-encoding values
+        if (!streamEncoding.equalsIgnoreCase("gzip")) {
+          deframeFailed(
+              Status.INTERNAL
+                  .withDescription(
+                      String.format("Can't find full stream decompressor for %s", streamEncoding))
+                  .asRuntimeException());
           return;
-        }
-        if (decompressor != Codec.Identity.NONE) {
-          streamDecompressor = decompressor;
-          System.out.println("Turning on full-stream decompression: " + decompressor);
-          enableFullStreamDecompression();
         } else {
-          checkPerMessageEncoding = true;
+          setFullStreamDecompressor(new GzipInflatingBuffer());
         }
-      }
-      if (checkPerMessageEncoding) {
+      } else {
+        // Only obey per-message compression if content-encoding is missing or identity.
+        Decompressor decompressor = Codec.Identity.NONE;
         String encoding = headers.get(MESSAGE_ENCODING_KEY);
         if (encoding != null) {
           decompressor = decompressorRegistry.lookupDecompressor(encoding);
@@ -274,9 +265,6 @@ public abstract class AbstractClientStream extends AbstractStream
       listener().headersRead(headers);
     }
 
-    //private ReadableBuffer hackyBufferMemory;
-    //private GzipStreamDeframer gzipStreamDeframer;
-
     /**
      * Processes the contents of a received data frame from the server.
      *
@@ -291,38 +279,8 @@ public abstract class AbstractClientStream extends AbstractStream
           return;
         }
 
-        //        System.out.println("streamDecompressor: " + streamDecompressor);
-        //        if (streamDecompressor != null) {
-        //          if (gzipStreamDeframer == null) {
-        //            gzipStreamDeframer = new GzipStreamDeframer(deframer, streamDecompressor);
-        //          }
-        //          needToCloseFrame = false;
-        //          gzipStreamDeframer.deframe(frame);
-        ////          System.out.println("frame.readableBytes() = " + frame.readableBytes());
-        ////          if (hackyBufferMemory == null) {
-        ////            System.out.println("Saving frame");
-        ////            needToCloseFrame = false;
-        ////
-        ////            // This = needed streaming Gzip decoder
-        ////            hackyBufferMemory = frame;
-        ////          } else {
-        ////            try {
-        ////              InputStream concat = new SequenceInputStream(
-        ////                      ReadableBuffers.openStream(hackyBufferMemory, true),
-        ////                      ReadableBuffers.openStream(frame, true));
-        ////              InputStream unlimitedStream = streamDecompressor.decompress(concat);
-        ////              deframe(ReadableBuffers.wrap(ByteStreams.toByteArray(unlimitedStream)));
-        ////              needToCloseFrame = false;
-        ////            } catch (IOException e) {
-        ////              // TODO handle this
-        ////              System.out.println("Failed to decompress inbound data");
-        ////              e.printStackTrace(System.out);
-        ////            }
-        ////          }
-        //        } else {
         needToCloseFrame = false;
         deframe(frame);
-        //        }
       } finally {
         if (needToCloseFrame) {
           frame.close();

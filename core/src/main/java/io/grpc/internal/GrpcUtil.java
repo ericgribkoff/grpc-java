@@ -163,6 +163,16 @@ public final class GrpcUtil {
   public static final String CONTENT_ACCEPT_ENCODING = "accept-encoding";
 
   /**
+   * The content-encoding used to compress the full gRPC stream.
+   */
+  public static final String CONTENT_ENCODING = "content-encoding";
+
+  /**
+   * The accepted content-encodings that can be used to compress the full gRPC stream.
+   */
+  public static final String CONTENT_ACCEPT_ENCODING = "accept-encoding";
+
+  /**
    * The default maximum uncompressed size (in bytes) for inbound messages. Defaults to 4 MiB.
    */
   public static final int DEFAULT_MAX_MESSAGE_SIZE = 4 * 1024 * 1024;
@@ -498,12 +508,10 @@ public final class GrpcUtil {
    * @return a {@link ThreadFactory}.
    */
   public static ThreadFactory getThreadFactory(String nameFormat, boolean daemon) {
-    ThreadFactory threadFactory = MoreExecutors.platformThreadFactory();
     if (IS_RESTRICTED_APPENGINE) {
-      return threadFactory;
+      return MoreExecutors.platformThreadFactory();
     } else {
       return new ThreadFactoryBuilder()
-          .setThreadFactory(threadFactory)
           .setDaemon(daemon)
           .setNameFormat(nameFormat)
           .build();

@@ -16,10 +16,11 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import io.grpc.Codec;
 import io.grpc.Decompressor;
 import io.grpc.Status;
@@ -88,8 +89,9 @@ public class MessageDeframer implements Closeable, Deframer {
   private final StatsTraceContext statsTraceCtx;
   private final String debugString;
   private Decompressor decompressor;
+  private GzipInflatingBuffer fullStreamDecompressor;
   private State state = State.HEADER;
-  private int requiredLength = HEADER_LENGTH; // TODO - Does int capture max size?
+  private int requiredLength = HEADER_LENGTH;
   private boolean compressedFlag;
   private CompositeReadableBuffer nextFrame;
   private CompositeReadableBuffer unprocessed = new CompositeReadableBuffer();
@@ -110,20 +112,14 @@ public class MessageDeframer implements Closeable, Deframer {
    */
   public MessageDeframer(Listener listener, Decompressor decompressor, int maxMessageSize,
       StatsTraceContext statsTraceCtx, String debugString) {
-    this.listener = Preconditions.checkNotNull(listener, "sink");
-    this.decompressor = Preconditions.checkNotNull(decompressor, "decompressor");
+    this.listener = checkNotNull(listener, "sink");
+    this.decompressor = checkNotNull(decompressor, "decompressor");
     this.maxInboundMessageSize = maxMessageSize;
     this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
     this.debugString = debugString;
   }
 
-  private GzipInflatingBuffer gzipInflater;
-
-  public void setGZipInflater(GzipInflatingBuffer gzipInflater) {
-    this.gzipInflater = gzipInflater;
-  }
-
-  public void setListener(Listener listener) {
+  void setListener(Listener listener) {
     this.listener = listener;
   }
 
@@ -134,12 +130,25 @@ public class MessageDeframer implements Closeable, Deframer {
 
   @Override
   public void setDecompressor(Decompressor decompressor) {
+    checkState(
+        fullStreamDecompressor == null, "Already set full stream decompressor");
     this.decompressor = checkNotNull(decompressor, "Can't pass an empty decompressor");
   }
 
   @Override
+  public void setFullStreamDecompressor(GzipInflatingBuffer fullStreamDecompressor) {
+    checkState(
+        decompressor == Codec.Identity.NONE, "per-message decompressor already set");
+    checkState(
+        this.fullStreamDecompressor == null, "full stream decompressor already set");
+    this.fullStreamDecompressor =
+        checkNotNull(fullStreamDecompressor, "Can't pass a null full stream decompressor");
+    unprocessed = null;
+  }
+
+  @Override
   public void request(int numMessages) {
-    Preconditions.checkArgument(numMessages > 0, "numMessages must be > 0");
+    checkArgument(numMessages > 0, "numMessages must be > 0");
     if (isClosed()) {
       return;
     }
@@ -149,12 +158,12 @@ public class MessageDeframer implements Closeable, Deframer {
 
   @Override
   public void deframe(ReadableBuffer data) {
-    Preconditions.checkNotNull(data, "data");
+    checkNotNull(data, "data");
     boolean needToCloseData = true;
     try {
       if (!isClosedOrScheduledToClose()) {
-        if (gzipInflater != null) {
-          gzipInflater.addGzippedBytes(data);
+        if (fullStreamDecompressor != null) {
+          fullStreamDecompressor.addGzippedBytes(data);
         } else {
           unprocessed.addBuffer(data);
         }
@@ -171,11 +180,9 @@ public class MessageDeframer implements Closeable, Deframer {
 
   @Override
   public void closeWhenComplete() {
-    // TODO unprocessed == null doesn't make the most sense to check with stream compression
-    if (unprocessed == null) {
+    if (isClosed()) {
       return;
-    }
-    if (isStalled()) {
+    } else if (isStalled()) {
       close();
     } else {
       closeWhenComplete = true;
@@ -197,14 +204,11 @@ public class MessageDeframer implements Closeable, Deframer {
     if (isClosed()) {
       return;
     }
-    boolean hasPartialMessage;
-    if (gzipInflater != null) {
-      hasPartialMessage =
-          (nextFrame != null && nextFrame.readableBytes() > 0) || gzipInflater.hasPartialData();
-    } else {
-      hasPartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
-    }
+    boolean hasPartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
     try {
+      if (fullStreamDecompressor != null) {
+        fullStreamDecompressor.close();
+      }
       if (unprocessed != null) {
         unprocessed.close();
       }
@@ -212,6 +216,7 @@ public class MessageDeframer implements Closeable, Deframer {
         nextFrame.close();
       }
     } finally {
+      fullStreamDecompressor = null;
       unprocessed = null;
       nextFrame = null;
     }
@@ -222,7 +227,7 @@ public class MessageDeframer implements Closeable, Deframer {
    * Indicates whether or not this deframer has been closed.
    */
   public boolean isClosed() {
-    return unprocessed == null;
+    return unprocessed == null && fullStreamDecompressor == null;
   }
 
   /** Returns true if this deframer has already been closed or scheduled to close. */
@@ -231,8 +236,8 @@ public class MessageDeframer implements Closeable, Deframer {
   }
 
   private boolean isStalled() {
-    if (gzipInflater != null) {
-      return gzipInflater.isStalled();
+    if (fullStreamDecompressor != null) {
+      return fullStreamDecompressor.isStalled();
     } else {
       return unprocessed.readableBytes() == 0;
     }
@@ -297,7 +302,6 @@ public class MessageDeframer implements Closeable, Deframer {
   private boolean readRequiredBytes() {
     int totalBytesRead = 0;
     try {
-      // TODO nextFrame essentially "moves" into GzipInflatingBuffer for a compressed stream
       if (nextFrame == null) {
         nextFrame = new CompositeReadableBuffer();
       }
@@ -305,24 +309,16 @@ public class MessageDeframer implements Closeable, Deframer {
       // Read until the buffer contains all the required bytes.
       int missingBytes;
       while ((missingBytes = requiredLength - nextFrame.readableBytes()) > 0) {
-        if (gzipInflater != null) {
+        if (fullStreamDecompressor != null) {
           try {
-            int bytesRead = gzipInflater.inflateBytes(missingBytes, nextFrame);
-            System.out.println("DEFRAMER: bytesRead = " + bytesRead);
-            totalBytesRead += bytesRead;
+            totalBytesRead += fullStreamDecompressor.inflateBytes(missingBytes, nextFrame);
             if (missingBytes == requiredLength - nextFrame.readableBytes()) {
-              // No additional bytes were inflated
+              // No more inflated data is available.
               return false;
             }
           } catch (IOException e) {
-            // TODO handle properly (just re-throw?)
-            System.out.println("Gzip exception");
-            e.printStackTrace(System.out);
             throw new RuntimeException(e);
           } catch (DataFormatException e) {
-            // TODO handle properly (just re-throw?)
-            System.out.println("Data format exception");
-            e.printStackTrace(System.out);
             throw new RuntimeException(e);
           }
         } else {
@@ -335,7 +331,6 @@ public class MessageDeframer implements Closeable, Deframer {
           nextFrame.addBuffer(unprocessed.readBytes(toRead));
         }
       }
-      System.out.println("readRequiredBytes complete! (" + requiredLength + " total needed)");
       return true;
     } finally {
       if (totalBytesRead > 0) {

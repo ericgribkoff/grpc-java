@@ -47,7 +47,7 @@ subprojects {
 //    idea.module.inheritOutputDirs = true
 
     group = "io.grpc"
-    version = "1.6.0-SNAPSHOT" // CURRENT_GRPC_VERSION
+    version = "1.7.0-SNAPSHOT" // CURRENT_GRPC_VERSION
 
     sourceCompatibility = 1.6
     targetCompatibility = 1.6
@@ -92,8 +92,8 @@ subprojects {
 
         nettyVersion = '4.1.14.Final'
         guavaVersion = '19.0'
-        protobufVersion = '3.3.1'
-        protocVersion = '3.3.0' // TODO(carl-mastrangelo): set this from protobufVersion when versions align again
+        protobufVersion = '3.4.0'
+        protocVersion = protobufVersion
         protobufNanoVersion = '3.0.0-alpha-5'
 
         configureProtoCompilation = {
@@ -130,6 +130,7 @@ subprojects {
                       // To generate deprecated interfaces and static bindService method,
                       // turn the enable_deprecated option to true below:
                       option 'enable_deprecated=false'
+                      option 'noversion'
                     }
                   }
                 }

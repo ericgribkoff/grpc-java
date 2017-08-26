@@ -62,7 +62,6 @@ import org.mockito.stubbing.Answer;
 /**
  * Tests for {@link MessageDeframer}.
  */
-//@RunWith(JUnit4.class)
 @RunWith(Parameterized.class)
 public class MessageDeframerTest {
   @Rule public final ExpectedException thrown = ExpectedException.none();
@@ -93,25 +92,18 @@ public class MessageDeframerTest {
   @Before
   public void setUp() {
     if (useGzipInflatingBuffer) {
-      deframer.setGZipInflater(new GzipInflatingBuffer() {
+      deframer.setFullStreamDecompressor(new GzipInflatingBuffer() {
         @Override
         public void addGzippedBytes(ReadableBuffer buffer) {
           try {
             ByteArrayOutputStream gzippedOutputStream = new ByteArrayOutputStream();
             OutputStream gzipCompressingStream = new GZIPOutputStream(
                 gzippedOutputStream);
-            int n;
-            while ((n = buffer.readableBytes()) > 0) {
-              byte[] tmpBuf = new byte[n];
-              buffer.readBytes(tmpBuf, 0, n);
-              gzipCompressingStream.write(tmpBuf, 0, n);
-            }
+            buffer.readBytes(gzipCompressingStream, buffer.readableBytes());
             gzipCompressingStream.close();
-            byte[] gZipCompressedBytes = gzippedOutputStream.toByteArray();
-            System.out.println("gZipCompressedBytes: " + gZipCompressedBytes.length);
-            super.addGzippedBytes(ReadableBuffers.wrap(gZipCompressedBytes));
+            super.addGzippedBytes(ReadableBuffers.wrap(gzippedOutputStream.toByteArray()));
           } catch (IOException e) {
-            System.out.println("TODO");
+            throw new RuntimeException(e);
           }
         }
       });
@@ -480,10 +472,6 @@ public class MessageDeframerTest {
     assertEquals(messagesReceived, tracer.getInboundMessageCount());
     assertEquals(wireBytesReceived, tracer.getInboundWireSize());
     assertEquals(uncompressedBytesReceived, tracer.getInboundUncompressedSize());
-  }
-
-  private static List<Byte> bytes(ArgumentCaptor<InputStream> captor) {
-    return bytes(captor.getValue());
   }
 
   private static List<Byte> bytes(InputStream in) {

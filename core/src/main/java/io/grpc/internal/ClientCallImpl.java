@@ -48,6 +48,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import java.io.InputStream;
+import java.nio.charset.Charset;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
@@ -146,6 +147,11 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
       headers.put(MESSAGE_ACCEPT_ENCODING_KEY, advertisedEncodings);
       headers.put(CONTENT_ACCEPT_ENCODING_KEY, advertisedEncodings);
     }
+
+    headers.discardAll(CONTENT_ENCODING_KEY);
+    headers.discardAll(CONTENT_ACCEPT_ENCODING_KEY);
+    // TODO(ericgribkoff) don't hard code accept-encoding values
+    headers.put(CONTENT_ACCEPT_ENCODING_KEY, "identity,gzip".getBytes(Charset.forName("US-ASCII")));
   }
 
   @Override
