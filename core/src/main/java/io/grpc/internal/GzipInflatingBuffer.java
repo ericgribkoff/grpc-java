@@ -132,7 +132,9 @@ class GzipInflatingBuffer implements Closeable {
   }
 
   private enum State {
-    HEADER,
+    HEADER_MAGIC,
+    HEADER_COMPRESSION_METHOD,
+    HEADER_FLAG,
     HEADER_EXTRA_LEN,
     HEADER_EXTRA,
     HEADER_NAME,
@@ -160,7 +162,7 @@ class GzipInflatingBuffer implements Closeable {
   private int inflaterInputEnd;
   private Inflater inflater;
 
-  private State state = State.HEADER;
+  private State state = State.HEADER_MAGIC;
   private boolean closed = false;
 
   /** Output buffer for inflated bytes. */
@@ -235,6 +237,8 @@ class GzipInflatingBuffer implements Closeable {
       throws DataFormatException, ZipException {
     checkState(!closed, "GzipInflatingBuffer is closed");
 
+    System.out.println("Trying to inflate " + n + " bytes");
+
     int bytesNeeded = n;
     while (bytesNeeded > 0) {
       int bytesWritten = fillInflatedBuf(bytesNeeded);
@@ -264,8 +268,14 @@ class GzipInflatingBuffer implements Closeable {
     boolean madeProgress = true;
     while (madeProgress && (bytesNeeded = bytesToInflate - inflaterOutputEnd) > 0) {
       switch (state) {
-        case HEADER:
-          madeProgress = processHeader();
+        case HEADER_MAGIC:
+          madeProgress = processHeaderMagic();
+          break;
+        case HEADER_COMPRESSION_METHOD:
+          madeProgress = processHeaderCompressionMethod();
+          break;
+        case HEADER_FLAG:
+          madeProgress = processHeaderFlag();
           break;
         case HEADER_EXTRA_LEN:
           madeProgress = processHeaderExtraLen();
@@ -374,26 +384,44 @@ class GzipInflatingBuffer implements Closeable {
     }
   }
 
-  private boolean processHeader() throws ZipException {
-    if (GZIP_HEADER_MIN_SIZE > gzipMetadataReader.readableBytes()) {
+  private boolean processHeaderMagic() throws ZipException {
+    if (gzipMetadataReader.readableBytes() >= UNSIGNED_SHORT_SIZE) {
+      // Check header magic
+      if (readUnsignedShort(gzipMetadataReader) != GZIP_MAGIC) {
+        throw new ZipException("Not in GZIP format");
+      }
+      state = State.HEADER_COMPRESSION_METHOD;
+      return true;
+    } else {
       return false;
     }
+  }
 
-    crc.reset();
-    // Check header magic
-    if (readUnsignedShort(gzipMetadataReader) != GZIP_MAGIC) {
-      throw new ZipException("Not in GZIP format");
+  private boolean processHeaderCompressionMethod() throws ZipException {
+    if (gzipMetadataReader.readableBytes() > 0) {
+      // Check compression method
+      if (gzipMetadataReader.readUnsignedByte() != 8) {
+        throw new ZipException("Unsupported compression method");
+      }
+      state = State.HEADER_FLAG;
+      return true;
+    } else {
+      return false;
     }
-    // Check compression method
-    if (gzipMetadataReader.readUnsignedByte() != 8) {
-      throw new ZipException("Unsupported compression method");
-    }
-    // Read flags, ignore MTIME, XFL, and OS fields.
-    gzipHeaderFlag = gzipMetadataReader.readUnsignedByte();
-    gzipMetadataReader.skipBytes(6 /* remaining header bytes */);
+  }
 
-    state = State.HEADER_EXTRA_LEN;
-    return true;
+  private boolean processHeaderFlag() {
+    int requiredBytes =
+        GZIP_HEADER_MIN_SIZE - UNSIGNED_SHORT_SIZE /* header magic */ - 1 /* compression method */;
+    if (gzipMetadataReader.readableBytes() >= requiredBytes) {
+      // Read flags, ignore MTIME, XFL, and OS fields.
+      gzipHeaderFlag = gzipMetadataReader.readUnsignedByte();
+      gzipMetadataReader.skipBytes(6 /* remaining header bytes */);
+      state = State.HEADER_EXTRA_LEN;
+      return true;
+    } else {
+      return false;
+    }
   }
 
   private boolean processHeaderExtraLen() {
@@ -460,18 +488,19 @@ class GzipInflatingBuffer implements Closeable {
   }
 
   private boolean processTrailer() throws ZipException {
-    if (GZIP_TRAILER_SIZE > gzipMetadataReader.readableBytes()) {
+    if (gzipMetadataReader.readableBytes() >= GZIP_TRAILER_SIZE) {
+      if (crc.getValue() != (readUnsignedInt(gzipMetadataReader))
+          ||
+          // rfc1952; ISIZE is the input size modulo 2^32
+          (readUnsignedInt(gzipMetadataReader) != expectedGzipTrailerIsize)) {
+        throw new ZipException("Corrupt GZIP trailer");
+      }
+      crc.reset();
+      state = State.HEADER_MAGIC;
+      return true;
+    } else {
       return false;
     }
-
-    if (crc.getValue() != (readUnsignedInt(gzipMetadataReader))
-        ||
-        // rfc1952; ISIZE is the input size modulo 2^32
-        (readUnsignedInt(gzipMetadataReader) != expectedGzipTrailerIsize)) {
-      throw new ZipException("Corrupt GZIP trailer");
-    }
-    state = State.HEADER;
-    return true;
   }
 
   /** Skip over a zero-terminated byte sequence. Returns true when the zero byte is read. */
