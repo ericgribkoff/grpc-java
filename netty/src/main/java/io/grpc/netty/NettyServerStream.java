@@ -19,7 +19,6 @@ package io.grpc.netty;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import io.grpc.Attributes;
-import io.grpc.Codec;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.AbstractServerStream;
@@ -32,9 +31,6 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.EventLoop;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Stream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -53,66 +49,13 @@ class NettyServerStream extends AbstractServerStream {
   private final String authority;
 
   public NettyServerStream(Channel channel, TransportState state, Attributes transportAttrs,
-      String authority, StatsTraceContext statsTraceCtx, boolean fullStreamCompression) {
-    super(new NettyWritableBufferAllocator(channel.alloc()), statsTraceCtx, fullStreamCompression);
+      String authority, StatsTraceContext statsTraceCtx) {
+    super(new NettyWritableBufferAllocator(channel.alloc()), statsTraceCtx);
     this.state = checkNotNull(state, "transportState");
     this.channel = checkNotNull(channel, "channel");
     this.writeQueue = state.handler.getWriteQueue();
     this.attributes = checkNotNull(transportAttrs);
     this.authority = authority;
-  }
-
-  @Override
-  protected void readBytesFromBufferToStream(WritableBuffer buffer, OutputStream os)
-      throws IOException {
-    if (buffer != null) {
-      ByteBuf bytebuf = ((NettyWritableBuffer) buffer).bytebuf();
-      System.out.println("Readable bytes: " + bytebuf.readableBytes());
-      byte[] rawBytes = new byte[bytebuf.readableBytes()];
-      bytebuf.readBytes(rawBytes);
-      //      System.out.println("Raw bytes:" + bytesToHex(rawBytes));
-      bytebuf.resetReaderIndex();
-      System.out.println("Readable bytes: " + bytebuf.readableBytes());
-      bytebuf.readBytes(os, bytebuf.readableBytes());
-
-      Codec gzip = new Codec.Gzip();
-      ByteArrayOutputStream byteOs = new ByteArrayOutputStream(rawBytes.length);
-      OutputStream compressedOs = gzip.compress(byteOs);
-      compressedOs.write(rawBytes);
-      compressedOs.close();
-
-      System.out.println("Compressed bytes: " + byteOs.toByteArray().length);
-
-      //      System.out.println("Compressed bytes: " + bytesToHex(byteOs.toByteArray()));
-      //
-      //      System.out.println(
-      //          "Uncompressed bytes: "
-      //              + bytesToHex(
-      //                  ByteStreams.toByteArray(
-      //                      gzip.decompress(new ByteArrayInputStream(byteOs.toByteArray())))));
-
-    }
-  }
-
-  private static final char[] hexArray = "0123456789ABCDEF".toCharArray();
-
-  /** Javadoc. */
-  // TODO - remove
-  public static String bytesToHex(byte[] bytes) {
-    return bytesToHex(bytes, bytes.length);
-  }
-
-  /** Javadoc. */
-  // TODO - remove
-  public static String bytesToHex(byte[] bytes, int len) {
-    char[] hexChars = new char[len * 3];
-    for (int j = 0; j < len; j++) {
-      int v = bytes[j] & 0xFF;
-      hexChars[j * 3] = hexArray[v >>> 4];
-      hexChars[j * 3 + 1] = hexArray[v & 0x0F];
-      hexChars[j * 3 + 2] = '-';
-    }
-    return new String(hexChars) + " (" + len + " bytes)";
   }
 
   @Override

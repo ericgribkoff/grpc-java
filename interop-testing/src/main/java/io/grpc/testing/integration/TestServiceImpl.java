@@ -507,7 +507,7 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
         // TODO remove this by fixing enabling/disabling of stream compression
         System.out.println("Calling setStreamCompression(true)");
         call.setStreamCompression(true);
-        call.setCompression("gzip");
+//        call.setCompression("gzip");
 
         return next.startCall(call, headers);
       }

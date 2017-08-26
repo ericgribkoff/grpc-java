@@ -34,6 +34,7 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.zip.GZIPOutputStream;
 import javax.annotation.Nullable;
 
 /**
@@ -93,6 +94,12 @@ public class MessageFramer implements Framer {
   @Override
   public MessageFramer setCompressor(Compressor compressor) {
     this.compressor = checkNotNull(compressor, "Can't pass an empty compressor");
+    return this;
+  }
+
+  @Override
+  public Framer setStreamCompression(boolean enable) {
+    streamCompression = enable;
     return this;
   }
 
@@ -200,7 +207,7 @@ public class MessageFramer implements Framer {
     if (maxOutboundMessageSize >= 0 && messageLength > maxOutboundMessageSize) {
       throw Status.RESOURCE_EXHAUSTED
           .withDescription(
-              String.format("message too large %d > %d", messageLength , maxOutboundMessageSize))
+              String.format("message too large %d > %d", messageLength, maxOutboundMessageSize))
           .asRuntimeException();
     }
     ByteBuffer header = ByteBuffer.wrap(headerScratch);
@@ -208,11 +215,20 @@ public class MessageFramer implements Framer {
     header.putInt(messageLength);
     // Allocate the initial buffer chunk based on frame header + payload length.
     // Note that the allocator may allocate a buffer larger or smaller than this length
+    // TODO - stream compression: don't allocate until we know compressed size...
     if (buffer == null) {
       buffer = bufferAllocator.allocate(header.position() + messageLength);
     }
-    writeRaw(headerScratch, 0, header.position());
-    return writeToOutputStream(message, outputStreamAdapter);
+    if (streamCompression) {
+      GZIPOutputStream gzippedStream = new GZIPOutputStream(outputStreamAdapter);
+      gzippedStream.write(headerScratch);
+      int retTmp = writeToOutputStream(message, gzippedStream);
+      gzippedStream.close();
+      return retTmp;
+    } else {
+      writeRaw(headerScratch, 0, header.position());
+      return writeToOutputStream(message, outputStreamAdapter);
+    }
   }
 
   /**

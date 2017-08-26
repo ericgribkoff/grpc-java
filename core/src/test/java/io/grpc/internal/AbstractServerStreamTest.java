@@ -336,7 +336,7 @@ public class AbstractServerStreamTest {
 
     protected AbstractServerStreamBase(WritableBufferAllocator bufferAllocator, Sink sink,
         AbstractServerStream.TransportState state) {
-      super(bufferAllocator, StatsTraceContext.NOOP, false);
+      super(bufferAllocator, StatsTraceContext.NOOP);
       this.sink = sink;
       this.state = state;
     }
@@ -345,10 +345,6 @@ public class AbstractServerStreamTest {
     protected Sink abstractServerStreamSink() {
       return sink;
     }
-
-    @Override
-    protected void readBytesFromBufferToStream(WritableBuffer buffer, OutputStream stream)
-        throws IOException {}
 
     @Override
     protected AbstractServerStream.TransportState transportState() {

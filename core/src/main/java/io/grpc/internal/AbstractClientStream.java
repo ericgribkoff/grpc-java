@@ -428,6 +428,12 @@ public abstract class AbstractClientStream extends AbstractStream
       return this;
     }
 
+    // Compression is not supported for GET encoding.
+    @Override
+    public Framer setStreamCompression(boolean enable) {
+      return this;
+    }
+
     // TODO(zsurocking): support this
     @Override
     public void setMaxOutboundMessageSize(int maxSize) {}

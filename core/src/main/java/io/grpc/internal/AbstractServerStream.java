@@ -18,15 +18,10 @@ package io.grpc.internal;
 
 import com.google.common.base.Preconditions;
 import io.grpc.Attributes;
-import io.grpc.Codec;
 import io.grpc.Decompressor;
 import io.grpc.InternalStatus;
 import io.grpc.Metadata;
 import io.grpc.Status;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.List;
 import javax.annotation.Nullable;
 
 /**
@@ -79,192 +74,15 @@ public abstract class AbstractServerStream extends AbstractStream
     void cancel(Status status);
   }
 
-  private class CompressingSink implements MessageFramer.Sink {
-    private final MessageFramer.Sink savedSink;
-    private final WritableBufferAllocator bufferAllocator;
-    private final List<WritableBuffer> buffers = new ArrayList<WritableBuffer>();
-
-    private CompressingSink(MessageFramer.Sink sink, WritableBufferAllocator bufferAllocator) {
-      this.savedSink = sink;
-      this.bufferAllocator = bufferAllocator;
-    }
-
-    private boolean waitTillEndOfStream = false;
-
-    private Codec compressor = new Codec.Gzip();
-
-    @Override
-    public void deliverFrame(@Nullable WritableBuffer frame, boolean endOfStream, boolean flush) {
-      //      System.out.println("I can buffer this by just wrapping sink! ? " + streamCompression);
-      //      System.out.println("With compressor " + compressor);
-      System.out.println("deliverFrame called: frame=" + frame + " endOfStream=" + endOfStream);
-      if (streamCompression) {
-        if (waitTillEndOfStream) {
-          buffers.add(frame);
-          if (endOfStream) {
-            try {
-              // This is wrong - it compresses before writing to buffers, so the sizes won't be
-              // right.
-              // Need to *write* to the compressed stream.
-              BufferChainOutputStream bufferChain = new BufferChainOutputStream();
-              OutputStream compressingStream = compressor.compress(bufferChain);
-              //compressor.compress(new UnchainedOutputStream(buffers));
-              for (WritableBuffer buffer : buffers) {
-                // This is highly likely to fail if the buffers haven't been written to...but are
-                // written in MessageFramer.
-                readBytesFromBufferToStream(buffer, compressingStream);
-              }
-              compressingStream.close();
-              for (WritableBuffer buffer : bufferChain.bufferList) {
-                savedSink.deliverFrame(buffer, false, false);
-              }
-              savedSink.deliverFrame(null, endOfStream, flush);
-            } catch (IOException e) {
-              System.out.println("Failed to compress stream");
-              e.printStackTrace(System.out);
-            }
-          }
-        } else {
-          try {
-            if (frame != null) {
-              BufferChainOutputStream bufferChain = new BufferChainOutputStream();
-              OutputStream compressingStream = compressor.compress(bufferChain);
-              //compressor.compress(new UnchainedOutputStream(buffers));
-              readBytesFromBufferToStream(frame, compressingStream);
-              compressingStream.close();
-              for (WritableBuffer buffer : bufferChain.bufferList) {
-                savedSink.deliverFrame(buffer, false, flush);
-              }
-              if (endOfStream) {
-                savedSink.deliverFrame(null, endOfStream, flush);
-              }
-            } else {
-              if (endOfStream) {
-                savedSink.deliverFrame(null, endOfStream, flush);
-              }
-            }
-          } catch (IOException e) {
-            System.out.println("Failed to compress stream");
-            e.printStackTrace(System.out);
-          }
-        }
-      } else {
-        savedSink.deliverFrame(frame, endOfStream, flush);
-      }
-    }
-
-    private final class UnchainedOutputStream extends OutputStream {
-      private final List<WritableBuffer> bufferList;
-      private WritableBuffer current;
-      private int currentIndex;
-
-      private UnchainedOutputStream(List<WritableBuffer> bufferList) {
-        this.bufferList = bufferList;
-        currentIndex = 0;
-        current = bufferList.get(currentIndex);
-      }
-
-      @Override
-      public void write(int b) throws IOException {
-        if (current != null && current.writableBytes() > 0) {
-          current.write((byte)b);
-          return;
-        }
-        byte[] singleByte = new byte[]{(byte)b};
-        write(singleByte, 0, 1);
-      }
-
-      @Override
-      public void write(byte[] b, int off, int len) {
-        while (len > 0) {
-          int canWrite = Math.min(len, current.writableBytes());
-          if (canWrite == 0) {
-            currentIndex++;
-            current = bufferList.get(currentIndex);
-          } else {
-            current.write(b, off, canWrite);
-            off += canWrite;
-            len -= canWrite;
-          }
-        }
-      }
-    }
-
-    /**
-     * Produce a collection of {@link WritableBuffer} instances from the data written to an
-     * {@link OutputStream}.
-     */
-    private final class BufferChainOutputStream extends OutputStream {
-      private final List<WritableBuffer> bufferList = new ArrayList<WritableBuffer>();
-      private WritableBuffer current;
-
-      /**
-       * This is slow, don't call it.  If you care about write overhead, use a BufferedOutputStream.
-       * Better yet, you can use your own single byte buffer and call
-       * {@link #write(byte[], int, int)}.
-       */
-      @Override
-      public void write(int b) throws IOException {
-        if (current != null && current.writableBytes() > 0) {
-          current.write((byte)b);
-          return;
-        }
-        byte[] singleByte = new byte[]{(byte)b};
-        write(singleByte, 0, 1);
-      }
-
-      @Override
-      public void write(byte[] b, int off, int len) {
-        if (current == null) {
-          // Request len bytes initially from the allocator, it may give us more.
-          current = bufferAllocator.allocate(len);
-          bufferList.add(current);
-        }
-        while (len > 0) {
-          int canWrite = Math.min(len, current.writableBytes());
-          if (canWrite == 0) {
-            // Assume message is twice as large as previous assumption if were still not done,
-            // the allocator may allocate more or less than this amount.
-            int needed = Math.max(len, current.readableBytes() * 2);
-            current = bufferAllocator.allocate(needed);
-            bufferList.add(current);
-          } else {
-            current.write(b, off, canWrite);
-            off += canWrite;
-            len -= canWrite;
-          }
-        }
-      }
-
-      private int readableBytes() {
-        int readable = 0;
-        for (WritableBuffer writableBuffer : bufferList) {
-          readable += writableBuffer.readableBytes();
-        }
-        return readable;
-      }
-    }
-  }
-
-  private final Framer framer;
-  private final MessageFramer.Sink framerSink;
+  private final MessageFramer framer;
   private final StatsTraceContext statsTraceCtx;
   private boolean outboundClosed;
   private boolean headersSent;
 
-  protected abstract void readBytesFromBufferToStream(WritableBuffer buffer, OutputStream stream)
-      throws IOException;
-
   protected AbstractServerStream(WritableBufferAllocator bufferAllocator,
-      StatsTraceContext statsTraceCtx, boolean fullStreamCompression) {
+      StatsTraceContext statsTraceCtx) {
     this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
-
-    //    if (fullStreamCompression) {
-    //      framer = new CompressedStreamFramer(this, bufferAllocator, statsTraceCtx);
-    //    } else {
-    this.framerSink = new CompressingSink(this, bufferAllocator);
-    framer = new MessageFramer(framerSink, bufferAllocator, statsTraceCtx);
-    //    }
+    framer = new MessageFramer(this, bufferAllocator, statsTraceCtx);
   }
 
   @Override
@@ -277,7 +95,7 @@ public abstract class AbstractServerStream extends AbstractStream
   protected abstract Sink abstractServerStreamSink();
 
   @Override
-  protected final Framer framer() {
+  protected final MessageFramer framer() {
     return framer;
   }
 

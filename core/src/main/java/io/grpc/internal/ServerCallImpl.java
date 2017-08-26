@@ -84,6 +84,9 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
     stream.request(numMessages);
   }
 
+  // TODO: remove
+  private static final boolean DO_STREAM_COMPRESSION = true;
+
   @Override
   public void sendHeaders(Metadata headers) {
     checkState(!sendHeadersCalled, "sendHeaders has already been called");
@@ -162,8 +165,10 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
     // Always put compressors, even if they're identity.
     System.out.println("streamCompression = " + streamCompression);
     System.out.println("compressor: " + compressor);
-    if (streamCompression) {
-      headers.put(CONTENT_ENCODING_KEY, compressor.getMessageEncoding());
+
+
+    if (DO_STREAM_COMPRESSION) {
+      headers.put(CONTENT_ENCODING_KEY, "gzip");
       headers.put(MESSAGE_ENCODING_KEY, Codec.Identity.NONE.getMessageEncoding());
     } else {
       headers.put(CONTENT_ENCODING_KEY, Codec.Identity.NONE.getMessageEncoding());
@@ -227,6 +232,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
 
   @Override
   public void setStreamCompression(boolean enable) {
+//    System.out.println("Ignoring call to setStreamCompression(" + enable + ")");
     System.out.println("setting stream compression = " + enable);
     this.streamCompression = enable;
     stream.setStreamCompression(enable);
