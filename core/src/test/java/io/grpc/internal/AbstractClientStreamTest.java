@@ -191,6 +191,7 @@ public class AbstractClientStreamTest {
     Metadata headers = new Metadata();
     headers.put(GrpcUtil.CONTENT_ENCODING_KEY, "gzip");
 
+    stream.setFullStreamDecompression(true);
     stream.transportState().inboundHeadersReceived(headers);
 
     verify(mockListener).headersRead(headers);
@@ -204,6 +205,7 @@ public class AbstractClientStreamTest {
     Metadata headers = new Metadata();
     headers.put(GrpcUtil.CONTENT_ENCODING_KEY, "gZIp");
 
+    stream.setFullStreamDecompression(true);
     stream.transportState().inboundHeadersReceived(headers);
 
     verify(mockListener).headersRead(headers);
@@ -216,6 +218,7 @@ public class AbstractClientStreamTest {
     Metadata headers = new Metadata();
     headers.put(GrpcUtil.CONTENT_ENCODING_KEY, "not-a-real-compression-method");
 
+    stream.setFullStreamDecompression(true);
     stream.transportState().inboundHeadersReceived(headers);
 
     verifyNoMoreInteractions(mockListener);
@@ -236,6 +239,7 @@ public class AbstractClientStreamTest {
     headers.put(GrpcUtil.CONTENT_ENCODING_KEY, "gzip");
     headers.put(GrpcUtil.MESSAGE_ENCODING_KEY, new Codec.Gzip().getMessageEncoding());
 
+    stream.setFullStreamDecompression(true);
     stream.transportState().inboundHeadersReceived(headers);
 
     verifyNoMoreInteractions(mockListener);
