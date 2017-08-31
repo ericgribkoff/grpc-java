@@ -235,9 +235,16 @@ public abstract class AbstractClientStream extends AbstractStream
       statsTraceCtx.clientInboundHeaders();
 
       String streamEncoding = headers.get(CONTENT_ENCODING_KEY);
+      String messageEncoding = headers.get(MESSAGE_ENCODING_KEY);
       if (streamEncoding != null && !streamEncoding.equalsIgnoreCase("identity")) {
-        // TODO(ericgribkoff) don't hard code allowed content-encoding values
-        if (!streamEncoding.equalsIgnoreCase("gzip")) {
+        if (messageEncoding != null && !messageEncoding.equalsIgnoreCase("identity")) {
+          deframeFailed(
+              Status.INTERNAL
+                  .withDescription(
+                      String.format("Full stream and gRPC message encoding cannot both be set"))
+                  .asRuntimeException());
+          return;
+        } else if (!streamEncoding.equalsIgnoreCase("gzip")) {
           deframeFailed(
               Status.INTERNAL
                   .withDescription(
@@ -248,14 +255,16 @@ public abstract class AbstractClientStream extends AbstractStream
           setFullStreamDecompressor(new GzipInflatingBuffer());
         }
       } else {
-        // Only obey per-message compression if content-encoding is missing or identity.
+        // Only allow per-message compression if content-encoding is missing or identity.
         Decompressor decompressor = Codec.Identity.NONE;
-        String encoding = headers.get(MESSAGE_ENCODING_KEY);
-        if (encoding != null) {
-          decompressor = decompressorRegistry.lookupDecompressor(encoding);
+        if (messageEncoding != null) {
+          decompressor = decompressorRegistry.lookupDecompressor(messageEncoding);
           if (decompressor == null) {
-            deframeFailed(Status.INTERNAL.withDescription(
-                String.format("Can't find decompressor for %s", encoding)).asRuntimeException());
+            deframeFailed(
+                Status.INTERNAL
+                    .withDescription(
+                        String.format("Can't find decompressor for %s", messageEncoding))
+                    .asRuntimeException());
             return;
           }
         }
