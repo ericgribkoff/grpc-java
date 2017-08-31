@@ -400,11 +400,15 @@ public class ClientCallImplTest {
     Metadata m = new Metadata();
     m.put(GrpcUtil.MESSAGE_ENCODING_KEY, "gzip");
     m.put(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY, "gzip".getBytes(GrpcUtil.US_ASCII));
+    m.put(GrpcUtil.CONTENT_ENCODING_KEY, "gzip");
+    m.put(GrpcUtil.CONTENT_ACCEPT_ENCODING_KEY, "gzip".getBytes(GrpcUtil.US_ASCII));
 
     ClientCallImpl.prepareHeaders(m, DecompressorRegistry.emptyInstance(), Codec.Identity.NONE);
 
     assertNull(m.get(GrpcUtil.MESSAGE_ENCODING_KEY));
     assertNull(m.get(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY));
+    assertNull(m.get(GrpcUtil.CONTENT_ENCODING_KEY));
+    assertNull(m.get(GrpcUtil.CONTENT_ACCEPT_ENCODING_KEY));
   }
 
   @Test
