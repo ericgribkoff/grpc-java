@@ -118,6 +118,11 @@ public abstract class AbstractClientStream extends AbstractStream
   }
 
   @Override
+  public final void setFullStreamDecompression(boolean fullStreamDecompression) {
+    transportState().setFullStreamDecompression(fullStreamDecompression);
+  }
+
+  @Override
   public final void setDecompressorRegistry(DecompressorRegistry decompressorRegistry) {
     transportState().setDecompressorRegistry(decompressorRegistry);
   }
@@ -183,6 +188,7 @@ public abstract class AbstractClientStream extends AbstractStream
     private final StatsTraceContext statsTraceCtx;
     private boolean listenerClosed;
     private ClientStreamListener listener;
+    private boolean fullStreamDecompression;
     private DecompressorRegistry decompressorRegistry = DecompressorRegistry.getDefaultInstance();
 
     private boolean deframerClosed = false;
@@ -197,6 +203,10 @@ public abstract class AbstractClientStream extends AbstractStream
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
       super(maxMessageSize, statsTraceCtx);
       this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
+    }
+
+    private void setFullStreamDecompression(boolean fullStreamDecompression) {
+      this.fullStreamDecompression = fullStreamDecompression;
     }
 
     private void setDecompressorRegistry(DecompressorRegistry decompressorRegistry) {
@@ -234,39 +244,38 @@ public abstract class AbstractClientStream extends AbstractStream
       Preconditions.checkState(!statusReported, "Received headers on closed stream");
       statsTraceCtx.clientInboundHeaders();
 
+      boolean compressedStream = false;
       String streamEncoding = headers.get(CONTENT_ENCODING_KEY);
-      String messageEncoding = headers.get(MESSAGE_ENCODING_KEY);
-      if (streamEncoding != null && !streamEncoding.equalsIgnoreCase("identity")) {
-        if (messageEncoding != null && !messageEncoding.equalsIgnoreCase("identity")) {
-          deframeFailed(
-              Status.INTERNAL
-                  .withDescription(
-                      String.format("Full stream and gRPC message encoding cannot both be set"))
-                  .asRuntimeException());
-          return;
-        } else if (!streamEncoding.equalsIgnoreCase("gzip")) {
+      if (fullStreamDecompression && streamEncoding != null) {
+        if (streamEncoding.equalsIgnoreCase("gzip")) {
+          setFullStreamDecompressor(new GzipInflatingBuffer());
+          compressedStream = true;
+        } else if (!streamEncoding.equalsIgnoreCase("identity")) {
           deframeFailed(
               Status.INTERNAL
                   .withDescription(
                       String.format("Can't find full stream decompressor for %s", streamEncoding))
                   .asRuntimeException());
           return;
-        } else {
-          setFullStreamDecompressor(new GzipInflatingBuffer());
         }
-      } else {
-        // Only allow per-message compression if content-encoding is missing or identity.
-        Decompressor decompressor = Codec.Identity.NONE;
-        if (messageEncoding != null) {
-          decompressor = decompressorRegistry.lookupDecompressor(messageEncoding);
-          if (decompressor == null) {
-            deframeFailed(
-                Status.INTERNAL
-                    .withDescription(
-                        String.format("Can't find decompressor for %s", messageEncoding))
-                    .asRuntimeException());
-            return;
-          }
+      }
+
+      String messageEncoding = headers.get(MESSAGE_ENCODING_KEY);
+      if (messageEncoding != null) {
+        Decompressor decompressor = decompressorRegistry.lookupDecompressor(messageEncoding);
+        if (decompressor == null) {
+          deframeFailed(
+              Status.INTERNAL
+                  .withDescription(String.format("Can't find decompressor for %s", messageEncoding))
+                  .asRuntimeException());
+          return;
+        } else if (compressedStream && decompressor != Codec.Identity.NONE) {
+          deframeFailed(
+              Status.INTERNAL
+                  .withDescription(
+                      String.format("Full stream and gRPC message encoding cannot both be set"))
+                  .asRuntimeException());
+          return;
         }
         setDecompressor(decompressor);
       }
