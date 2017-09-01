@@ -158,7 +158,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     headers.discardAll(CONTENT_ACCEPT_ENCODING_KEY);
     if (fullStreamDecompression) {
       headers.put(
-          CONTENT_ACCEPT_ENCODING_KEY, "identity, gzip".getBytes(Charset.forName("US-ASCII")));
+          CONTENT_ACCEPT_ENCODING_KEY, "identity,gzip".getBytes(Charset.forName("US-ASCII")));
     }
   }
 

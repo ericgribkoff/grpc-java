@@ -269,15 +269,17 @@ public abstract class AbstractClientStream extends AbstractStream
                   .withDescription(String.format("Can't find decompressor for %s", messageEncoding))
                   .asRuntimeException());
           return;
-        } else if (compressedStream && decompressor != Codec.Identity.NONE) {
-          deframeFailed(
-              Status.INTERNAL
-                  .withDescription(
-                      String.format("Full stream and gRPC message encoding cannot both be set"))
-                  .asRuntimeException());
-          return;
+        } else if (decompressor != Codec.Identity.NONE) {
+          if (compressedStream) {
+            deframeFailed(
+                Status.INTERNAL
+                    .withDescription(
+                        String.format("Full stream and gRPC message encoding cannot both be set"))
+                    .asRuntimeException());
+            return;
+          }
+          setDecompressor(decompressor);
         }
-        setDecompressor(decompressor);
       }
 
       listener().headersRead(headers);
