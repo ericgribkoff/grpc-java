@@ -64,6 +64,8 @@ import javax.annotation.Nullable;
 final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
   private static final Logger log = Logger.getLogger(ClientCallImpl.class.getName());
+  private static final byte[] FULL_STREAM_DECOMPRESSION_ENCODINGS
+      = "gzip".getBytes(Charset.forName("US-ASCII"));
 
   private final MethodDescriptor<ReqT, RespT> method;
   private final Executor callExecutor;
@@ -157,8 +159,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     headers.discardAll(CONTENT_ENCODING_KEY);
     headers.discardAll(CONTENT_ACCEPT_ENCODING_KEY);
     if (fullStreamDecompression) {
-      headers.put(
-          CONTENT_ACCEPT_ENCODING_KEY, "identity,gzip".getBytes(Charset.forName("US-ASCII")));
+      headers.put(CONTENT_ACCEPT_ENCODING_KEY, FULL_STREAM_DECOMPRESSION_ENCODINGS);
     }
   }
 

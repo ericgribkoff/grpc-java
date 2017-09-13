@@ -460,7 +460,7 @@ public class ClientCallImplTest {
         ACCEPT_ENCODING_SPLITTER.split(
             new String(m.get(GrpcUtil.CONTENT_ACCEPT_ENCODING_KEY), GrpcUtil.US_ASCII));
     assertEquals(
-        ImmutableSet.of("identity", "gzip"), ImmutableSet.copyOf(acceptedContentEncodings));
+        ImmutableSet.of("gzip"), ImmutableSet.copyOf(acceptedContentEncodings));
   }
 
   @Test

@@ -111,7 +111,7 @@ public abstract class AbstractManagedChannelImplBuilder
 
   LoadBalancer.Factory loadBalancerFactory = DEFAULT_LOAD_BALANCER_FACTORY;
 
-  boolean fullStreamDecompression = false;
+  boolean fullStreamDecompression;
 
   DecompressorRegistry decompressorRegistry = DEFAULT_DECOMPRESSOR_REGISTRY;
 

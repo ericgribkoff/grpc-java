@@ -193,12 +193,12 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   public abstract T loadBalancerFactory(LoadBalancer.Factory loadBalancerFactory);
 
   /**
-   * Enable full-stream decompression of inbound streams. This will cause the channel's outbound
+   * Enables full-stream decompression of inbound streams. This will cause the channel's outbound
    * headers to advertise support for GZIP compressed streams, and gRPC servers which support the
    * feature may respond with a GZIP compressed stream.
    *
-   * <p>This differs from {@link DecompressorRegistry}, which specifies the accepted encodings for
-   * individual gRPC messages.
+   * <p>EXPERIMENTAL: This method is here to enable an experimental feature, and may be changed or
+   * removed once the feature is stable.
    *
    * @since 1.7.0
    */
