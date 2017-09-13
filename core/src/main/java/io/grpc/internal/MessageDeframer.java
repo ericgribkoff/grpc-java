@@ -43,6 +43,7 @@ public class MessageDeframer implements Closeable, Deframer {
   private static final int HEADER_LENGTH = 5;
   private static final int COMPRESSED_FLAG_MASK = 1;
   private static final int RESERVED_MASK = 0xFE;
+  private static final int MAX_BUFFER_SIZE = 1024 * 1024 * 2;
 
   /**
    * A listener of deframing events. These methods will be invoked from the deframing thread.
@@ -311,11 +312,14 @@ public class MessageDeframer implements Closeable, Deframer {
       while ((missingBytes = requiredLength - nextFrame.readableBytes()) > 0) {
         if (fullStreamDecompressor != null) {
           try {
-            totalBytesRead += fullStreamDecompressor.inflateBytes(missingBytes, nextFrame);
-            if (missingBytes == requiredLength - nextFrame.readableBytes()) {
+            byte[] b = new byte[Math.min(missingBytes, MAX_BUFFER_SIZE)];
+            int n = fullStreamDecompressor.inflateBytes(b, 0, b.length);
+            totalBytesRead += fullStreamDecompressor.getAndResetBytesConsumed();
+            if (n == 0) {
               // No more inflated data is available.
               return false;
             }
+            nextFrame.addBuffer(ReadableBuffers.wrap(b, 0, n));
           } catch (IOException e) {
             throw new RuntimeException(e);
           } catch (DataFormatException e) {
