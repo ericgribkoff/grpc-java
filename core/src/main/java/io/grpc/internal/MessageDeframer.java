@@ -131,17 +131,14 @@ public class MessageDeframer implements Closeable, Deframer {
 
   @Override
   public void setDecompressor(Decompressor decompressor) {
-    checkState(
-        fullStreamDecompressor == null, "Already set full stream decompressor");
+    checkState(fullStreamDecompressor == null, "Already set full stream decompressor");
     this.decompressor = checkNotNull(decompressor, "Can't pass an empty decompressor");
   }
 
   @Override
   public void setFullStreamDecompressor(GzipInflatingBuffer fullStreamDecompressor) {
-    checkState(
-        decompressor == Codec.Identity.NONE, "per-message decompressor already set");
-    checkState(
-        this.fullStreamDecompressor == null, "full stream decompressor already set");
+    checkState(decompressor == Codec.Identity.NONE, "per-message decompressor already set");
+    checkState(this.fullStreamDecompressor == null, "full stream decompressor already set");
     this.fullStreamDecompressor =
         checkNotNull(fullStreamDecompressor, "Can't pass a null full stream decompressor");
     unprocessed = null;
@@ -208,6 +205,7 @@ public class MessageDeframer implements Closeable, Deframer {
     boolean hasPartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
     try {
       if (fullStreamDecompressor != null) {
+        hasPartialMessage = hasPartialMessage || fullStreamDecompressor.hasPartialData();
         fullStreamDecompressor.close();
       }
       if (unprocessed != null) {

@@ -175,13 +175,15 @@ class GzipInflatingBuffer implements Closeable {
   /** Tracks gzipped bytes consumed during {@link #inflateBytes} calls. */
   private int bytesConsumed = 0;
 
+  private boolean isStalled = true;
+
   /**
-   * Returns true when all of {@code gzippedData} has been input to the inflater and the inflater is
-   * unable to produce more output.
+   * Returns true when more bytes must be added via {@link #addGzippedBytes} to enable additional
+   * calls to {@link #inflateBytes} to make progress.
    */
   boolean isStalled() {
     checkState(!closed, "GzipInflatingBuffer is closed");
-    return gzippedData.readableBytes() == 0 && (inflaterInputStart == inflaterInputEnd);
+    return isStalled;
   }
 
   /**
@@ -190,7 +192,7 @@ class GzipInflatingBuffer implements Closeable {
    */
   boolean hasPartialData() {
     checkState(!closed, "GzipInflatingBuffer is closed");
-    return gzippedData.readableBytes() != 0 || (inflaterInputStart < inflaterInputEnd);
+    return gzipMetadataReader.readableBytes() != 0;
   }
 
   /**
@@ -199,6 +201,9 @@ class GzipInflatingBuffer implements Closeable {
    */
   void addGzippedBytes(ReadableBuffer buffer) {
     checkState(!closed, "GzipInflatingBuffer is closed");
+    if (buffer.readableBytes() > 0) {
+      isStalled = false;
+    }
     gzippedData.addBuffer(buffer);
   }
 
@@ -224,6 +229,8 @@ class GzipInflatingBuffer implements Closeable {
     return savedBytesConsumed;
   }
 
+  private boolean inGzipMetadata = true;
+
   /**
    * Attempts to inflate {@code length} bytes of data into {@code bufferToWrite}.
    *
@@ -241,8 +248,9 @@ class GzipInflatingBuffer implements Closeable {
     checkState(!closed, "GzipInflatingBuffer is closed");
 
     int bytesRead = 0;
-    int missingBytes;
+    int missingBytes = length - bytesRead;
     boolean madeProgress = true;
+//    while (madeProgress && (inGzipMetadata || (missingBytes = length - bytesRead) > 0)) {
     while (madeProgress && (missingBytes = length - bytesRead) > 0) {
       switch (state) {
         case HEADER:
@@ -287,6 +295,10 @@ class GzipInflatingBuffer implements Closeable {
           throw new AssertionError("Invalid state: " + state);
       }
     }
+    // If we finished a gzip block, look ahead to see if we have enough bytes to read another header
+    isStalled =
+        !madeProgress
+            || (state == State.HEADER && gzipMetadataReader.readableBytes() < GZIP_HEADER_MIN_SIZE);
 
     return bytesRead;
   }
@@ -355,6 +367,7 @@ class GzipInflatingBuffer implements Closeable {
 
   private boolean processHeaderCrc() throws ZipException {
     if ((gzipHeaderFlag & HEADER_CRC_FLAG) != HEADER_CRC_FLAG) {
+      inGzipMetadata = false;
       state = State.INITIALIZE_INFLATER;
       return true;
     }
@@ -365,6 +378,7 @@ class GzipInflatingBuffer implements Closeable {
     if (desiredCrc16 != gzipMetadataReader.readUnsignedShort()) {
       throw new ZipException("Corrupt GZIP header");
     }
+    inGzipMetadata = false;
     state = State.INITIALIZE_INFLATER;
     return true;
   }
@@ -405,6 +419,7 @@ class GzipInflatingBuffer implements Closeable {
           inflater.end();
           inflater = null;
         }
+        inGzipMetadata = true;
         state = State.TRAILER;
       } else if (inflater.needsInput()) {
         state = State.INFLATER_NEEDS_INPUT;
