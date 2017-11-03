@@ -3,7 +3,7 @@
     package="io.grpc.android.integrationtest" >
 
     <uses-sdk
-        android:minSdkVersion="9"
+        android:minSdkVersion="14"
         android:targetSdkVersion="22"/>
 
     <uses-permission android:name="android.permission.INTERNET" />
