@@ -9,6 +9,7 @@ android {
         applicationId "io.grpc.android.integrationtest"
         minSdkVersion 14
         targetSdkVersion 26
+        multiDexEnabled true
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
@@ -57,9 +58,10 @@ protobuf {
 }
 
 dependencies {
-    compile "com.android.support:support-v13:26.0.0"
+//    compile "com.android.support:support-v13:26.0.0"
     compile "com.android.support:appcompat-v7:26.0.0"
     compile 'com.google.android.gms:play-services:11.0.4'
+    compile 'com.android.support:multidex:1.0.1'
     // You need to build grpc-java to obtain the grpc libraries below.
     compile 'io.grpc:grpc-protobuf-nano:1.8.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     compile 'io.grpc:grpc-okhttp:1.8.0-SNAPSHOT' // CURRENT_GRPC_VERSION
@@ -68,9 +70,9 @@ dependencies {
     compile 'javax.annotation:javax.annotation-api:1.2'
     compile 'junit:junit:4.12'
 
-    androidTestCompile 'com.android.support.test:rules:0.5'
-    androidTestCompile 'com.android.support.test:runner:0.5'
-    androidTestCompile 'com.android.support:support-annotations:26.0.0'
+    androidTestCompile 'com.android.support.test:rules:1.0.1'
+    androidTestCompile 'com.android.support.test:runner:1.0.1'
+    androidTestCompile 'com.android.support:support-v13:26.0.0'
 }
 
 gradle.projectsEvaluated {
