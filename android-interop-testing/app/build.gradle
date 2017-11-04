@@ -2,13 +2,13 @@ apply plugin: 'com.android.application'
 apply plugin: 'com.google.protobuf'
 
 android {
-    compileSdkVersion 22
-    buildToolsVersion '25.0.2'
+    compileSdkVersion 26
+    buildToolsVersion '26.0.1'
 
     defaultConfig {
         applicationId "io.grpc.android.integrationtest"
         minSdkVersion 14
-        targetSdkVersion 22
+        targetSdkVersion 26
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
@@ -57,9 +57,9 @@ protobuf {
 }
 
 dependencies {
-    compile 'com.android.support:appcompat-v7:22.2.1'
-    compile 'com.android.support:support-annotations:23.1.1'
-    compile 'com.google.android.gms:play-services-base:7.3.0'
+    compile "com.android.support:support-v13:26.0.0"
+    compile "com.android.support:appcompat-v7:26.0.0"
+    compile 'com.google.android.gms:play-services:11.0.4'
     // You need to build grpc-java to obtain the grpc libraries below.
     compile 'io.grpc:grpc-protobuf-nano:1.8.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     compile 'io.grpc:grpc-okhttp:1.8.0-SNAPSHOT' // CURRENT_GRPC_VERSION
@@ -70,6 +70,7 @@ dependencies {
 
     androidTestCompile 'com.android.support.test:rules:0.5'
     androidTestCompile 'com.android.support.test:runner:0.5'
+    androidTestCompile 'com.android.support:support-annotations:26.0.0'
 }
 
 gradle.projectsEvaluated {
