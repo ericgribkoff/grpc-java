@@ -1,6 +1,19 @@
 apply plugin: 'com.android.application'
 apply plugin: 'com.google.protobuf'
 
+buildscript {
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        classpath 'com.getkeepsafe.dexcount:dexcount-gradle-plugin:0.8.2'
+        classpath 'com.vanniktech:gradle-android-apk-size-plugin:0.4.0'
+    }
+}
+
+apply plugin: 'com.getkeepsafe.dexcount'
+apply plugin: 'com.vanniktech.android.apk.size'
+
 android {
     compileSdkVersion 22
     buildToolsVersion '25.0.2'
