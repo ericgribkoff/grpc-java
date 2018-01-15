@@ -2,14 +2,13 @@ apply plugin: 'com.android.application'
 apply plugin: 'com.google.protobuf'
 
 android {
-    compileSdkVersion 22
-    buildToolsVersion "25.0.2"
+    compileSdkVersion 25
 
     defaultConfig {
         applicationId "io.grpc.android.helloworldexample"
         // API level 14+ is required for TLS since Google Play Services v10.2
         minSdkVersion 14
-        targetSdkVersion 22
+        targetSdkVersion 25
         versionCode 1
         versionName "1.0"
     }
@@ -52,11 +51,14 @@ protobuf {
 }
 
 dependencies {
-    compile 'com.android.support:appcompat-v7:22.1.1'
+    compile 'com.android.support:appcompat-v7:25.4.0'
 
     // You need to build grpc-java to obtain these libraries below.
     compile 'io.grpc:grpc-okhttp:1.10.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     compile 'io.grpc:grpc-protobuf-lite:1.10.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     compile 'io.grpc:grpc-stub:1.10.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     compile 'javax.annotation:javax.annotation-api:1.2'
+
+    compile 'com.google.android.gms:play-services-base:9.0.0'
+    compile 'org.conscrypt:conscrypt-android:1.0.0.RC14'
 }

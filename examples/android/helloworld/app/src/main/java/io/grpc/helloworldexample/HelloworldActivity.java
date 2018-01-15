@@ -17,6 +17,8 @@
 package io.grpc.helloworldexample;
 
 import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
@@ -34,11 +36,22 @@ import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
 
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 
-public class HelloworldActivity extends AppCompatActivity {
+import org.conscrypt.Conscrypt;
+import java.security.Provider;
+import java.security.Security;
+
+import com.google.android.gms.common.GooglePlayServicesNotAvailableException;
+import com.google.android.gms.common.GooglePlayServicesRepairableException;
+import com.google.android.gms.common.GooglePlayServicesUtil;
+import com.google.android.gms.security.ProviderInstaller;
+
+public class HelloworldActivity extends AppCompatActivity implements ProviderInstaller.ProviderInstallListener {
     private Button mSendButton;
     private EditText mHostEdit;
     private EditText mPortEdit;
@@ -55,6 +68,82 @@ public class HelloworldActivity extends AppCompatActivity {
         mMessageEdit = (EditText) findViewById(R.id.message_edit_text);
         mResultText = (TextView) findViewById(R.id.grpc_response_text);
         mResultText.setMovementMethod(new ScrollingMovementMethod());
+
+        for (Provider p : Security.getProviders()) {
+            System.out.println(p + " " + p.getClass().getName());
+        }
+
+//        try {
+//            ProviderInstaller.installIfNeeded(this);
+//        } catch (GooglePlayServicesRepairableException e) {
+//
+//            // Indicates that Google Play services is out of date, disabled, etc.
+//
+//            // Prompt the user to install/update/enable Google Play services.
+//            GooglePlayServicesUtil.showErrorNotification(
+//                    e.getConnectionStatusCode(), this);
+//            e.printStackTrace();
+//            return;
+//
+//        } catch (GooglePlayServicesNotAvailableException e) {
+//            // Indicates a non-recoverable error; the ProviderInstaller is not able
+//            // to install an up-to-date Provider.
+//
+//            // Notify the SyncManager that a hard error occurred.
+//
+//            e.printStackTrace();
+//            return;
+//        }
+
+        System.out.println(Security.addProvider(Conscrypt.newProvider()));
+//        System.out.println(Security.insertProviderAt(Conscrypt.newProvider(), 1));
+        for (Provider p : Security.getProviders()) {
+            System.out.println(p + " " + p.getClass().getName());
+        }
+
+//        ProviderInstaller.installIfNeededAsync(this, this);
+
+        String loggingConfig =
+                "handlers=java.util.logging.ConsoleHandler\n"
+                        + "io.grpc.level=FINE\n"
+                        + "java.util.logging.ConsoleHandler.level=FINE\n"
+                        + "java.util.logging.ConsoleHandler.formatter=java.util.logging.SimpleFormatter";
+        try {
+            java.util.logging.LogManager.getLogManager()
+                    .readConfiguration(
+                            new java.io.ByteArrayInputStream(
+                                    loggingConfig.getBytes()));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    @Override
+    public void onProviderInstalled() {
+        System.out.println("Success!");
+    }
+
+    @Override
+    public void onProviderInstallFailed(int errorCode, Intent recoveryIntent) {
+        if (GooglePlayServicesUtil.isUserRecoverableError(errorCode)) {
+            // Recoverable error. Show a dialog prompting the user to
+            // install/update/enable Google Play services.
+            GooglePlayServicesUtil.showErrorDialogFragment(
+                    errorCode,
+                    this,
+                    1,
+                    new DialogInterface.OnCancelListener() {
+                        @Override
+                        public void onCancel(DialogInterface dialog) {
+                            // The user chose not to take the recovery action
+                            System.out.println("failed1");
+                        }
+                    });
+        } else {
+            // Google Play services is not available.
+            System.out.println("failed2");
+        }
     }
 
     public void sendMessage(View view) {
@@ -72,10 +161,10 @@ public class HelloworldActivity extends AppCompatActivity {
 
         @Override
         protected void onPreExecute() {
-            mHost = mHostEdit.getText().toString();
-            mMessage = mMessageEdit.getText().toString();
-            String portStr = mPortEdit.getText().toString();
-            mPort = TextUtils.isEmpty(portStr) ? 0 : Integer.valueOf(portStr);
+            mHost = "grpc-test.sandbox.googleapis.com"; //mHostEdit.getText().toString();
+            mMessage = "test"; //mMessageEdit.getText().toString();
+//            String portStr = mPortEdit.getText().toString();
+            mPort = 443; //TextUtils.isEmpty(portStr) ? 0 : Integer.valueOf(portStr);
             mResultText.setText("");
         }
 
@@ -83,7 +172,7 @@ public class HelloworldActivity extends AppCompatActivity {
         protected String doInBackground(Void... nothing) {
             try {
                 mChannel = ManagedChannelBuilder.forAddress(mHost, mPort)
-                    .usePlaintext(true)
+//                    .usePlaintext(true)
                     .build();
                 GreeterGrpc.GreeterBlockingStub stub = GreeterGrpc.newBlockingStub(mChannel);
                 HelloRequest message = HelloRequest.newBuilder().setName(mMessage).build();
