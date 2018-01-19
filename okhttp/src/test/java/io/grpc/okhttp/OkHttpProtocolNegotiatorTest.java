@@ -31,13 +31,9 @@ import io.grpc.okhttp.internal.Platform;
 import io.grpc.okhttp.internal.Platform.TlsExtensionType;
 import io.grpc.okhttp.internal.Protocol;
 import java.io.IOException;
-import java.security.Provider;
-import java.security.Security;
 import javax.net.ssl.HandshakeCompletedListener;
 import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLSocket;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -52,21 +48,8 @@ import org.mockito.Mockito;
 public class OkHttpProtocolNegotiatorTest {
   @Rule public final ExpectedException thrown = ExpectedException.none();
 
-  private final Provider fakeSecurityProvider = new Provider("GmsCore_OpenSSL", 1.0, "info") {};
-  private final Provider fakeConscrypt = new Provider("Conscrypt", 1.0, "info") {};
   private final SSLSocket sock = mock(SSLSocket.class);
   private final Platform platform = mock(Platform.class);
-
-  @Before
-  public void setUp() {
-    // Tests that depend on android need this to know which protocol negotiation to use.
-    Security.addProvider(fakeSecurityProvider);
-  }
-
-  @After
-  public void tearDown() {
-    Security.removeProvider(fakeSecurityProvider.getName());
-  }
 
   @Test
   public void createNegotiator_isAndroid() {

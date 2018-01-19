@@ -111,7 +111,7 @@ public class Platform {
     return sslProvider;
   }
 
-  /** Returns the TLS extension type to use (ALPN and NPN, NPN, or None). */
+  /** Returns the TLS extension type available (ALPN and NPN, NPN, or None). */
   public TlsExtensionType getTlsExtensionType() {
     return TlsExtensionType.NONE;
   }
@@ -135,9 +135,6 @@ public class Platform {
 
   /** Returns the negotiated protocol, or null if no protocol was negotiated. */
   public String getSelectedProtocol(SSLSocket socket) {
-    // TODO(ericgribkoff) Using default platform, this always returns null => throwing an
-    // exception in OkHttpProtocolNegotiator#negotiate... so why have this?
-    // Platform is used by testserver and benchmark...but can it do anything if this is null?
     return null;
   }
 
