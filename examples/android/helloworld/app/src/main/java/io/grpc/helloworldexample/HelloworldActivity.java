@@ -95,8 +95,8 @@ public class HelloworldActivity extends AppCompatActivity implements ProviderIns
 //            return;
 //        }
 
-        System.out.println(Security.addProvider(Conscrypt.newProvider()));
-//        System.out.println(Security.insertProviderAt(Conscrypt.newProvider(), 1));
+//        System.out.println(Security.addProvider(Conscrypt.newProvider()));
+        System.out.println(Security.insertProviderAt(Conscrypt.newProvider(), 1));
         for (Provider p : Security.getProviders()) {
             System.out.println(p + " " + p.getClass().getName());
         }

@@ -28,8 +28,8 @@ import static org.mockito.Mockito.when;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import io.grpc.okhttp.OkHttpProtocolNegotiator.AndroidNegotiator;
-import io.grpc.okhttp.OkHttpProtocolNegotiator.AndroidNegotiator.TlsExtensionType;
 import io.grpc.okhttp.internal.Platform;
+import io.grpc.okhttp.internal.Platform.TlsExtensionType;
 import io.grpc.okhttp.internal.Protocol;
 import java.io.IOException;
 import java.security.Provider;
@@ -180,103 +180,11 @@ public class OkHttpProtocolNegotiatorTest {
     verify(platform).afterHandshake(sock);
   }
 
-  @Test
-  public void pickTlsExtensionType_securityProvider() throws Exception {
-    assertNotNull(Security.getProvider(fakeSecurityProvider.getName()));
-
-    AndroidNegotiator.TlsExtensionType tlsExtensionType =
-        AndroidNegotiator.pickTlsExtensionType(getClass().getClassLoader());
-
-    assertEquals(TlsExtensionType.ALPN_AND_NPN, tlsExtensionType);
-  }
-
-  @Test
-  public void pickTlsExtensionType_android50() throws Exception {
-    Security.removeProvider(fakeSecurityProvider.getName());
-    ClassLoader cl = new ClassLoader(this.getClass().getClassLoader()) {
-      @Override
-      protected Class<?> findClass(String name) throws ClassNotFoundException {
-        // Just don't throw.
-        if ("android.net.Network".equals(name)) {
-          return null;
-        }
-        return super.findClass(name);
-      }
-    };
-
-    AndroidNegotiator.TlsExtensionType tlsExtensionType =
-        AndroidNegotiator.pickTlsExtensionType(cl);
-
-    assertEquals(TlsExtensionType.ALPN_AND_NPN, tlsExtensionType);
-  }
-
-  @Test
-  public void pickTlsExtensionType_android41() throws Exception {
-    Security.removeProvider(fakeSecurityProvider.getName());
-    ClassLoader cl = new ClassLoader(this.getClass().getClassLoader()) {
-      @Override
-      protected Class<?> findClass(String name) throws ClassNotFoundException {
-        // Just don't throw.
-        if ("android.app.ActivityOptions".equals(name)) {
-          return null;
-        }
-        return super.findClass(name);
-      }
-    };
-
-    AndroidNegotiator.TlsExtensionType tlsExtensionType =
-        AndroidNegotiator.pickTlsExtensionType(cl);
-
-    assertEquals(TlsExtensionType.NPN, tlsExtensionType);
-  }
-
-  @Test
-  public void pickTlsExtensionType_android41WithConscrypt() throws Exception {
-    Security.removeProvider(fakeSecurityProvider.getName());
-    Security.addProvider(fakeConscrypt);
-    ClassLoader cl =
-        new ClassLoader(this.getClass().getClassLoader()) {
-          @Override
-          protected Class<?> findClass(String name) throws ClassNotFoundException {
-            // Just don't throw.
-            if ("android.app.ActivityOptions".equals(name)) {
-              return null;
-            }
-            return super.findClass(name);
-          }
-        };
-
-    AndroidNegotiator.TlsExtensionType tlsExtensionType =
-        AndroidNegotiator.pickTlsExtensionType(cl);
-
-    assertEquals(TlsExtensionType.ALPN_AND_NPN, tlsExtensionType);
-
-    // Clean up
-    Security.removeProvider(fakeConscrypt.getName());
-  }
-
-  @Test
-  public void pickTlsExtensionType_none() throws Exception {
-    Security.removeProvider(fakeSecurityProvider.getName());
-
-    AndroidNegotiator.TlsExtensionType tlsExtensionType =
-        AndroidNegotiator.pickTlsExtensionType(getClass().getClassLoader());
-
-    assertNull(tlsExtensionType);
-  }
-
-  @Test
-  public void androidNegotiator_failsOnNull() {
-    thrown.expect(NullPointerException.class);
-    thrown.expectMessage("Unable to pick a TLS extension");
-
-    new AndroidNegotiator(platform, null);
-  }
-
   // Checks that the super class is properly invoked.
   @Test
   public void negotiate_android_handshakeFails() throws Exception {
-    AndroidNegotiator negotiator = new AndroidNegotiator(platform, TlsExtensionType.ALPN_AND_NPN);
+    when(platform.getTlsExtensionType()).thenReturn(TlsExtensionType.NPN);
+    AndroidNegotiator negotiator = new AndroidNegotiator(platform);
 
     FakeAndroidSslSocket androidSock = new FakeAndroidSslSocket() {
       @Override
@@ -301,7 +209,8 @@ public class OkHttpProtocolNegotiatorTest {
 
   @Test
   public void getSelectedProtocol_alpn() throws Exception {
-    AndroidNegotiator negotiator = new AndroidNegotiator(platform, TlsExtensionType.ALPN_AND_NPN);
+    when(platform.getTlsExtensionType()).thenReturn(TlsExtensionType.ALPN_AND_NPN);
+    AndroidNegotiator negotiator = new AndroidNegotiator(platform);
     FakeAndroidSslSocket androidSock = new FakeAndroidSslSocketAlpn();
 
     String actual = negotiator.getSelectedProtocol(androidSock);
@@ -319,7 +228,8 @@ public class OkHttpProtocolNegotiatorTest {
 
   @Test
   public void getSelectedProtocol_npn() throws Exception {
-    AndroidNegotiator negotiator = new AndroidNegotiator(platform, TlsExtensionType.NPN);
+    when(platform.getTlsExtensionType()).thenReturn(TlsExtensionType.NPN);
+    AndroidNegotiator negotiator = new AndroidNegotiator(platform);
     FakeAndroidSslSocket androidSock = new FakeAndroidSslSocketNpn();
 
     String actual = negotiator.getSelectedProtocol(androidSock);
