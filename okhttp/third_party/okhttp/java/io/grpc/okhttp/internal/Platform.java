@@ -75,7 +75,7 @@ public class Platform {
       new String[] {
         // See https://developer.android.com/training/articles/security-gms-provider.html
         "com.google.android.gms.org.conscrypt.OpenSSLProvider",
-          "org.conscrypt.OpenSSLProvider",
+        "org.conscrypt.OpenSSLProvider",
         "com.android.org.conscrypt.OpenSSLProvider",
         "org.apache.harmony.xnet.provider.jsse.OpenSSLProvider"
       };
@@ -111,9 +111,7 @@ public class Platform {
     return sslProvider;
   }
 
-  /**
-   * Returns the TLS extension type to use (ALPN and NPN, NPN, or None).
-   */
+  /** Returns the TLS extension type to use (ALPN and NPN, NPN, or None). */
   public TlsExtensionType getTlsExtensionType() {
     return TlsExtensionType.NONE;
   }
@@ -150,9 +148,8 @@ public class Platform {
 
   /** Attempt to match the host runtime to a capable Platform implementation. */
   private static Platform findPlatform() {
-    Provider androidOrAppEngineProvider = GrpcUtil.IS_RESTRICTED_APPENGINE ?
-        getAppEngineProvider()
-        : getAndroidSecurityProvider();
+    Provider androidOrAppEngineProvider =
+        GrpcUtil.IS_RESTRICTED_APPENGINE ? getAppEngineProvider() : getAndroidSecurityProvider();
     if (androidOrAppEngineProvider != null) {
       // Attempt to find Android 2.3+ APIs.
       OptionalMethod<Socket> setUseSessionTickets
@@ -178,7 +175,8 @@ public class Platform {
       TlsExtensionType tlsExtensionType;
       if (GrpcUtil.IS_RESTRICTED_APPENGINE) {
         tlsExtensionType = TlsExtensionType.ALPN_AND_NPN;
-      } else if (androidOrAppEngineProvider.getName().equals("GmsCore_OpenSSL") || androidOrAppEngineProvider.getName().equals("Conscrypt")) {
+      } else if (androidOrAppEngineProvider.getName().equals("GmsCore_OpenSSL")
+          || androidOrAppEngineProvider.getName().equals("Conscrypt")) {
         tlsExtensionType = TlsExtensionType.ALPN_AND_NPN;
       } else if (isAtLeastAndroid5()) {
         tlsExtensionType = TlsExtensionType.ALPN_AND_NPN;
@@ -187,8 +185,14 @@ public class Platform {
       } else {
         tlsExtensionType = TlsExtensionType.NONE;
       }
-      return new Android(setUseSessionTickets, setHostname, trafficStatsTagSocket,
-          trafficStatsUntagSocket, getAlpnSelectedProtocol, setAlpnProtocols, androidOrAppEngineProvider,
+      return new Android(
+          setUseSessionTickets,
+          setHostname,
+          trafficStatsTagSocket,
+          trafficStatsUntagSocket,
+          getAlpnSelectedProtocol,
+          setAlpnProtocols,
+          androidOrAppEngineProvider,
           tlsExtensionType);
     }
     Provider sslProvider;
@@ -221,7 +225,9 @@ public class Platform {
 
   private static boolean isAtLeastAndroid5() {
     try {
-      Platform.class.getClassLoader().loadClass("android.net.Network"); // Arbitrary class added in Android 5.0.
+      Platform.class
+          .getClassLoader()
+          .loadClass("android.net.Network"); // Arbitrary class added in Android 5.0.
       return true;
     } catch (ClassNotFoundException e) {
       logger.log(Level.FINE, "Can't find class", e);
@@ -231,7 +237,9 @@ public class Platform {
 
   private static boolean isAtLeastAndroid41() {
     try {
-      Platform.class.getClassLoader().loadClass("android.app.ActivityOptions"); // Arbitrary class added in Android 4.1.
+      Platform.class
+          .getClassLoader()
+          .loadClass("android.app.ActivityOptions"); // Arbitrary class added in Android 4.1.
       return true;
     } catch (ClassNotFoundException e) {
       logger.log(Level.FINE, "Can't find class", e);
@@ -286,10 +294,15 @@ public class Platform {
 
     private final TlsExtensionType tlsExtensionType;
 
-    public Android(OptionalMethod<Socket> setUseSessionTickets, OptionalMethod<Socket> setHostname,
-        Method trafficStatsTagSocket, Method trafficStatsUntagSocket,
-        OptionalMethod<Socket> getAlpnSelectedProtocol, OptionalMethod<Socket> setAlpnProtocols,
-        Provider provider, TlsExtensionType tlsExtensionType) {
+    public Android(
+        OptionalMethod<Socket> setUseSessionTickets,
+        OptionalMethod<Socket> setHostname,
+        Method trafficStatsTagSocket,
+        Method trafficStatsUntagSocket,
+        OptionalMethod<Socket> getAlpnSelectedProtocol,
+        OptionalMethod<Socket> setAlpnProtocols,
+        Provider provider,
+        TlsExtensionType tlsExtensionType) {
       super(provider);
       this.setUseSessionTickets = setUseSessionTickets;
       this.setHostname = setHostname;
