@@ -42,6 +42,42 @@ set_target_properties(libssl PROPERTIES IMPORTED_LOCATION
 # You can define multiple libraries, and CMake builds them for you.
 # Gradle automatically packages shared libraries with your APK.
 
+#add_library(libprotobuf STATIC IMPORTED)
+#set_target_properties(libprotobuf PROPERTIES IMPORTED_LOCATION
+#  ${distribution_DIR}/libprotobuf/lib/${ANDROID_ABI}/libprotobuf.a)
+
+
+
+# Sets libprotobuf_src_DIR to the path of the target CMake project.
+#set( libgmock_src_DIR ../gmock )
+#
+# Sets lib_build_DIR to the path of the desired output directory.
+#set( libgmock_build_DIR ../gmock/outputs )
+#file(MAKE_DIRECTORY ${libgmock_build_DIR})
+#
+# Adds the CMakeLists.txt file located in the specified directory
+# as a build dependency.
+#add_subdirectory( # Specifies the directory of the CMakeLists.txt file.
+#                  ${libgmock_src_DIR}
+#
+#                  # Specifies the directory for the build outputs.
+#                  ${libgmock_build_DIR} )
+
+# Sets libprotobuf_src_DIR to the path of the target CMake project.
+set( libprotobuf_src_DIR ../protobuf/cmake )
+
+# Sets lib_build_DIR to the path of the desired output directory.
+set( libprotobuf_build_DIR ../protobuf/outputs )
+file(MAKE_DIRECTORY ${libprotobuf_build_DIR})
+
+# Adds the CMakeLists.txt file located in the specified directory
+# as a build dependency.
+add_subdirectory( # Specifies the directory of the CMakeLists.txt file.
+                  ${libprotobuf_src_DIR}
+
+                  # Specifies the directory for the build outputs.
+                  ${libprotobuf_build_DIR} )
+
 add_library( # Sets the name of the library.
              native-lib
 
@@ -50,6 +86,7 @@ add_library( # Sets the name of the library.
 
              # Provides a relative path to your source file(s).
              src/main/cpp/native-lib.cpp )
+
 
 # Searches for a specified prebuilt library and stores the path as a
 # variable. Because CMake includes system libraries in the search path by
@@ -64,7 +101,8 @@ find_library( # Sets the name of the path variable.
               # you want CMake to locate.
               log )
 
-                        target_include_directories(native-lib PRIVATE
+
+target_include_directories(native-lib PRIVATE
               ${distribution_DIR}/libgrpc/include
               ${distribution_DIR}/libgrpc++/include)
 
@@ -80,7 +118,8 @@ libzlib
                                               libcares
                                               libssl
                                               libcrypto
+                                              #libprotobuf
                                               libgpr # Order matters
                        # Links the target library to the log library
                        # included in the NDK.
-                       ${log-lib} )
+                       ${log-lib})
