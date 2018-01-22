@@ -11,11 +11,32 @@ set(distribution_DIR ${CMAKE_SOURCE_DIR}/../)
 
 add_library(libgrpc STATIC IMPORTED)
 set_target_properties(libgrpc PROPERTIES IMPORTED_LOCATION
-      ${distribution_DIR}/libgrpc.a)
+  ${distribution_DIR}/libgrpc/lib/${ANDROID_ABI}/libgrpc.a)
 
 add_library(libgrpc++ STATIC IMPORTED)
 set_target_properties(libgrpc++ PROPERTIES IMPORTED_LOCATION
-      ${distribution_DIR}/libgrpc++.a)
+  ${distribution_DIR}/libgrpc++/lib/${ANDROID_ABI}/libgrpc++.a)
+
+add_library(libgpr STATIC IMPORTED)
+set_target_properties(libgpr PROPERTIES IMPORTED_LOCATION
+  ${distribution_DIR}/libgpr/lib/${ANDROID_ABI}/libgpr.a)
+
+add_library(libcares STATIC IMPORTED)
+set_target_properties(libcares PROPERTIES IMPORTED_LOCATION
+  ${distribution_DIR}/libcares/lib/${ANDROID_ABI}/libcares.a)
+
+add_library(libzlib STATIC IMPORTED)
+set_target_properties(libzlib PROPERTIES IMPORTED_LOCATION
+  ${distribution_DIR}/libzlib/lib/${ANDROID_ABI}/libz.a)
+
+add_library(libcrypto STATIC IMPORTED)
+set_target_properties(libcrypto PROPERTIES IMPORTED_LOCATION
+  ${distribution_DIR}/boringssl/lib/${ANDROID_ABI}/libcrypto.a)
+
+add_library(libssl STATIC IMPORTED)
+set_target_properties(libssl PROPERTIES IMPORTED_LOCATION
+  ${distribution_DIR}/boringssl/lib/${ANDROID_ABI}/libssl.a)
+
 # Creates and names a library, sets it as either STATIC
 # or SHARED, and provides the relative paths to its source code.
 # You can define multiple libraries, and CMake builds them for you.
@@ -43,8 +64,9 @@ find_library( # Sets the name of the path variable.
               # you want CMake to locate.
               log )
 
-            target_include_directories(native-lib PRIVATE
-  ${distribution_DIR}/include)
+                        target_include_directories(native-lib PRIVATE
+              ${distribution_DIR}/libgrpc/include
+              ${distribution_DIR}/libgrpc++/include)
 
 # Specifies libraries CMake should link to your target library. You
 # can link multiple libraries, such as libraries you define in this
@@ -52,7 +74,13 @@ find_library( # Sets the name of the path variable.
 
 target_link_libraries( # Specifies the target library.
                        native-lib
-                       libgrpc
+                       libgrpc++
+                                              libgrpc
+libzlib
+                                              libcares
+                                              libssl
+                                              libcrypto
+                                              libgpr # Order matters
                        # Links the target library to the log library
                        # included in the NDK.
                        ${log-lib} )
