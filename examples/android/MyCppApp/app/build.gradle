@@ -11,11 +11,15 @@ android {
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
             cmake {
+                //cppFlags "-llog -landroid"
 //                cppFlags "-v -frtti -fexceptions"
                 arguments '-DANDROID_STL=c++_static'
                 arguments '-Dprotobuf_BUILD_TESTS=OFF'
                 arguments '-V=1'
                 arguments '-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON'
+                arguments '-DRUN_HAVE_POSIX_REGEX=0'
+                arguments '-DRUN_HAVE_STD_REGEX=0'
+                arguments '-DHAVE_STEADY_CLOCK=0'
             }
         }
         ndk.abiFilters 'x86' //, 'x86_64', 'arm64-v8a'

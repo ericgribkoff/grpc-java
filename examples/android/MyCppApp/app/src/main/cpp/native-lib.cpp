@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <grpc++/grpc++.h>
+#include "src/core/lib/gpr/env.h"
 
 
 #include <grpc/support/log.h>
@@ -38,18 +39,19 @@ public:
         ClientContext context;
 
         // The actual RPC.
-//        Status status = stub_->SayHello(&context, request, &reply);
+        Status status = stub_->SayHello(&context, request, &reply);
 
-        return "blah";
+//        return "blah";
 
-//        // Act upon its status.
-//        if (status.ok()) {
-//            return reply.message();
-//        } else {
-//            std::cout << status.error_code() << ": " << status.error_message()
-//                      << std::endl;
-//            return "RPC failed";
-//        }
+        // Act upon its status.
+        if (status.ok()) {
+            return reply.message();
+        } else {
+            std::cout << status.error_code() << ": " << status.error_message()
+                      << std::endl;
+            //return "RPC failed";
+            return status.error_message();
+        }
     }
 
 private:
@@ -64,16 +66,28 @@ Java_com_example_ericgribkoff_mycppapp_MainActivity_stringFromJNI(
         JNIEnv *env,
         jobject /* this */) {
     std::string hello = "Hello from C++";
-    grpc::CreateChannel(
-              "localhost:50051", grpc::InsecureChannelCredentials());
-
+//    // Create a default SSL ChannelCredentials object.
+//    grpc::SslCredentialsOptions opts =
+//            {
+//                    "cert.pem",
+//                          "key",
+//                                "chain"
+//                                        };
+   gpr_setenv("GRPC_TRACE", "all");
+    gpr_setenv("GRPC_VERBOSITY", "debug");
+//    auto channel_creds = grpc::SslCredentials(opts);
+//    auto channel = grpc::CreateChannel(
+//              "grpc-test.sandbox.googleapis.com:443", channel_creds);
+//
+//    GreeterClient greeter(
+//        channel);
     GreeterClient greeter(grpc::CreateChannel(
-            "10.0.2.2:50051", grpc::InsecureChannelCredentials()));
+        "10.0.2.2:50051", grpc::InsecureChannelCredentials()));
     std::string user("world");
     std::string reply = greeter.SayHello(hello);
-//    //std::cout << "Greeter received: " << reply << std::endl;
-//    return env->NewStringUTF(reply.c_str());
+    //std::cout << "Greeter received: " << reply << std::endl;
+    return env->NewStringUTF(reply.c_str());
 
-    gpr_log(GPR_ERROR, "yo grpc");
-    return env->NewStringUTF(hello.c_str());
+//    gpr_log(GPR_ERROR, "yo grpc");
+//    return env->NewStringUTF(hello.c_str());
 }

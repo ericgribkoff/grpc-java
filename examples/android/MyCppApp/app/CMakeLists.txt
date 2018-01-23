@@ -9,57 +9,106 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 set(distribution_DIR ${CMAKE_SOURCE_DIR}/../)
 
-add_library(libgrpc STATIC IMPORTED)
-set_target_properties(libgrpc PROPERTIES IMPORTED_LOCATION
-  ${distribution_DIR}/libgrpc/lib/${ANDROID_ABI}/libgrpc.a)
+#add_library(libgrpc STATIC IMPORTED)
+#set_target_properties(libgrpc PROPERTIES IMPORTED_LOCATION
+#  ${distribution_DIR}/libgrpc/lib/${ANDROID_ABI}/libgrpc.a)
 
-add_library(libgrpc++ STATIC IMPORTED)
-set_target_properties(libgrpc++ PROPERTIES IMPORTED_LOCATION
-  ${distribution_DIR}/libgrpc++/lib/${ANDROID_ABI}/libgrpc++.a)
+#add_library(libgrpc++ STATIC IMPORTED)
+#set_target_properties(libgrpc++ PROPERTIES IMPORTED_LOCATION
+#  ${distribution_DIR}/libgrpc++/lib/${ANDROID_ABI}/libgrpc++.a)
 
-add_library(libgpr STATIC IMPORTED)
-set_target_properties(libgpr PROPERTIES IMPORTED_LOCATION
-  ${distribution_DIR}/libgpr/lib/${ANDROID_ABI}/libgpr.a)
+#add_library(libgpr STATIC IMPORTED)
+#set_target_properties(libgpr PROPERTIES IMPORTED_LOCATION
+#  ${distribution_DIR}/libgpr/lib/${ANDROID_ABI}/libgpr.a)
 
-add_library(libcares STATIC IMPORTED)
-set_target_properties(libcares PROPERTIES IMPORTED_LOCATION
-  ${distribution_DIR}/libcares/lib/${ANDROID_ABI}/libcares.a)
+#add_library(libcares STATIC IMPORTED)
+#set_target_properties(libcares PROPERTIES IMPORTED_LOCATION
+#  ${distribution_DIR}/libcares/lib/${ANDROID_ABI}/libcares.a)
 
-add_library(libzlib STATIC IMPORTED)
-set_target_properties(libzlib PROPERTIES IMPORTED_LOCATION
-  ${distribution_DIR}/libzlib/lib/${ANDROID_ABI}/libz.a)
+#add_library(libzlib STATIC IMPORTED)
+#set_target_properties(libzlib PROPERTIES IMPORTED_LOCATION
+#  ${distribution_DIR}/libzlib/lib/${ANDROID_ABI}/libz.a)
 
-add_library(libcrypto STATIC IMPORTED)
-set_target_properties(libcrypto PROPERTIES IMPORTED_LOCATION
-  ${distribution_DIR}/boringssl/lib/${ANDROID_ABI}/libcrypto.a)
+#add_library(libcrypto STATIC IMPORTED)
+#set_target_properties(libcrypto PROPERTIES IMPORTED_LOCATION
+#  ${distribution_DIR}/boringssl/lib/${ANDROID_ABI}/libcrypto.a)
 
-add_library(libssl STATIC IMPORTED)
-set_target_properties(libssl PROPERTIES IMPORTED_LOCATION
-  ${distribution_DIR}/boringssl/lib/${ANDROID_ABI}/libssl.a)
-
-
+#add_library(libssl STATIC IMPORTED)
+#set_target_properties(libssl PROPERTIES IMPORTED_LOCATION
+#  ${distribution_DIR}/boringssl/lib/${ANDROID_ABI}/libssl.a)
 
 
-# Works with add_subdirectory
-
-# Sets libprotobuf_src_DIR to the path of the target CMake project.
-set( libprotobuf_src_DIR ../protobuf/cmake )
+set( grpc_src_DIR ../grpc )
 
 # Sets lib_build_DIR to the path of the desired output directory.
-set( libprotobuf_build_DIR ../protobuf/outputs/${ANDROID_ABI} )
-#file(MAKE_DIRECTORY ${libprotobuf_build_DIR})
+set( grpc_build_DIR ../grpc/outputs/${ANDROID_ABI} )
+file(MAKE_DIRECTORY ${grpc_build_DIR})
 
 # Adds the CMakeLists.txt file located in the specified directory
 # as a build dependency.
 add_subdirectory( # Specifies the directory of the CMakeLists.txt file.
-                  ${libprotobuf_src_DIR}
+                  ${grpc_src_DIR}
 
                   # Specifies the directory for the build outputs.
-                 ${libprotobuf_build_DIR} )
-#include_directories
-include_directories(../protobuf/src)
-include_directories(${distribution_DIR}/libgrpc++/include)
-include_directories(${distribution_DIR}/libgrpc/include)
+                 ${grpc_build_DIR} )
+
+include_directories(${grpc_src_DIR}/include)
+
+add_library( libgrpc STATIC IMPORTED )
+set_target_properties( libgrpc PROPERTIES IMPORTED_LOCATION
+  ${grpc_build_DIR}/libgrpc.a )
+
+add_library( libgrpc++ STATIC IMPORTED )
+set_target_properties( libgrpc++ PROPERTIES IMPORTED_LOCATION
+  ${grpc_build_DIR}/libgrpc++.a )
+
+
+add_library( libgpr STATIC IMPORTED )
+set_target_properties( libgpr PROPERTIES IMPORTED_LOCATION
+  ${grpc_build_DIR}/libgpr.a )
+
+add_library(libcares STATIC IMPORTED)
+set_target_properties(libcares PROPERTIES IMPORTED_LOCATION
+  ${grpc_build_DIR}/third_party/cares/cares/lib/libcares.a)
+
+add_library(libzlib STATIC IMPORTED)
+set_target_properties(libzlib PROPERTIES IMPORTED_LOCATION
+  ${grpc_build_DIR}/third_party/zlib/libz.a)
+
+add_library(libcrypto STATIC IMPORTED)
+set_target_properties(libcrypto PROPERTIES IMPORTED_LOCATION
+  ${grpc_build_DIR}/third_party/boringssl/crypto/libcrypto.a)
+
+add_library(libssl STATIC IMPORTED)
+set_target_properties(libssl PROPERTIES IMPORTED_LOCATION
+  ${grpc_build_DIR}/third_party/boringssl/ssl/libssl.a)
+
+
+
+# Works with add_subdirectory
+# Can't build grpc plus protobuf and protobuf separately...just build via gRPC, or don't build with gRPC?
+
+
+# Sets libprotobuf_src_DIR to the path of the target CMake project.
+#set( libprotobuf_src_DIR ../protobuf/cmake )
+
+# Sets lib_build_DIR to the path of the desired output directory.
+#set( libprotobuf_build_DIR ../protobuf/outputs/${ANDROID_ABI} )
+#file(MAKE_DIRECTORY ${libprotobuf_build_DIR})
+
+# Adds the CMakeLists.txt file located in the specified directory
+# as a build dependency.
+#add_subdirectory( # Specifies the directory of the CMakeLists.txt file.
+#                  ${libprotobuf_src_DIR}
+
+                  # Specifies the directory for the build outputs.
+#                 ${libprotobuf_build_DIR} )
+
+#include_directories(../protobuf/src)
+
+#include_directories(${distribution_DIR}/libgrpc++/include)
+#include_directories(${distribution_DIR}/libgrpc/include)
+
 # For well-known .proto files distributed with protobuf
 #include_directories("../protobuf/src")
 
@@ -87,7 +136,7 @@ function(android_protobuf_generate_cpp srcs_var hdrs_var)
     add_custom_command(
       OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/protos/${fil_we}.pb.cc"
              "${CMAKE_CURRENT_BINARY_DIR}/protos/${fil_we}.pb.h"
-      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+      #WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
       COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}"
       COMMAND ${PROTOBUF_PROTOC_EXECUTABLE} -I${PROJECT_SOURCE_DIR}/protos --cpp_out    "${PROJECT_BINARY_DIR}/protos" ${abs_fil}
       COMMAND ${PROTOBUF_PROTOC_EXECUTABLE}
@@ -114,7 +163,7 @@ file(GLOB Caffe2_PROTOBUF_FILES "./protos/*.proto")
 android_protobuf_generate_cpp(Caffe2_PROTO_SRCS Caffe2_PROTO_HEADERS ${Caffe2_PROTOBUF_FILES})
 
 add_library(Caffe2_PROTO SHARED ${Caffe2_PROTO_HEADERS} ${Caffe2_PROTO_SRCS})
-target_link_libraries( Caffe2_PROTO libprotobuf libgrpc libgrpc++ android log)
+target_link_libraries( Caffe2_PROTO libprotobuf libgrpc++ android log) #libgrpc
 
 #install(FILES ${Caffe2_PROTO_HEADERS} DESTINATION include/caffe2/proto)
 
@@ -201,7 +250,8 @@ find_library( # Sets the name of the path variable.
               log )
 
 target_include_directories(native-lib PRIVATE
-              ${distribution_DIR}/libgrpc/include
+                ${grpc_src_DIR}
+              #${distribution_DIR}/libgrpc/include
 #              ${distribution_DIR}/libgrpc++/include
               ${Caffe2_PROTO_HEADERS})
 
@@ -215,7 +265,7 @@ target_link_libraries( # Specifies the target library.
                        native-lib
                        libgrpc++
                                               libgrpc
-libzlib
+                                              libzlib
                                               libcares
                                               libssl
                                               libcrypto
