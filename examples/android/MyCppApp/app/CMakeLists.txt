@@ -58,11 +58,14 @@ add_subdirectory( # Specifies the directory of the CMakeLists.txt file.
                  ${libprotobuf_build_DIR} )
 #include_directories
 include_directories(../protobuf/src)
+include_directories(${distribution_DIR}/libgrpc++/include)
+include_directories(${distribution_DIR}/libgrpc/include)
 # For well-known .proto files distributed with protobuf
 #include_directories("../protobuf/src")
 
 # Use host version of protoc, not cross-compiled version
 set(PROTOBUF_PROTOC_EXECUTABLE /usr/local/bin/protoc)
+set(GRPC_CPP_PLUGIN_EXECUTABLE /usr/local/bin/grpc_cpp_plugin)
 
 function(android_protobuf_generate_cpp srcs_var hdrs_var)
   if(NOT ARGN)
@@ -78,6 +81,8 @@ function(android_protobuf_generate_cpp srcs_var hdrs_var)
 
     list(APPEND ${srcs_var} "${CMAKE_CURRENT_BINARY_DIR}/protos/${fil_we}.pb.cc")
     list(APPEND ${hdrs_var} "${CMAKE_CURRENT_BINARY_DIR}/protos/${fil_we}.pb.h")
+    list(APPEND ${srcs_var} "${CMAKE_CURRENT_BINARY_DIR}/protos/${fil_we}.grpc.pb.cc")
+    list(APPEND ${hdrs_var} "${CMAKE_CURRENT_BINARY_DIR}/protos/${fil_we}.grpc.pb.h")
 
     add_custom_command(
       OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/protos/${fil_we}.pb.cc"
@@ -85,7 +90,10 @@ function(android_protobuf_generate_cpp srcs_var hdrs_var)
       WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
       COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}"
       COMMAND ${PROTOBUF_PROTOC_EXECUTABLE} -I${PROJECT_SOURCE_DIR}/protos --cpp_out    "${PROJECT_BINARY_DIR}/protos" ${abs_fil}
-      #COMMAND ${PROTOBUF_PROTOC_EXECUTABLE} -I${PROJECT_SOURCE_DIR}/protos --python_out "${PROJECT_BINARY_DIR}/protos" ${abs_fil}
+      COMMAND ${PROTOBUF_PROTOC_EXECUTABLE}
+            ARGS --grpc_out "${PROJECT_BINARY_DIR}/protos" -I ${PROJECT_SOURCE_DIR}/protos
+              --plugin=protoc-gen-grpc=${GRPC_CPP_PLUGIN_EXECUTABLE}
+              "${abs_fil}"
       DEPENDS ${PROTOBUF_PROTOC_EXECUTABLE} ${abs_fil}
       COMMENT "Running C++ protocol buffer compiler on ${fil}" VERBATIM )
   endforeach()
@@ -106,7 +114,7 @@ file(GLOB Caffe2_PROTOBUF_FILES "./protos/*.proto")
 android_protobuf_generate_cpp(Caffe2_PROTO_SRCS Caffe2_PROTO_HEADERS ${Caffe2_PROTOBUF_FILES})
 
 add_library(Caffe2_PROTO SHARED ${Caffe2_PROTO_HEADERS} ${Caffe2_PROTO_SRCS})
-target_link_libraries( Caffe2_PROTO libprotobuf android log)
+target_link_libraries( Caffe2_PROTO libprotobuf libgrpc libgrpc++ android log)
 
 #install(FILES ${Caffe2_PROTO_HEADERS} DESTINATION include/caffe2/proto)
 
@@ -115,7 +123,7 @@ target_link_libraries( Caffe2_PROTO libprotobuf android log)
 #      COMMAND bash ${libprotobuf_build_DIR}/protoc
 #      #ARGS ${hw_grpc_srcs}
 #      #ARGS --grpc_out "${CMAKE_CURRENT_BINARY_DIR}" -I "${hw_proto_path}"
-#        #--plugin=protoc-gen-grpc="${gRPC_CPP_PLUGIN_EXECUTABLE}"
+#        #--plugin=protoc-gen-grpc="${GRPC_CPP_PLUGIN_EXECUTABLE}"
 #      #  "${hw_proto}"
 #      DEPENDS ${libprotobuf_build_DIR}
 #      )
@@ -166,6 +174,8 @@ set( Protobuf_INCLUDE_DIR ${libprotobuf_src_DIR})
 #include(${libprotobuf_src_DIR}/protobuf-module.cmake.in)
 # Generated sources
 
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/protos/)
+
 add_library( # Sets the name of the library.
              native-lib
 
@@ -190,10 +200,10 @@ find_library( # Sets the name of the path variable.
               # you want CMake to locate.
               log )
 
-
 target_include_directories(native-lib PRIVATE
               ${distribution_DIR}/libgrpc/include
-              ${distribution_DIR}/libgrpc++/include)
+#              ${distribution_DIR}/libgrpc++/include
+              ${Caffe2_PROTO_HEADERS})
 
 # Specifies libraries CMake should link to your target library. You
 # can link multiple libraries, such as libraries you define in this
