@@ -37,31 +37,7 @@ add_library(libssl STATIC IMPORTED)
 set_target_properties(libssl PROPERTIES IMPORTED_LOCATION
   ${distribution_DIR}/boringssl/lib/${ANDROID_ABI}/libssl.a)
 
-# Creates and names a library, sets it as either STATIC
-# or SHARED, and provides the relative paths to its source code.
-# You can define multiple libraries, and CMake builds them for you.
-# Gradle automatically packages shared libraries with your APK.
 
-#add_library(libprotobuf STATIC IMPORTED)
-#set_target_properties(libprotobuf PROPERTIES IMPORTED_LOCATION
-#  ${distribution_DIR}/libprotobuf/lib/${ANDROID_ABI}/libprotobuf.a)
-
-
-
-# Sets libprotobuf_src_DIR to the path of the target CMake project.
-#set( libgmock_src_DIR ../gmock )
-#
-# Sets lib_build_DIR to the path of the desired output directory.
-#set( libgmock_build_DIR ../gmock/outputs )
-#file(MAKE_DIRECTORY ${libgmock_build_DIR})
-#
-# Adds the CMakeLists.txt file located in the specified directory
-# as a build dependency.
-#add_subdirectory( # Specifies the directory of the CMakeLists.txt file.
-#                  ${libgmock_src_DIR}
-#
-#                  # Specifies the directory for the build outputs.
-#                  ${libgmock_build_DIR} )
 
 
 # Works with add_subdirectory
@@ -71,7 +47,7 @@ set( libprotobuf_src_DIR ../protobuf/cmake )
 
 # Sets lib_build_DIR to the path of the desired output directory.
 set( libprotobuf_build_DIR ../protobuf/outputs/${ANDROID_ABI} )
-file(MAKE_DIRECTORY ${libprotobuf_build_DIR})
+#file(MAKE_DIRECTORY ${libprotobuf_build_DIR})
 
 # Adds the CMakeLists.txt file located in the specified directory
 # as a build dependency.
@@ -79,31 +55,77 @@ add_subdirectory( # Specifies the directory of the CMakeLists.txt file.
                   ${libprotobuf_src_DIR}
 
                   # Specifies the directory for the build outputs.
-                  ${libprotobuf_build_DIR} )
+                 ${libprotobuf_build_DIR} )
+#include_directories
+include_directories(../protobuf/src)
+# For well-known .proto files distributed with protobuf
+#include_directories("../protobuf/src")
+
+# Use host version of protoc, not cross-compiled version
+set(PROTOBUF_PROTOC_EXECUTABLE /usr/local/bin/protoc)
+
+function(android_protobuf_generate_cpp srcs_var hdrs_var)
+  if(NOT ARGN)
+    message(SEND_ERROR "Error: android_protobuf_generate_cpp() called without any proto files")
+    return()
+  endif()
+
+  set(${srcs_var})
+  set(${hdrs_var})
+  foreach(fil ${ARGN})
+    get_filename_component(abs_fil ${fil} ABSOLUTE)
+    get_filename_component(fil_we ${fil} NAME_WE)
+
+    list(APPEND ${srcs_var} "${CMAKE_CURRENT_BINARY_DIR}/protos/${fil_we}.pb.cc")
+    list(APPEND ${hdrs_var} "${CMAKE_CURRENT_BINARY_DIR}/protos/${fil_we}.pb.h")
+
+    add_custom_command(
+      OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/protos/${fil_we}.pb.cc"
+             "${CMAKE_CURRENT_BINARY_DIR}/protos/${fil_we}.pb.h"
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}"
+      COMMAND ${PROTOBUF_PROTOC_EXECUTABLE} -I${PROJECT_SOURCE_DIR}/protos --cpp_out    "${PROJECT_BINARY_DIR}/protos" ${abs_fil}
+      #COMMAND ${PROTOBUF_PROTOC_EXECUTABLE} -I${PROJECT_SOURCE_DIR}/protos --python_out "${PROJECT_BINARY_DIR}/protos" ${abs_fil}
+      DEPENDS ${PROTOBUF_PROTOC_EXECUTABLE} ${abs_fil}
+      COMMENT "Running C++ protocol buffer compiler on ${fil}" VERBATIM )
+  endforeach()
+
+  set_source_files_properties(${${srcs_var}} ${${hdrs_var}} PROPERTIES GENERATED TRUE)
+  set(${srcs_var} ${${srcs_var}} PARENT_SCOPE)
+  set(${hdrs_var} ${${hdrs_var}} PARENT_SCOPE)
+endfunction()
 
 
-get_filename_component(hw_proto "../protos/helloworld.proto" ABSOLUTE)
-get_filename_component(hw_proto_path "${hw_proto}" PATH)
+#get_filename_component(hw_proto "../protos/helloworld.proto" ABSOLUTE)
+#get_filename_component(hw_proto_path "${hw_proto}" PATH)
+#set(hw_grpc_srcs "${CMAKE_CURRENT_BINARY_DIR}/helloworld.grpc.pb.cc")
+#set(hw_grpc_hdrs "${CMAKE_CURRENT_BINARY_DIR}/helloworld.grpc.pb.h")
 
-set(hw_grpc_srcs "${CMAKE_CURRENT_BINARY_DIR}/helloworld.grpc.pb.cc")
-set(hw_grpc_hdrs "${CMAKE_CURRENT_BINARY_DIR}/helloworld.grpc.pb.h")
+file(GLOB Caffe2_PROTOBUF_FILES "./protos/*.proto")
 
-add_custom_command(
-      OUTPUT "some_file4" # "${hw_grpc_hdrs}"
-      COMMAND bash ${libprotobuf_build_DIR}/protoc
-      #ARGS ${hw_grpc_srcs}
-      #ARGS --grpc_out "${CMAKE_CURRENT_BINARY_DIR}" -I "${hw_proto_path}"
-        #--plugin=protoc-gen-grpc="${gRPC_CPP_PLUGIN_EXECUTABLE}"
-      #  "${hw_proto}"
-      DEPENDS ${libprotobuf_build_DIR}
-      )
-add_custom_target(
-  some_file3 ALL
-  DEPENDS some_file4
-  )
+android_protobuf_generate_cpp(Caffe2_PROTO_SRCS Caffe2_PROTO_HEADERS ${Caffe2_PROTOBUF_FILES})
+
+add_library(Caffe2_PROTO SHARED ${Caffe2_PROTO_HEADERS} ${Caffe2_PROTO_SRCS})
+target_link_libraries( Caffe2_PROTO libprotobuf android log)
+
+#install(FILES ${Caffe2_PROTO_HEADERS} DESTINATION include/caffe2/proto)
+
+#add_custom_command(
+#      OUTPUT "some_file4" # "${hw_grpc_hdrs}"
+#      COMMAND bash ${libprotobuf_build_DIR}/protoc
+#      #ARGS ${hw_grpc_srcs}
+#      #ARGS --grpc_out "${CMAKE_CURRENT_BINARY_DIR}" -I "${hw_proto_path}"
+#        #--plugin=protoc-gen-grpc="${gRPC_CPP_PLUGIN_EXECUTABLE}"
+#      #  "${hw_proto}"
+#      DEPENDS ${libprotobuf_build_DIR}
+#      )
+#add_custom_target(
+#  some_file3 ALL
+#  DEPENDS some_file4
+#  )
 #add_custom_target(some_file2 DEPENDS some_file3)
 
-include_directories("${CMAKE_CURRENT_BINARY_DIR}")
+#include_directories("${CMAKE_CURRENT_BINARY_DIR}")
 
 #set ( Protobuf_SRC_ROOT_FOLDER ${libprotobuf_src_DIR})
 #set(Protobuf_USE_STATIC_LIBS ON)
@@ -187,13 +209,11 @@ libzlib
                                               libcares
                                               libssl
                                               libcrypto
-
-                                              #libprotobuf libprotobuf-lite libprotoc
+Caffe2_PROTO
+                                              libprotobuf # libprotobuf-lite
                                               libgpr # Order matters
                        # Links the target library to the log library
                        # included in the NDK.
                        ${log-lib})
 
-add_dependencies( native-lib "some_file3")
-
-#protobuf_generate_cpp(hw_proto_srcs hw_proto_hdrs "${hw_proto}")
+#add_dependencies( native-lib "some_file3")
