@@ -64,26 +64,37 @@ JNIEXPORT jstring
 JNICALL
 Java_com_example_ericgribkoff_mycppapp_MainActivity_stringFromJNI(
         JNIEnv *env,
-        jobject /* this */) {
+        jobject /* this */, jstring certRaw) {
+
+    const jsize len = env->GetStringUTFLength(certRaw);
+    const char* certChars = env->GetStringUTFChars(certRaw, (jboolean *)0);
+
+    std::string cert(certChars, len);
+
+
     std::string hello = "Hello from C++";
-//    // Create a default SSL ChannelCredentials object.
-//    grpc::SslCredentialsOptions opts =
+    // Create a default SSL ChannelCredentials object.
+    grpc::SslCredentialsOptions opts = grpc::SslCredentialsOptions();
 //            {
-//                    "cert.pem",
-//                          "key",
-//                                "chain"
+//                    "",
+//                          "",
+//                                cert
 //                                        };
+    gpr_setenv("GRPC_DEFAULT_SSL_ROOTS_FILE_PATH", cert.c_str());
    gpr_setenv("GRPC_TRACE", "all");
     gpr_setenv("GRPC_VERBOSITY", "debug");
-//    auto channel_creds = grpc::SslCredentials(opts);
-//    auto channel = grpc::CreateChannel(
-//              "grpc-test.sandbox.googleapis.com:443", channel_creds);
-//
-//    GreeterClient greeter(
-//        channel);
-    GreeterClient greeter(grpc::CreateChannel(
-        "10.0.2.2:50051", grpc::InsecureChannelCredentials()));
-    std::string user("world");
+
+    gpr_log(GPR_ERROR, "cert: %s", cert.c_str());
+
+    auto channel_creds = grpc::SslCredentials(opts);
+    auto channel = grpc::CreateChannel(
+              "grpc-test.sandbox.googleapis.com", channel_creds);
+
+    GreeterClient greeter(
+        channel);
+//    GreeterClient greeter(grpc::CreateChannel(
+//        "10.0.2.2:50051", grpc::InsecureChannelCredentials()));
+//    std::string user("world");
     std::string reply = greeter.SayHello(hello);
     //std::cout << "Greeter received: " << reply << std::endl;
     return env->NewStringUTF(reply.c_str());
