@@ -1,5 +1,6 @@
 package com.example.ericgribkoff.mycppapp;
 
+import android.content.res.AssetManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
@@ -106,16 +107,47 @@ public class MainActivity extends AppCompatActivity {
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-        new RetrieveFileTask().execute();
+//        new RetrieveFileTask().execute();
 
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
+                AssetManager assetManager = getAssets();
+                FileOutputStream fileOutput = null;
+                InputStream inputStream = null;
+                File file = new File(MainActivity.this.getFilesDir(), "certs.pem");
+                try {
+                    fileOutput = new FileOutputStream(file);
+                    inputStream = assetManager.open("roots.pem");
+
+                    byte[] buffer = new byte[1024];
+                    int bufferLength;
+                    while ( (bufferLength = inputStream.read(buffer)) > 0 ) {
+                        fileOutput.write(buffer, 0, bufferLength);
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                } finally {
+                    if (fileOutput != null) {
+                        try {
+                            fileOutput.close();
+                        } catch (IOException e) {
+                        }
+                    }
+                    if (inputStream != null) {
+                        try {
+                            inputStream.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+
 
                 // Example of a call to a native method
                 TextView tv = (TextView) findViewById(R.id.sample_text);
-                tv.setText(stringFromJNI(cert));
+                tv.setText(stringFromJNI(file.getAbsolutePath()));
                 Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
                         .setAction("Action", null).show();
             }

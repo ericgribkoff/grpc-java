@@ -272,6 +272,7 @@ target_link_libraries( # Specifies the target library.
 Caffe2_PROTO
                                               libprotobuf # libprotobuf-lite
                                               libgpr # Order matters
+                      android
                        # Links the target library to the log library
                        # included in the NDK.
                        ${log-lib})

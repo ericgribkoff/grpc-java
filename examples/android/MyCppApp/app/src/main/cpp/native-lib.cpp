@@ -9,6 +9,8 @@
 
 #include <grpc/support/log.h>
 
+//#include <android/asset_manager.h>
+
 #include "helloworld.grpc.pb.h"
 
 using grpc::Channel;
@@ -70,6 +72,14 @@ Java_com_example_ericgribkoff_mycppapp_MainActivity_stringFromJNI(
     const char* certChars = env->GetStringUTFChars(certRaw, (jboolean *)0);
 
     std::string cert(certChars, len);
+
+
+//    AAssetManager* mgr = AAssetManager_fromJava(env, assetManager);
+//    AAsset* asset = AAssetManager_open(mgr, "roots.pem", AASSET_MODE_UNKNOWN);
+//    long size = AAsset_getLength(asset);
+//    char* buffer = (char*) malloc (sizeof(char)*size);
+//    AAsset_read (asset,buffer,size);
+//    AAsset_close(asset);
 
 
     std::string hello = "Hello from C++";
