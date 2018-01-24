@@ -12,6 +12,8 @@
 //#include <android/asset_manager.h>
 
 #include "helloworld.grpc.pb.h"
+#include "messages.pb.h"
+#include "test.grpc.pb.h"
 
 using grpc::Channel;
 using grpc::ClientContext;
@@ -19,6 +21,11 @@ using grpc::Status;
 using helloworld::HelloRequest;
 using helloworld::HelloReply;
 using helloworld::Greeter;
+
+using grpc::testing::TestService;
+using grpc::testing::Empty;
+using grpc::testing::SimpleRequest;
+using grpc::testing::SimpleResponse;
 
 class GreeterClient {
 public:
@@ -58,6 +65,84 @@ public:
 
 private:
     std::unique_ptr<Greeter::Stub> stub_;
+};
+
+class InteropClient {
+public:
+    InteropClient(std::shared_ptr<Channel> channel)
+            : stub_(TestService::NewStub(channel)) {}
+
+    // Assembles the client's payload, sends it and presents the response back
+    // from the server.
+    std::string doEmptyUnary() {
+        // Data we are sending to the server.
+        Empty request;
+
+
+        // Container for the data we expect from the server.
+        Empty reply;
+
+        // Context for the client. It could be used to convey extra information to
+        // the server and/or tweak certain RPC behaviors.
+        ClientContext context;
+
+        // The actual RPC.
+        Status status = stub_->EmptyCall(&context, request, &reply);
+
+//        return "blah";
+
+        // Act upon its status.
+        if (status.ok()) {
+            return "empty unary succeeded";
+        } else {
+            std::cout << status.error_code() << ": " << status.error_message()
+                      << std::endl;
+            //return "RPC failed";
+            return status.error_message();
+        }
+    }
+
+    std::string doLargeUnary() {
+        // Data we are sending to the server.
+        SimpleRequest request;
+        request.set_response_size(1000);
+
+        grpc::string payload(1212, '\0');
+        request.mutable_payload()->set_body(payload.c_str(), 1212);
+
+        // Container for the data we expect from the server.
+        SimpleResponse reply;
+
+        // Context for the client. It could be used to convey extra information to
+        // the server and/or tweak certain RPC behaviors.
+        ClientContext context;
+
+        // The actual RPC.
+        Status status = stub_->UnaryCall(&context, request, &reply);
+
+//        return "blah";
+
+        // Act upon its status.
+        if (status.ok()) {
+            std::string s = reply.DebugString();
+//            if (reply.SerializeToString(&s)) {
+//                return "serialize true";
+//            } else {
+//                return "serialize false";
+//            }
+            gpr_log(GPR_ERROR, "to string: %s", s.c_str());
+            return "large unary succeeded";
+        } else {
+            std::cout << status.error_code() << ": " << status.error_message()
+                      << std::endl;
+            //return "RPC failed";
+            return status.error_message();
+        }
+    }
+
+
+private:
+    std::unique_ptr<TestService::Stub> stub_;
 };
 
 extern "C"
@@ -100,13 +185,18 @@ Java_com_example_ericgribkoff_mycppapp_MainActivity_stringFromJNI(
     auto channel = grpc::CreateChannel(
               "grpc-test.sandbox.googleapis.com", channel_creds);
 
-    GreeterClient greeter(
-        channel);
-//    GreeterClient greeter(grpc::CreateChannel(
-//        "10.0.2.2:50051", grpc::InsecureChannelCredentials()));
-//    std::string user("world");
-    std::string reply = greeter.SayHello(hello);
-    //std::cout << "Greeter received: " << reply << std::endl;
+//    GreeterClient greeter(
+//        channel);
+////    GreeterClient greeter(grpc::CreateChannel(
+////        "10.0.2.2:50051", grpc::InsecureChannelCredentials()));
+////    std::string user("world");
+//    std::string reply = greeter.SayHello(hello);
+//    //std::cout << "Greeter received: " << reply << std::endl;
+
+    InteropClient interopClient(channel);
+    std::string reply = interopClient.doLargeUnary();
+
+
     return env->NewStringUTF(reply.c_str());
 
 //    gpr_log(GPR_ERROR, "yo grpc");
