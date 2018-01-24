@@ -100,6 +100,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
+    class RunServerTask extends AsyncTask<Void, Void, Void> {
+
+        @Override
+        protected Void doInBackground(Void... voids) {
+            startServer();
+            return null;
+        }
+    }
+
+
         @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -144,6 +154,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
 
+                new RunServerTask().execute();
 
                 // Example of a call to a native method
                 TextView tv = (TextView) findViewById(R.id.sample_text);
@@ -184,4 +195,7 @@ public class MainActivity extends AppCompatActivity {
      * which is packaged with this application.
      */
     public native String stringFromJNI(String cert);
+
+
+    public native void startServer();
 }
