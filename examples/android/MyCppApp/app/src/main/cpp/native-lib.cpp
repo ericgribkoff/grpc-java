@@ -1,5 +1,6 @@
 #include <jni.h>
 
+#include <atomic>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -31,6 +32,9 @@ using grpc::Server;
 using grpc::ServerBuilder;
 using grpc::ServerContext;
 
+
+std::atomic<bool> stop_server(false);
+
 // Logic and data behind the server's behavior.
 class GreeterServiceImpl final : public Greeter::Service {
     Status SayHello(ServerContext* context, const HelloRequest* request,
@@ -42,7 +46,7 @@ class GreeterServiceImpl final : public Greeter::Service {
 };
 
 //std::unique_ptr<Server> StartServer() {
-void StartServer() {
+void StartServer(JNIEnv *env, jobject obj, jmethodID mid) {
     std::string server_address("0.0.0.0:50051");
     GreeterServiceImpl service;
 
@@ -59,7 +63,17 @@ void StartServer() {
 //    return server;
 //    // Wait for the server to shutdown. Note that some other thread must be
 //    // responsible for shutting down the server for this call to ever return.
-    server->Wait();
+//    server->Wait();
+    while(!stop_server.load()) {
+        jboolean isCancelled = env->CallBooleanMethod(obj, mid);
+        if (isCancelled == JNI_TRUE) {
+            gpr_log(GPR_ERROR, "cancelled");
+            stop_server = true;
+        } else {
+            gpr_log(GPR_ERROR, "not cancelled");
+        }
+    }
+    gpr_log(GPR_ERROR, "server stopped!");
 }
 
 
@@ -222,14 +236,14 @@ Java_com_example_ericgribkoff_mycppapp_MainActivity_stringFromJNI(
 
 //    GreeterClient greeter(
 //        channel);
-////    GreeterClient greeter(grpc::CreateChannel(
-////        "10.0.2.2:50051", grpc::InsecureChannelCredentials()));
-////    std::string user("world");
-//    std::string reply = greeter.SayHello(hello);
-//    //std::cout << "Greeter received: " << reply << std::endl;
+    GreeterClient greeter(grpc::CreateChannel(
+        "10.0.2.2:50051", grpc::InsecureChannelCredentials()));
+    std::string user("myself on my own server");
+    std::string reply = greeter.SayHello(user);
+    //std::cout << "Greeter received: " << reply << std::endl;
 
-    InteropClient interopClient(channel);
-    std::string reply = interopClient.doLargeUnary();
+//    InteropClient interopClient(channel);
+//    std::string reply = interopClient.doLargeUnary();
 
 
 //    RunServer();
@@ -244,8 +258,23 @@ extern "C"
 JNIEXPORT void
 JNICALL
 Java_com_example_ericgribkoff_mycppapp_MainActivity_startServer(
-        JNIEnv *env, jobject /* this */) {
-    StartServer();
+        JNIEnv *env, jobject obj /* this */) {
+    gpr_setenv("GRPC_TRACE", "all");
+    gpr_setenv("GRPC_VERBOSITY", "debug");
+
+    jclass cls = env->GetObjectClass(obj);
+    jmethodID mid = env->GetMethodID(cls, "isRunServerTaskCancelled", "()Z");
+    if (mid == 0) {
+        gpr_log(GPR_ERROR, "java method not found");
+    }
+    jboolean isCancelled = env->CallBooleanMethod(obj, mid);
+    if (isCancelled == JNI_TRUE) {
+        gpr_log(GPR_ERROR, "cancelled");
+    } else {
+        gpr_log(GPR_ERROR, "not cancelled");
+    }
+
+    StartServer(env, obj, mid);
 //    std::unique_ptr<Server> server = StartServer();
 //
 //    jclass thread = env->FindClass("java/lang/Thread");
@@ -259,4 +288,13 @@ Java_com_example_ericgribkoff_mycppapp_MainActivity_startServer(
 //            server.get()->Shutdown();
 //        }
 //    }
+}
+
+
+extern "C"
+JNIEXPORT void
+JNICALL
+Java_com_example_ericgribkoff_mycppapp_MainActivity_stopServer() {
+    stop_server = true;
+    gpr_log(GPR_ERROR, "set stop_server flag to true");
 }

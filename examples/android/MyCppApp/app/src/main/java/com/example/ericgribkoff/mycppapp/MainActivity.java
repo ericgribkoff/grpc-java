@@ -4,6 +4,7 @@ import android.content.res.AssetManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
+import android.widget.Button;
 import android.widget.TextView;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
@@ -107,10 +108,39 @@ public class MainActivity extends AppCompatActivity {
             startServer();
             return null;
         }
-    }
-
 
         @Override
+        protected void onCancelled(Void result) {
+            stopServer();
+        }
+    }
+
+    private RunServerTask runServerTask;
+
+    public boolean isRunServerTaskCancelled() {
+        if (runServerTask != null) {
+            return runServerTask.isCancelled();
+        }
+        return false;
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (runServerTask != null) {
+            runServerTask.cancel(true);
+            runServerTask = null;
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        runServerTask = new RunServerTask();
+        runServerTask.execute();
+    }
+
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
@@ -118,6 +148,15 @@ public class MainActivity extends AppCompatActivity {
         setSupportActionBar(toolbar);
 
 //        new RetrieveFileTask().execute();
+
+
+        Button stopServerButton = (Button) findViewById(R.id.stop_server);
+        stopServerButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                stopServer();
+            }
+        });
 
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
         fab.setOnClickListener(new View.OnClickListener() {
@@ -154,7 +193,6 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
 
-                new RunServerTask().execute();
 
                 // Example of a call to a native method
                 TextView tv = (TextView) findViewById(R.id.sample_text);
@@ -198,4 +236,6 @@ public class MainActivity extends AppCompatActivity {
 
 
     public native void startServer();
+
+    public native void stopServer();
 }
