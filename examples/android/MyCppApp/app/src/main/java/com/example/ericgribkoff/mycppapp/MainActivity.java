@@ -111,7 +111,7 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         protected void onCancelled(Void result) {
-            stopServer();
+            System.out.println("onCancelled invoked");
         }
     }
 
@@ -137,7 +137,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         runServerTask = new RunServerTask();
-        runServerTask.execute();
+        //runServerTask.execute();
     }
 
     @Override

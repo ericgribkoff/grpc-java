@@ -116,7 +116,11 @@ set_target_properties(libssl PROPERTIES IMPORTED_LOCATION
 set(PROTOBUF_PROTOC_EXECUTABLE /usr/local/bin/protoc)
 set(GRPC_CPP_PLUGIN_EXECUTABLE /usr/local/bin/grpc_cpp_plugin)
 
-function(android_protobuf_generate_cpp srcs_var hdrs_var)
+set(GRPC_PROTO_GENS_DIR ${CMAKE_BINARY_DIR}/gens)
+file(MAKE_DIRECTORY ${GRPC_PROTO_GENS_DIR})
+include_directories(${GRPC_PROTO_GENS_DIR})
+
+function(android_protobuf_generate_cpp srcs_var hdrs_var include_root)
   if(NOT ARGN)
     message(SEND_ERROR "Error: android_protobuf_generate_cpp() called without any proto files")
     return()
@@ -124,27 +128,55 @@ function(android_protobuf_generate_cpp srcs_var hdrs_var)
 
   set(${srcs_var})
   set(${hdrs_var})
-  foreach(fil ${ARGN})
-    get_filename_component(abs_fil ${fil} ABSOLUTE)
-    get_filename_component(fil_we ${fil} NAME_WE)
+  set(PROTOBUF_INCLUDE_PATH -I ${include_root} ) #-I ${_gRPC_PROTOBUF_WELLKNOWN_INCLUDE_DIR})
+  foreach(FIL ${ARGN})
+    get_filename_component(ABS_FIL ${FIL} ABSOLUTE)
+    get_filename_component(FIL_WE ${FIL} NAME_WE)
+    file(RELATIVE_PATH REL_FIL ${CMAKE_CURRENT_SOURCE_DIR}/${include_root} ${ABS_FIL})
+    get_filename_component(REL_DIR ${REL_FIL} DIRECTORY)
+    set(RELFIL_WE "${REL_DIR}/${FIL_WE}")
 
-    list(APPEND ${srcs_var} "${CMAKE_CURRENT_BINARY_DIR}/protos/${fil_we}.pb.cc")
-    list(APPEND ${hdrs_var} "${CMAKE_CURRENT_BINARY_DIR}/protos/${fil_we}.pb.h")
-    list(APPEND ${srcs_var} "${CMAKE_CURRENT_BINARY_DIR}/protos/${fil_we}.grpc.pb.cc")
-    list(APPEND ${hdrs_var} "${CMAKE_CURRENT_BINARY_DIR}/protos/${fil_we}.grpc.pb.h")
+    #get_filename_component(abs_fil ${fil} ABSOLUTE)
+    #get_filename_component(fil_we ${fil} NAME_WE)
+
+    list(APPEND ${srcs_var} "${GRPC_PROTO_GENS_DIR}/${RELFIL_WE}.pb.cc")
+    list(APPEND ${hdrs_var} "${GRPC_PROTO_GENS_DIR}/${RELFIL_WE}.pb.h")
+    list(APPEND ${srcs_var} "${GRPC_PROTO_GENS_DIR}/${RELFIL_WE}.grpc.pb.cc")
+    list(APPEND ${hdrs_var} "${GRPC_PROTO_GENS_DIR}/${RELFIL_WE}.grpc.pb.h")
 
     add_custom_command(
-      OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/protos/${fil_we}.pb.cc"
-             "${CMAKE_CURRENT_BINARY_DIR}/protos/${fil_we}.pb.h"
-      #WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-      COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}"
-      COMMAND ${PROTOBUF_PROTOC_EXECUTABLE} -I${PROJECT_SOURCE_DIR}/protos --cpp_out    "${PROJECT_BINARY_DIR}/protos" ${abs_fil}
+      OUTPUT "${GRPC_PROTO_GENS_DIR}/${RELFIL_WE}.grpc.pb.cc"
+             "${GRPC_PROTO_GENS_DIR}/${RELFIL_WE}.grpc.pb.h"
+             "${GRPC_PROTO_GENS_DIR}/${RELFIL_WE}.pb.cc"
+             "${GRPC_PROTO_GENS_DIR}/${RELFIL_WE}.pb.h"
       COMMAND ${PROTOBUF_PROTOC_EXECUTABLE}
-            ARGS --grpc_out "${PROJECT_BINARY_DIR}/protos" -I ${PROJECT_SOURCE_DIR}/protos
-              --plugin=protoc-gen-grpc=${GRPC_CPP_PLUGIN_EXECUTABLE}
-              "${abs_fil}"
-      DEPENDS ${PROTOBUF_PROTOC_EXECUTABLE} ${abs_fil}
-      COMMENT "Running C++ protocol buffer compiler on ${fil}" VERBATIM )
+      ARGS --grpc_out=${GRPC_PROTO_GENS_DIR}
+          --cpp_out=${GRPC_PROTO_GENS_DIR}
+          --plugin=protoc-gen-grpc=${GRPC_CPP_PLUGIN_EXECUTABLE}
+          ${PROTOBUF_INCLUDE_PATH}
+          ${REL_FIL}
+          #${ABS_FIL}
+          #         ${REL_FIL}
+          #                    --FIL ${FIL}
+          #                    --ABS_FIL ${ABS_FIL}
+          #                    --FIL_WE ${FIL_WE}
+          #                    --REL_FIL ${REL_FIL}
+          #                    --REL_DIR ${REL_DIR}
+          #                    --RELFIL_WE ${RELFIL_WE}
+          #                    --CMAKE_CURRENT_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}
+          #                    --CMAKE_CURRENT_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+      #OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/protos/${fil_we}.pb.cc"
+             #"${CMAKE_CURRENT_BINARY_DIR}/protos/${fil_we}.pb.h"
+      #WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+      #COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}"
+      #COMMAND ${PROTOBUF_PROTOC_EXECUTABLE} -I${PROJECT_SOURCE_DIR}/protos --cpp_out    "${PROJECT_BINARY_DIR}/protos" ${abs_fil}
+      #COMMAND ${PROTOBUF_PROTOC_EXECUTABLE}
+      #      ARGS --grpc_out "${PROJECT_BINARY_DIR}/protos" -I ${PROJECT_SOURCE_DIR}/protos
+      #        --plugin=protoc-gen-grpc=${GRPC_CPP_PLUGIN_EXECUTABLE}
+      #        "${abs_fil}"
+      DEPENDS ${PROTOBUF_PROTOC_EXECUTABLE} ${GRPC_CPP_PLUGIN_EXECUTABLE} ${ABS_FIL}
+      COMMENT "Running C++ gRPC protocol buffer compiler on ${fil}" VERBATIM )
   endforeach()
 
   set_source_files_properties(${${srcs_var}} ${${hdrs_var}} PROPERTIES GENERATED TRUE)
@@ -158,12 +190,36 @@ endfunction()
 #set(hw_grpc_srcs "${CMAKE_CURRENT_BINARY_DIR}/helloworld.grpc.pb.cc")
 #set(hw_grpc_hdrs "${CMAKE_CURRENT_BINARY_DIR}/helloworld.grpc.pb.h")
 
-file(GLOB Caffe2_PROTOBUF_FILES "./protos/*.proto")
+#file(GLOB Caffe2_PROTOBUF_FILES "./protos/*.proto")
 
-android_protobuf_generate_cpp(Caffe2_PROTO_SRCS Caffe2_PROTO_HEADERS ${Caffe2_PROTOBUF_FILES})
+android_protobuf_generate_cpp(Caffe2_PROTO_SRCS Caffe2_PROTO_HEADERS ./protos ./protos/helloworld.proto)
 
 add_library(Caffe2_PROTO SHARED ${Caffe2_PROTO_HEADERS} ${Caffe2_PROTO_SRCS})
 target_link_libraries( Caffe2_PROTO libprotobuf libgrpc++ android log) #libgrpc
+
+android_protobuf_generate_cpp(interop_PROTO_SRCS interop_PROTO_HEADERS ${grpc_src_DIR} "${grpc_src_DIR}/src/proto/grpc/testing/test.proto"
+  "${grpc_src_DIR}/src/proto/grpc/testing/empty.proto" "${grpc_src_DIR}/src/proto/grpc/testing/messages.proto")
+
+add_library(interop_PROTO SHARED ${interop_PROTO_HEADERS} ${interop_PROTO_SRCS})
+target_link_libraries( interop_PROTO libprotobuf libgrpc++ android log) #libgrpc
+
+#
+#add_library(interop_client_main
+#  ${GRPC_PROTO_GENS_DIR}/src/proto/grpc/testing/empty.pb.cc
+#  ${GRPC_PROTO_GENS_DIR}/src/proto/grpc/testing/empty.grpc.pb.cc
+#  ${GRPC_PROTO_GENS_DIR}/src/proto/grpc/testing/empty.pb.h
+#  ${GRPC_PROTO_GENS_DIR}/src/proto/grpc/testing/empty.grpc.pb.h
+#  ${GRPC_PROTO_GENS_DIR}/src/proto/grpc/testing/messages.pb.cc
+#  ${GRPC_PROTO_GENS_DIR}/src/proto/grpc/testing/messages.grpc.pb.cc
+#  ${GRPC_PROTO_GENS_DIR}/src/proto/grpc/testing/messages.pb.h
+#  ${GRPC_PROTO_GENS_DIR}/src/proto/grpc/testing/messages.grpc.pb.h
+#  ${GRPC_PROTO_GENS_DIR}/src/proto/grpc/testing/test.pb.cc
+#  ${GRPC_PROTO_GENS_DIR}/src/proto/grpc/testing/test.grpc.pb.cc
+#  ${GRPC_PROTO_GENS_DIR}/src/proto/grpc/testing/test.pb.h
+#  ${GRPC_PROTO_GENS_DIR}/src/proto/grpc/testing/test.grpc.pb.h
+#  ${grpc_src_DIR}/test/cpp/interop/client.cc
+#  ${grpc_src_DIR}/test/cpp/interop/interop_client.cc
+#)
 
 #install(FILES ${Caffe2_PROTO_HEADERS} DESTINATION include/caffe2/proto)
 
@@ -223,7 +279,7 @@ set( Protobuf_INCLUDE_DIR ${libprotobuf_src_DIR})
 #include(${libprotobuf_src_DIR}/protobuf-module.cmake.in)
 # Generated sources
 
-include_directories(${CMAKE_CURRENT_BINARY_DIR}/protos/)
+#include_directories(${CMAKE_CURRENT_BINARY_DIR}/protos/)
 
 add_library( # Sets the name of the library.
              native-lib
@@ -232,7 +288,8 @@ add_library( # Sets the name of the library.
              SHARED
 
              # Provides a relative path to your source file(s).
-             src/main/cpp/native-lib.cpp )
+             src/main/cpp/native-lib.cpp
+           ${grpc_src_DIR}/test/cpp/interop/interop_client.cc) # This is necessary for interop app on android REMOVE FOR HELLO WORLD
 
 
 # Searches for a specified prebuilt library and stores the path as a
@@ -250,7 +307,7 @@ find_library( # Sets the name of the path variable.
               log )
 
 target_include_directories(native-lib PRIVATE
-                ${grpc_src_DIR}
+  ${grpc_src_DIR} # This allows including the interop test headers, and the gpr_env etc functions. REMOVE FOR HELLO WORLD
               #${distribution_DIR}/libgrpc/include
 #              ${distribution_DIR}/libgrpc++/include
               ${Caffe2_PROTO_HEADERS})
@@ -270,6 +327,7 @@ target_link_libraries( # Specifies the target library.
                                               libssl
                                               libcrypto
 Caffe2_PROTO
+interop_PROTO
                                               libprotobuf # libprotobuf-lite
                                               libgpr # Order matters
                       android
