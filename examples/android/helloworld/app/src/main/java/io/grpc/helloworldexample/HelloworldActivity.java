@@ -22,8 +22,12 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.NetworkInfo;
+import android.net.NetworkRequest;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
@@ -39,11 +43,18 @@ import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.ref.WeakReference;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.LogManager;
+
+import static android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET;
 
 public class HelloworldActivity extends AppCompatActivity {
   private Button sendButton;
@@ -78,13 +89,75 @@ public class HelloworldActivity extends AppCompatActivity {
                     + "java.util.logging.ConsoleHandler.level=FINE\n"
                     + "java.util.logging.ConsoleHandler.formatter=java.util.logging.SimpleFormatter";
     try {
-      java.util.logging.LogManager.getLogManager()
+      LogManager.getLogManager()
               .readConfiguration(
-                      new java.io.ByteArrayInputStream(
-                              loggingConfig.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+                      new ByteArrayInputStream(
+                              loggingConfig.getBytes(StandardCharsets.UTF_8)));
     } catch (IOException e) {
       e.printStackTrace();
     }
+
+
+    ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+
+
+//    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+//      NetworkRequest request = new NetworkRequest.Builder().addCapability(NET_CAPABILITY_INTERNET).build();
+//      connectivityManager.registerNetworkCallback(
+//              request,
+//              new ConnectivityManager.NetworkCallback() {
+//                /**
+//                 * @param network
+//                 */
+//                @Override
+//                public void onAvailable(Network network) {
+//                  System.out.println("ConnectivityManager.onAvailable");
+//                  Thread thread = new Thread(new Runnable() {
+//
+//                    @Override
+//                    public void run() {
+//                      try {
+//                        InetAddress.getAllByName("grpc-test.sandbox.googleapis.com");
+//                        System.out.println("onAvailable - Resolved");
+//                      } catch (UnknownHostException e) {
+//                        System.out.println("onAvailable - failed to resolve!");
+//                        e.printStackTrace();
+//                      }
+//                    }
+//                  });
+//                  thread.start();
+//                }
+//
+//                @Override
+//                public void onCapabilitiesChanged(Network network, NetworkCapabilities capabilities) {
+//                  System.out.println("ConnectivityManager.onCapabilitiesChanged");
+//                  Thread thread = new Thread(new Runnable() {
+//
+//                    @Override
+//                    public void run() {
+//                      try {
+//                        InetAddress.getAllByName("grpc-test.sandbox.googleapis.com");
+//                        System.out.println("onCapabilitiesChanged - Resolved");
+//                      } catch (UnknownHostException e) {
+//                        System.out.println("onCapabilitiesChanged - failed to resolve!");
+//                        e.printStackTrace();
+//                      }
+//                    }
+//                  });
+//                  thread.start();
+//                }
+//
+//                /**
+//                 * @param network
+//                 */
+//                @Override
+//                public void onLost(Network network) {
+//                  System.out.println("onLost");
+//                }
+//              }
+//
+//      );
+//    }
 
   }
 
@@ -96,7 +169,9 @@ public class HelloworldActivity extends AppCompatActivity {
     if (channel == null) {
 //      String portStr = portEdit.getText().toString();
 //      int port = TextUtils.isEmpty(portStr) ? 0 : Integer.valueOf(portStr);
-      channel = ManagedChannelBuilder.forAddress("grpc-test.sandbox.googleapis.com", 443).idleTimeout(10, TimeUnit.SECONDS).build();
+      channel = ManagedChannelBuilder.forAddress("grpc-test.sandbox.googleapis.com", 443)
+              //.idleTimeout(10, TimeUnit.SECONDS)
+        .build();
     }
     new GrpcTask(this, channel)
         .execute(
@@ -167,11 +242,26 @@ public class HelloworldActivity extends AppCompatActivity {
       System.out.println("active network: " + networkInfo.getTypeName());
       System.out.println("isConnected: " + networkInfo.isConnected());
 
+
+
       if (channel != null) {
         System.out.println("invoking reset connect backoff");
         channel.resetConnectBackoff();
       }
+      Thread thread = new Thread(new Runnable() {
 
+        @Override
+        public void run() {
+          try {
+            InetAddress.getAllByName("grpc-test.sandbox.googleapis.com");
+            System.out.println("Resolved");
+          } catch (UnknownHostException e) {
+            System.out.println("failed to resolve!");
+            e.printStackTrace();
+          }
+        }
+      });
+      thread.start();
     }
   }
 }
