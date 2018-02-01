@@ -17,7 +17,12 @@
 package io.grpc.helloworldexample;
 
 import android.app.Activity;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
@@ -33,6 +38,8 @@ import io.grpc.ManagedChannelBuilder;
 import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
+
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.ref.WeakReference;
@@ -44,6 +51,10 @@ public class HelloworldActivity extends AppCompatActivity {
   private EditText portEdit;
   private EditText messageEdit;
   private TextView resultText;
+  private ManagedChannel channel;
+
+  // The BroadcastReceiver that tracks network connectivity changes.
+  private NetworkReceiver receiver = new NetworkReceiver();
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -55,6 +66,26 @@ public class HelloworldActivity extends AppCompatActivity {
     messageEdit = (EditText) findViewById(R.id.message_edit_text);
     resultText = (TextView) findViewById(R.id.grpc_response_text);
     resultText.setMovementMethod(new ScrollingMovementMethod());
+
+    // Registers BroadcastReceiver to track network connection changes.
+    IntentFilter filter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
+    receiver = new NetworkReceiver();
+    this.registerReceiver(receiver, filter);
+
+    String loggingConfig =
+            "handlers=java.util.logging.ConsoleHandler\n"
+                    + "io.grpc.level=FINE\n"
+                    + "java.util.logging.ConsoleHandler.level=FINE\n"
+                    + "java.util.logging.ConsoleHandler.formatter=java.util.logging.SimpleFormatter";
+    try {
+      java.util.logging.LogManager.getLogManager()
+              .readConfiguration(
+                      new java.io.ByteArrayInputStream(
+                              loggingConfig.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+
   }
 
   public void sendMessage(View view) {
@@ -62,7 +93,12 @@ public class HelloworldActivity extends AppCompatActivity {
         .hideSoftInputFromWindow(hostEdit.getWindowToken(), 0);
     sendButton.setEnabled(false);
     resultText.setText("");
-    new GrpcTask(this)
+    if (channel == null) {
+//      String portStr = portEdit.getText().toString();
+//      int port = TextUtils.isEmpty(portStr) ? 0 : Integer.valueOf(portStr);
+      channel = ManagedChannelBuilder.forAddress("grpc-test.sandbox.googleapis.com", 443).idleTimeout(10, TimeUnit.SECONDS).build();
+    }
+    new GrpcTask(this, channel)
         .execute(
             hostEdit.getText().toString(),
             messageEdit.getText().toString(),
@@ -73,8 +109,9 @@ public class HelloworldActivity extends AppCompatActivity {
     private final WeakReference<Activity> activityReference;
     private ManagedChannel channel;
 
-    private GrpcTask(Activity activity) {
+    private GrpcTask(Activity activity, ManagedChannel channel) {
       this.activityReference = new WeakReference<Activity>(activity);
+      this.channel = channel;
     }
 
     @Override
@@ -84,7 +121,6 @@ public class HelloworldActivity extends AppCompatActivity {
       String portStr = params[2];
       int port = TextUtils.isEmpty(portStr) ? 0 : Integer.valueOf(portStr);
       try {
-        channel = ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build();
         GreeterGrpc.GreeterBlockingStub stub = GreeterGrpc.newBlockingStub(channel);
         HelloRequest request = HelloRequest.newBuilder().setName(message).build();
         HelloReply reply = stub.sayHello(request);
@@ -100,11 +136,11 @@ public class HelloworldActivity extends AppCompatActivity {
 
     @Override
     protected void onPostExecute(String result) {
-      try {
-        channel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-      }
+//      try {
+//        channel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
+//      } catch (InterruptedException e) {
+//        Thread.currentThread().interrupt();
+//      }
       Activity activity = activityReference.get();
       if (activity == null) {
         return;
@@ -113,6 +149,29 @@ public class HelloworldActivity extends AppCompatActivity {
       Button sendButton = (Button) activity.findViewById(R.id.send_button);
       resultText.setText(result);
       sendButton.setEnabled(true);
+    }
+  }
+
+  public class NetworkReceiver extends BroadcastReceiver {
+
+    @Override
+    public void onReceive(Context context, Intent intent) {
+      ConnectivityManager conn = (ConnectivityManager)
+              context.getSystemService(Context.CONNECTIVITY_SERVICE);
+      NetworkInfo networkInfo = conn.getActiveNetworkInfo();
+
+      if (networkInfo == null) {
+        System.out.println("active network: null");
+        return;
+      }
+      System.out.println("active network: " + networkInfo.getTypeName());
+      System.out.println("isConnected: " + networkInfo.isConnected());
+
+      if (channel != null) {
+        System.out.println("invoking reset connect backoff");
+        channel.resetConnectBackoff();
+      }
+
     }
   }
 }
