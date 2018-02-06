@@ -734,14 +734,25 @@ public final class ManagedChannelImpl
           return;
         }
         if (nameResolverStarted) {
-          nameResolver.refresh();
+          nameResolver.shutdown();
+          nameResolverStarted = false;
+          nameResolver = getNameResolver(target, nameResolverFactory, nameResolverParams);
         }
-        for (InternalSubchannel subchannel : subchannels) {
-          subchannel.shutdownTransports(SHUTDOWN_TRANSPORTS_STATUS);
+        if (lbHelper != null) {
+          lbHelper.lb.shutdown();
+          lbHelper = null;
         }
-        for (InternalSubchannel oobChannel : oobChannels) {
-          oobChannel.shutdownTransports(SHUTDOWN_TRANSPORTS_STATUS);
+        subchannelPicker = null;
+        if (!channelStateManager.isDisabled()) {
+          channelStateManager.gotoState(IDLE);
         }
+        // shutdown will be invoked by LB
+        // for (InternalSubchannel subchannel : subchannels) {
+        //   subchannel.shutdown(SHUTDOWN_TRANSPORTS_STATUS);
+        // }
+        // for (InternalSubchannel oobChannel : oobChannels) {
+        //   oobChannel.shutdown(SHUTDOWN_TRANSPORTS_STATUS);
+        // }
       }
     }
 
