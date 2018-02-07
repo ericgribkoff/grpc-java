@@ -18,6 +18,7 @@ package io.grpc.android.integrationtest;
 
 import android.content.Context;
 import android.content.Intent;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
@@ -32,6 +33,8 @@ import com.google.android.gms.security.ProviderInstaller;
 import java.util.LinkedList;
 import java.util.List;
 
+import io.grpc.ManagedChannel;
+
 public class TesterActivity extends AppCompatActivity
     implements ProviderInstaller.ProviderInstallListener {
   private List<Button> buttons;
@@ -39,6 +42,7 @@ public class TesterActivity extends AppCompatActivity
   private EditText portEdit;
   private TextView resultText;
   private CheckBox getCheckBox;
+  private ManagedChannel channel;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -81,6 +85,26 @@ public class TesterActivity extends AppCompatActivity
     startTest("ping_pong");
   }
 
+  public void networkAvailable(View view) {
+    if (channel != null) {
+      channel.resetConnectBackoff();
+    }
+  }
+
+  public void networkSwitch(View view) {
+    if (channel != null) {
+      channel.shutdownTransports();
+    }
+  }
+
+  public void resetChannel(View view) {
+    if (channel != null) {
+      System.out.println("Setting channel to null");
+      channel.shutdown();
+      channel = null;
+    }
+  }
+
   private void enableButtons(boolean enable) {
     for (Button button : buttons) {
       button.setEnabled(enable);
@@ -90,15 +114,23 @@ public class TesterActivity extends AppCompatActivity
   private void startTest(String testCase) {
     ((InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(
         hostEdit.getWindowToken(), 0);
-    enableButtons(false);
+    if (!testCase.equals("ping_pong")) {
+      enableButtons(false);
+    }
     String host = hostEdit.getText().toString();
     String portStr = portEdit.getText().toString();
     int port = TextUtils.isEmpty(portStr) ? 8080 : Integer.valueOf(portStr);
 
+    if (channel == null) {
+      channel =         TesterOkHttpChannelBuilder.build(
+              "grpc-test.sandbox.googleapis.com", 443, null, true, //
+              // host, port, "foo.test.google.fr", true,
+              null, null);
+//            getResources().openRawResource(R.raw.ca), null),
+    }
     // TODO (madongfly) support server_host_override, useTls and useTestCa in the App UI.
     new InteropTester(testCase,
-        TesterOkHttpChannelBuilder.build(host, port, "foo.test.google.fr", true,
-            getResources().openRawResource(R.raw.ca), null),
+        channel,
         new InteropTester.TestListener() {
           @Override public void onPreTest() {
             resultText.setText("Testing...");
@@ -108,7 +140,7 @@ public class TesterActivity extends AppCompatActivity
             resultText.setText(result);
             enableButtons(true);
           }
-        }, getCheckBox.isChecked()).execute();
+        }, getCheckBox.isChecked()).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
   }
 
   @Override

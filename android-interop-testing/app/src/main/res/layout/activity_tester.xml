@@ -73,6 +73,28 @@
       android:text="Ping Pong"
       />
 
+  <Button
+      android:id="@+id/network_available_button"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:onClick="networkAvailable"
+      android:text="Network Available" />
+
+  <Button
+      android:id="@+id/network_switch_button"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:onClick="networkSwitch"
+      android:text="Network Switching" />
+
+
+  <Button
+      android:id="@+id/reset_channel_button"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:onClick="resetChannel"
+      android:text="Reset Channel" />
+
   <TextView
       android:layout_width="match_parent"
       android:layout_height="wrap_content"

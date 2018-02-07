@@ -63,6 +63,10 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
   static final String SUCCESS_MESSAGE = "Success!";
   static final String LOG_TAG = "GrpcTest";
 
+  static volatile int count = 0;
+
+  private final int counter;
+
   private ManagedChannel channel;
   private TestServiceGrpc.TestServiceBlockingStub blockingStub;
   private TestServiceGrpc.TestServiceStub asyncStub;
@@ -97,6 +101,7 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
                        ManagedChannel channel,
                        TestListener listener,
                        boolean useGet) {
+    counter = count++;
     this.testCase = testCase;
     this.listener = listener;
     this.channel = channel;
@@ -119,6 +124,7 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
       runTest(testCase);
       return SUCCESS_MESSAGE;
     } catch (Throwable t) {
+      System.out.println("Exception thrown on counter " + counter);
       // Print the stack trace to logcat.
       t.printStackTrace();
       // Then print to the error message.
@@ -137,7 +143,7 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
 
 
   public void shutdown() {
-    channel.shutdown();
+//    channel.shutdown();
   }
 
   public void runTest(String testCase) throws Exception {
@@ -317,15 +323,27 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
     ResponseObserver responseObserver = new ResponseObserver();
     StreamObserver<Messages.StreamingOutputCallRequest> requestObserver
         = asyncStub.fullDuplexCall(responseObserver);
-    for (int i = 0; i < requests.length; i++) {
-      requestObserver.onNext(requests[i]);
+    //    for (int i = 0; i < requests.length; i++) {
+    //      requestObserver.onNext(requests[i]);
+    //      Object response = responseObserver.responses.poll(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+    //      if (!(response instanceof Messages.StreamingOutputCallResponse)) {
+    //        fail("Unexpected: " + response);
+    //      }
+    //      assertMessageEquals(goldenResponses[i], (Messages.StreamingOutputCallResponse) response);
+    //      assertTrue("More than 1 responses received for ping pong test.",
+    //          responseObserver.responses.isEmpty());
+    //    }
+    for (int i = 0; i < 60; i++) {
+      requestObserver.onNext(requests[0]);
       Object response = responseObserver.responses.poll(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
       if (!(response instanceof Messages.StreamingOutputCallResponse)) {
         fail("Unexpected: " + response);
       }
-      assertMessageEquals(goldenResponses[i], (Messages.StreamingOutputCallResponse) response);
+      assertMessageEquals(goldenResponses[0], (Messages.StreamingOutputCallResponse) response);
       assertTrue("More than 1 responses received for ping pong test.",
-          responseObserver.responses.isEmpty());
+              responseObserver.responses.isEmpty());
+      System.out.println("Message " + i + " sent on ping pong counter " + counter);
+      Thread.sleep(5000);
     }
     requestObserver.onCompleted();
     assertEquals(responseObserver.magicTailResponse,

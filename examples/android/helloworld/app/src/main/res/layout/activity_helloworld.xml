@@ -37,6 +37,14 @@
             android:onClick="sendMessage"
             android:text="Send Grpc Request" />
 
+
+    <Button
+        android:id="@+id/shutdown_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:onClick="shutdownTransports"
+        android:text="Shutdown Transports" />
+
     <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

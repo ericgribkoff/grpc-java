@@ -33,7 +33,10 @@ import io.grpc.ManagedChannelBuilder;
 import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
+import io.grpc.okhttp.NegotiationType;
+import io.grpc.okhttp.OkHttpChannelBuilder;
 
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.concurrent.TimeUnit;
@@ -44,6 +47,7 @@ public class HelloworldActivity extends AppCompatActivity {
     private EditText mPortEdit;
     private EditText mMessageEdit;
     private TextView mResultText;
+    private ManagedChannel mChannel;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,13 +59,42 @@ public class HelloworldActivity extends AppCompatActivity {
         mMessageEdit = (EditText) findViewById(R.id.message_edit_text);
         mResultText = (TextView) findViewById(R.id.grpc_response_text);
         mResultText.setMovementMethod(new ScrollingMovementMethod());
+
+        String loggingConfig =
+                "handlers=java.util.logging.ConsoleHandler\n"
+                        + "io.grpc.level=FINE\n"
+                        + "java.util.logging.ConsoleHandler.level=FINE\n"
+                        + "java.util.logging.ConsoleHandler.formatter=java.util.logging.SimpleFormatter";
+        try {
+            java.util.logging.LogManager.getLogManager()
+                    .readConfiguration(
+                            new java.io.ByteArrayInputStream(
+                                    loggingConfig.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
     }
 
     public void sendMessage(View view) {
         ((InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE))
                 .hideSoftInputFromWindow(mHostEdit.getWindowToken(), 0);
         mSendButton.setEnabled(false);
-        new GrpcTask().execute();
+        if (mChannel == null) {
+            mChannel = OkHttpChannelBuilder.forAddress(
+//                    "grpc-test.sandbox.googleapis.com", 443)
+                    "localhost", 8789)
+                    .negotiationType(NegotiationType.PLAINTEXT)
+//                    .usePlaintext(true)
+                    .build();
+        }
+        new GrpcTask(mChannel).execute();
+    }
+
+    public void shutdownTransports(View view) {
+        if (mChannel != null) {
+            mChannel.shutdownTransports();
+        }
     }
 
     private class GrpcTask extends AsyncTask<Void, Void, String> {
@@ -69,6 +102,10 @@ public class HelloworldActivity extends AppCompatActivity {
         private String mMessage;
         private int mPort;
         private ManagedChannel mChannel;
+
+        private GrpcTask(ManagedChannel mChannel) {
+            this.mChannel = mChannel;
+        }
 
         @Override
         protected void onPreExecute() {
@@ -82,9 +119,6 @@ public class HelloworldActivity extends AppCompatActivity {
         @Override
         protected String doInBackground(Void... nothing) {
             try {
-                mChannel = ManagedChannelBuilder.forAddress(mHost, mPort)
-                    .usePlaintext(true)
-                    .build();
                 GreeterGrpc.GreeterBlockingStub stub = GreeterGrpc.newBlockingStub(mChannel);
                 HelloRequest message = HelloRequest.newBuilder().setName(mMessage).build();
                 HelloReply reply = stub.sayHello(message);
@@ -100,11 +134,11 @@ public class HelloworldActivity extends AppCompatActivity {
 
         @Override
         protected void onPostExecute(String result) {
-            try {
-                mChannel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
+//            try {
+//                mChannel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
+//            } catch (InterruptedException e) {
+//                Thread.currentThread().interrupt();
+//            }
             mResultText.setText(result);
             mSendButton.setEnabled(true);
         }
