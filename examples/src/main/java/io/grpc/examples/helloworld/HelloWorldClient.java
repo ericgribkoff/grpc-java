@@ -16,7 +16,10 @@
 
 package io.grpc.examples.helloworld;
 
+import io.grpc.Grpc;
+import io.grpc.InternalStatus;
 import io.grpc.ManagedChannel;
+import io.grpc.Attributes;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
 import java.util.concurrent.TimeUnit;
@@ -41,14 +44,18 @@ public class HelloWorldClient {
         .build());
   }
 
+  private Attributes a = Attributes.EMPTY;
+
+  public void shutdown() throws InterruptedException {
+    channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
+  }
+
   /** Construct client for accessing RouteGuide server using the existing channel. */
   HelloWorldClient(ManagedChannel channel) {
     this.channel = channel;
     blockingStub = GreeterGrpc.newBlockingStub(channel);
-  }
-
-  public void shutdown() throws InterruptedException {
-    channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
+    System.out.println(InternalStatus.MESSAGE_KEY);
+    System.out.println(Grpc.TRANSPORT_ATTR_REMOTE_ADDR);
   }
 
   /** Say hello to server. */
