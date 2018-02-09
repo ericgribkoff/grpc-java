@@ -1502,6 +1502,29 @@ public class ManagedChannelImplTest {
   }
 
   @Test
+  public void prepareToLoseNetworkEntersIdle() {
+    createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+    helper.updateBalancingState(READY, mockPicker);
+
+    channel.prepareToLoseNetwork();
+
+    assertEquals(IDLE, channel.getState(false /* request connection */));
+  }
+
+  @Test
+  public void prepareToLoseNetworkAfterIdleTimerIsNoOp() {
+    long idleTimeoutMillis = 2000L;
+    createChannel(
+        new FakeNameResolverFactory(true), NO_INTERCEPTOR, true /* request connection*/,
+        idleTimeoutMillis);
+    timer.forwardNanos(TimeUnit.MILLISECONDS.toNanos(idleTimeoutMillis));
+
+    channel.prepareToLoseNetwork();
+
+    assertEquals(IDLE, channel.getState(false /* request connection */));
+  }
+
+  @Test
   public void updateBalancingStateDoesUpdatePicker() {
     ClientStream mockStream = mock(ClientStream.class);
     createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
