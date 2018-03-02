@@ -1,0 +1,41 @@
+apply plugin: 'com.android.library'
+
+description = 'gRPC: Android'
+
+buildscript {
+    repositories {
+        google()
+        jcenter()
+        mavenCentral()
+    }
+    dependencies {
+        // TODO(ericgribkoff) Update this. Newer versions cause Gradle errors if build grpc-android
+        // as a subproject.
+        classpath 'com.android.tools.build:gradle:2.3.0'
+    }
+}
+
+android {
+    buildToolsVersion "25.0.2"
+    compileSdkVersion 27
+    defaultConfig {
+        minSdkVersion 14
+        targetSdkVersion 27
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+    }
+    lintOptions {
+        abortOnError false
+    }
+}
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+dependencies {
+    compile 'io.grpc:grpc-core:1.11.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    compile 'io.grpc:grpc-okhttp:1.11.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+}
