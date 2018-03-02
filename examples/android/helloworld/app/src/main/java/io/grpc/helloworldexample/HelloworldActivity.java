@@ -171,15 +171,70 @@ public class HelloworldActivity extends AppCompatActivity {
     }
   }
 
-  @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
   private class AndroidChannel extends ManagedChannel {
     private final ManagedChannel delegate;
     private final NetworkReceiver networkReceiver;
     private final IntentFilter networkIntentFilter;
     private final ConnectivityManager conn = (ConnectivityManager)
             getApplicationContext().getSystemService(Context.CONNECTIVITY_SERVICE);
-    private final NamedCallback defaultNetworkCallback = new NamedCallback("defaultNetworkCallback");
-    private final NamedCallback networkCallback = new NamedCallback("networkCallback");
+    private NNetworkCallback nNetworkCallback;
+
+    @RequiresApi(api = Build.VERSION_CODES.N)
+    private class NNetworkCallback {
+      private final NamedCallback defaultNetworkCallback = new NamedCallback("defaultNetworkCallback");
+
+      private void register(ConnectivityManager conn) {
+        System.out.println("Registering network callback");
+        conn.registerDefaultNetworkCallback(defaultNetworkCallback);
+      }
+
+      private void unregister(ConnectivityManager conn) {
+        System.out.println("Unregistering network callback");
+        conn.unregisterNetworkCallback(defaultNetworkCallback);
+      }
+
+      private class NamedCallback extends ConnectivityManager.NetworkCallback {
+
+        final String name;
+
+        private NamedCallback(String name) {
+          this.name = name;
+        }
+
+        @Override
+        public void onAvailable(Network network) {
+          System.out.println(name + ": onAvailable: " + network);
+          System.out.println("Invoking prepareToLoseNetwork");
+          // TODO - don't do this when channel first created
+          delegate.prepareToLoseNetwork();
+        }
+
+        @Override
+        public void onCapabilitiesChanged(Network network, NetworkCapabilities capabilities) {
+          System.out.println(name + ": onCapabilitiesChanged: " + network + " " + capabilities);
+        }
+
+        @Override
+        public void onLinkPropertiesChanged(Network network, LinkProperties properties) {
+          System.out.println(name + ": onLinkPropertiesChanged: " + network + " " + properties);
+        }
+
+        @Override
+        public void onLosing(Network network, int maxMsToLive) {
+          System.out.println(name + ": onLosing: " + network + " " + maxMsToLive);
+        }
+
+        @Override
+        public void onLost(Network network) {
+          System.out.println(name + ": onLost: " + network);
+        }
+
+        @Override
+        public void onUnavailable() {
+          System.out.println(name + ": onUnavailable");
+        }
+      }
+    }
 
     // TODO: pass in Context
     AndroidChannel(final ManagedChannel delegate) {
@@ -188,70 +243,18 @@ public class HelloworldActivity extends AppCompatActivity {
       networkIntentFilter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
 
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-//        NetworkRequest networkRequest =
-//                new NetworkRequest.Builder()
-////                        .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-////                        .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
-////                        .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-//                        .build();
-        System.out.println("Registering network callback(s)");
-//        conn.registerNetworkCallback(networkRequest, new ConnectivityManager.NetworkCallback() {
-        conn.registerDefaultNetworkCallback(defaultNetworkCallback);
-//        conn.registerNetworkCallback(networkRequest, networkCallback);
+        nNetworkCallback = new NNetworkCallback();
+        nNetworkCallback.register(conn);
       } else {
         System.out.println("Build.VERSION.SDK_INT=" + Build.VERSION.SDK_INT);
         getApplicationContext().registerReceiver(networkReceiver, networkIntentFilter);
       }
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    private class NamedCallback extends ConnectivityManager.NetworkCallback {
-
-      final String name;
-
-      private NamedCallback(String name) {
-        this.name = name;
-      }
-
-      @Override
-      public void onAvailable(Network network) {
-        System.out.println(name + ": onAvailable: " + network);
-        System.out.println("Invoking prepareToLoseNetwork");
-        delegate.prepareToLoseNetwork();
-      }
-
-      @Override
-      public void onCapabilitiesChanged(Network network, NetworkCapabilities capabilities) {
-        System.out.println(name + ": onCapabilitiesChanged: " + network + " " + capabilities);
-      }
-
-      @Override
-      public void onLinkPropertiesChanged(Network network, LinkProperties properties) {
-        System.out.println(name + ": onLinkPropertiesChanged: " + network + " " + properties);
-      }
-
-      @Override
-      public void onLosing(Network network, int maxMsToLive) {
-        System.out.println(name + ": onLosing: " + network + " " + maxMsToLive);
-      }
-
-      @Override
-      public void onLost(Network network) {
-        System.out.println(name + ": onLost: " + network);
-      }
-
-      @Override
-      public void onUnavailable() {
-        System.out.println(name + ": onUnavailable");
-      }
-    }
-
     @Override
     public ManagedChannel shutdown() {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-        System.out.println("Unregistering network callback(s)");
-        conn.unregisterNetworkCallback(defaultNetworkCallback);
-//        conn.unregisterNetworkCallback(networkCallback);
+        nNetworkCallback.unregister(conn);
       } else {
         // Throws if not registered :/
         getApplicationContext().unregisterReceiver(networkReceiver);
@@ -272,9 +275,7 @@ public class HelloworldActivity extends AppCompatActivity {
     @Override
     public ManagedChannel shutdownNow() {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-        System.out.println("Unregistering network callback(s)");
-        conn.unregisterNetworkCallback(defaultNetworkCallback);
-//        conn.unregisterNetworkCallback(networkCallback);
+        nNetworkCallback.unregister(conn);
       } else {
         // Throws if not registered :/
         getApplicationContext().unregisterReceiver(networkReceiver);
@@ -327,18 +328,7 @@ public class HelloworldActivity extends AppCompatActivity {
                 context.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo networkInfo = conn.getActiveNetworkInfo(); // TODO: document required permission
         System.out.println("onReceive: networkInfo: " + networkInfo);
-//        System.out.println(intent);
-//        Bundle bundle = intent.getExtras();
-//        if (bundle != null) {
-//          for (String key : bundle.keySet()) {
-//            Object value = bundle.get(key);
-//            Log.d("intentExtras", String.format("%s %s (%s)", key,
-//                    value.toString(), value.getClass().getName()));
-//          }
-//        }
-//        System.out.println("onReceive: " + intent.getStringExtra(ConnectivityManager.EXTRA_EXTRA_INFO));
-//        System.out.println("onReceive: " + intent.getBooleanExtra(ConnectivityManager.EXTRA_IS_FAILOVER, false));
-        // Will go to null first even when switching from wifi to cell
+        // networkInfo goes to null first even when switching from wifi to cell
         boolean connected = networkInfo != null && networkInfo.isConnected();
         if (connected && !wasConnected) {
           // Just this is insufficient for graceful network handover, in cases where the DNS
