@@ -16,6 +16,7 @@
 
 package io.grpc.helloworldexample;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -81,7 +82,7 @@ public class HelloworldActivity extends AppCompatActivity {
     resultText = (TextView) findViewById(R.id.grpc_response_text);
     resultText.setMovementMethod(new ScrollingMovementMethod());
 
-    hostEdit.setText("173.194.202.81"); //"grpc-test.sandbox.googleapis.com");
+    hostEdit.setText("grpc-test.sandbox.googleapis.com");
     portEdit.setText("443");
 
 //    String loggingConfig =
@@ -111,18 +112,24 @@ public class HelloworldActivity extends AppCompatActivity {
       channel = new AndroidChannel(
               OkHttpChannelBuilder
                       .forTarget("dns:///" + host + ":" + port)
-                      .hostnameVerifier(new HostnameVerifier() {
-                        @Override
-                        public boolean verify(String hostname, SSLSession session) {
-                          return true;
-                        }
-                      })
-//                      .forAddress(host, port)
-//                      .usePlaintext(true)
                       .build());
     }
     new GrpcTask(this, channel)
         .execute(messageEdit.getText().toString());
+  }
+
+  public void prepareToLoseNetwork(View view) {
+    if (channel != null) {
+      Log.e("grpcHelloworld", "Invoking prepareToLoseNetwork");
+      channel.prepareToLoseNetwork();
+    }
+  }
+
+  public void resetConnectBackoff(View view) {
+    if (channel != null) {
+      Log.e("grpcHelloworld", "Invoking resetConnectBackoff");
+      channel.resetConnectBackoff();
+    }
   }
 
   public void shutdownChannel(View view) {
@@ -179,23 +186,26 @@ public class HelloworldActivity extends AppCompatActivity {
             getApplicationContext().getSystemService(Context.CONNECTIVITY_SERVICE);
     private NNetworkCallback nNetworkCallback;
 
+    private final boolean useVersionNNetworkApi = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N;
+
     @RequiresApi(api = Build.VERSION_CODES.N)
     private class NNetworkCallback {
       private final NamedCallback defaultNetworkCallback = new NamedCallback("defaultNetworkCallback");
 
       private void register(ConnectivityManager conn) {
-        System.out.println("Registering network callback");
+        Log.e("grpcHelloworld", "Registering network callback");
         conn.registerDefaultNetworkCallback(defaultNetworkCallback);
       }
 
       private void unregister(ConnectivityManager conn) {
-        System.out.println("Unregistering network callback");
+        Log.e("grpcHelloworld", "Unregistering network callback");
         conn.unregisterNetworkCallback(defaultNetworkCallback);
       }
 
       private class NamedCallback extends ConnectivityManager.NetworkCallback {
 
         final String name;
+        private boolean isConnected;
 
         private NamedCallback(String name) {
           this.name = name;
@@ -203,57 +213,46 @@ public class HelloworldActivity extends AppCompatActivity {
 
         @Override
         public void onAvailable(Network network) {
-          System.out.println(name + ": onAvailable: " + network);
-          System.out.println("Invoking prepareToLoseNetwork");
-          // TODO - don't do this when channel first created
-          delegate.prepareToLoseNetwork();
-        }
-
-        @Override
-        public void onCapabilitiesChanged(Network network, NetworkCapabilities capabilities) {
-          System.out.println(name + ": onCapabilitiesChanged: " + network + " " + capabilities);
-        }
-
-        @Override
-        public void onLinkPropertiesChanged(Network network, LinkProperties properties) {
-          System.out.println(name + ": onLinkPropertiesChanged: " + network + " " + properties);
-        }
-
-        @Override
-        public void onLosing(Network network, int maxMsToLive) {
-          System.out.println(name + ": onLosing: " + network + " " + maxMsToLive);
+          Log.e("grpcHelloworld", name + ": onAvailable: " + network);
+          Log.e("grpcHelloworld", "wasConnected: " + isConnected);
+          if (isConnected) {
+            Log.e("grpcHelloworld", "Invoking prepareToLoseNetwork");
+            delegate.prepareToLoseNetwork();
+          } else {
+            Log.e("grpcHelloworld", "Invoking resetConnectBackoff");
+            delegate.resetConnectBackoff();
+          }
+          isConnected = true;
         }
 
         @Override
         public void onLost(Network network) {
-          System.out.println(name + ": onLost: " + network);
-        }
-
-        @Override
-        public void onUnavailable() {
-          System.out.println(name + ": onUnavailable");
+          isConnected = false;
+          Log.e("grpcHelloworld", name + ": onLost: " + network);
         }
       }
     }
 
     // TODO: pass in Context
+    @SuppressLint("NewApi")
     AndroidChannel(final ManagedChannel delegate) {
       this.delegate = delegate;
       networkReceiver = new NetworkReceiver();
       networkIntentFilter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
 
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+      if (useVersionNNetworkApi) {
         nNetworkCallback = new NNetworkCallback();
         nNetworkCallback.register(conn);
       } else {
-        System.out.println("Build.VERSION.SDK_INT=" + Build.VERSION.SDK_INT);
+        Log.e("grpcHelloworld", "Build.VERSION.SDK_INT=" + Build.VERSION.SDK_INT);
         getApplicationContext().registerReceiver(networkReceiver, networkIntentFilter);
       }
     }
 
+    @SuppressLint("NewApi")
     @Override
     public ManagedChannel shutdown() {
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+      if (useVersionNNetworkApi) {
         nNetworkCallback.unregister(conn);
       } else {
         // Throws if not registered :/
@@ -327,15 +326,12 @@ public class HelloworldActivity extends AppCompatActivity {
         ConnectivityManager conn =  (ConnectivityManager)
                 context.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo networkInfo = conn.getActiveNetworkInfo(); // TODO: document required permission
-        System.out.println("onReceive: networkInfo: " + networkInfo);
-        // networkInfo goes to null first even when switching from wifi to cell
+        Log.e("grpcHelloworld", "onReceive: networkInfo: " + networkInfo);
+        Log.e("grpcHelloworld", "wasConnected: " + wasConnected);
+        // networkInfo may go to null first even when switching from wifi to cell
         boolean connected = networkInfo != null && networkInfo.isConnected();
         if (connected && !wasConnected) {
-          // Just this is insufficient for graceful network handover, in cases where the DNS
-          // resolution results remain the same (e.g., if the host is given by IP address)
-          // Until the update stops resetConnectBackoff() from having any effect if not in
-          // exponential backoff already
-          System.out.println("Invoking reset connect backoff");
+          Log.e("grpcHelloworld", "Invoking reset connect backoff");
           delegate.resetConnectBackoff();
         }
         wasConnected = connected;

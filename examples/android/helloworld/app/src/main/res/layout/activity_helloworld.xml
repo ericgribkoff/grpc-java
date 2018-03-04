@@ -38,6 +38,20 @@
             android:text="Send Grpc Request" />
 
     <Button
+        android:id="@+id/prepare_to_lose_network_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:onClick="prepareToLoseNetwork"
+        android:text="Prepare to Lose Network" />
+
+    <Button
+        android:id="@+id/reset_connect_backoff_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:onClick="resetConnectBackoff"
+        android:text="Reset Connect Backoff" />
+
+    <Button
         android:id="@+id/shutdown_button"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
