@@ -102,7 +102,6 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
       connectivityManager =
           (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
 
-      System.out.println(Build.VERSION.SDK_INT);
       // Android N added the registerDefaultNetworkCallback API to listen to changes in the device's
       // default network. For earlier Android API levels, use the BroadcastReceiver API.
       if (connectivityManager != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {

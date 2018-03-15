@@ -123,20 +123,30 @@ public final class AndroidChannelBuilderTest {
     }
 
     @Override
-    public void setActiveNetworkInfo(NetworkInfo info) {
+    public void setActiveNetworkInfo(NetworkInfo activeNetworkInfo) {
       if (getApiLevel() >= N) {
-        if (info != getActiveNetworkInfo()) {
-          // fire default network listeners
-          System.out.println("changed default network");
-          if (info != null) {
-            for (ConnectivityManager.NetworkCallback networkCallback : defaultNetworkCallbacks) {
-              Network network = ShadowNetwork.newInstance(info.getType() /* use type as psuedo network ID */);
-              networkCallback.onAvailable(network);
-            }
+        NetworkInfo previousNetworkInfo = getActiveNetworkInfo();
+        if (activeNetworkInfo != previousNetworkInfo) {
+          if (activeNetworkInfo != null) {
+            notifyDefaultNetworkCallbacksOnAvailable(ShadowNetwork.newInstance(activeNetworkInfo.getType() /* use type as network ID */));
+          } else {
+            notifyDefaultNetworkCallbacksOnLost(ShadowNetwork.newInstance(previousNetworkInfo.getType() /* use type as network ID */));
           }
         }
       }
-      super.setActiveNetworkInfo(info);
+      super.setActiveNetworkInfo(activeNetworkInfo);
+    }
+
+    private void notifyDefaultNetworkCallbacksOnAvailable(Network network) {
+      for (ConnectivityManager.NetworkCallback networkCallback : defaultNetworkCallbacks) {
+        networkCallback.onAvailable(network);
+      }
+    }
+
+    private void notifyDefaultNetworkCallbacksOnLost(Network network) {
+      for (ConnectivityManager.NetworkCallback networkCallback : defaultNetworkCallbacks) {
+        networkCallback.onLost(network);
+      }
     }
 
     @Implementation(minSdk = N)
