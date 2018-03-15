@@ -212,7 +212,7 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
 
     /** Respond to network changes. Only used on API levels < 24. */
     private class NetworkReceiver extends BroadcastReceiver {
-      private boolean maybeInBackoff = false;
+      private boolean isConnected = false;
 
       @Override
       public void onReceive(Context context, Intent intent) {
@@ -220,12 +220,10 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
             (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo networkInfo = conn.getActiveNetworkInfo();
         boolean connected = networkInfo != null && networkInfo.isConnected();
-        if (connected && maybeInBackoff) {
-          System.out.println("resetting connect backoff");
+        if (!isConnected && connected) {
           delegate.resetConnectBackoff();
         }
-        System.out.println("ran");
-        maybeInBackoff = !connected;
+        isConnected = connected;
       }
     }
   }
