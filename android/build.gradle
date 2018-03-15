@@ -9,21 +9,23 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        // TODO(ericgribkoff) Update this. Newer versions cause Gradle errors if build grpc-android
-        // as a subproject.
-        classpath 'com.android.tools.build:gradle:2.3.0'
+        classpath 'com.android.tools.build:gradle:3.0.1'
     }
 }
 
 android {
-    buildToolsVersion "25.0.2"
-    compileSdkVersion 27
+    compileSdkVersion 'android-P'
     defaultConfig {
         minSdkVersion 14
-        targetSdkVersion 27
+//        targetSdkVersion 'P'
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+    }
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+        }
     }
     lintOptions {
         abortOnError false
@@ -33,9 +35,17 @@ android {
 repositories {
     mavenCentral()
     mavenLocal()
+    maven {
+        url "https://oss.sonatype.org/content/repositories/snapshots"
+    }
 }
 
 dependencies {
-    compile 'io.grpc:grpc-core:1.11.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    compile 'io.grpc:grpc-okhttp:1.11.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    implementation 'io.grpc:grpc-core:1.12.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    implementation 'io.grpc:grpc-okhttp:1.12.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+
+    testImplementation 'junit:junit:4.12'
+//    testImplementation 'org.mockito:mockito-core:1.10.19'
+//    testImplementation 'org.robolectric:robolectric:3.7.1
+    testImplementation 'org.robolectric:robolectric:3.8-SNAPSHOT'
 }
