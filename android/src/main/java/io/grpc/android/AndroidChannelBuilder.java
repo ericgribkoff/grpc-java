@@ -38,11 +38,10 @@ import io.grpc.internal.GrpcUtil;
 import io.grpc.okhttp.OkHttpChannelBuilder;
 import java.util.concurrent.TimeUnit;
 
-
 /**
  * Builds a {@link ManagedChannel} that automatically monitors the Android device's network state.
- * Network changes are used to update the connectivity state of the underlying OkHttp-backed
- * {@ManagedChannel} to smoothly handle intermittent network failures.
+ * Network changes are propagated to the underlying OkHttp-backed {@ManagedChannel} to smoothly
+ * handle intermittent network failures.
  *
  * <p>gRPC Cronet users should use {@code CronetChannelBuilder} directly, as Cronet itself monitors
  * the device network state.
