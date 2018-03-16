@@ -22,6 +22,7 @@ import io.grpc.internal.GrpcUtil;
 import io.grpc.okhttp.OkHttpChannelBuilder;
 import java.util.concurrent.TimeUnit;
 
+
 /**
  * Builds a {@link ManagedChannel} that automatically monitors the Android device's network state.
  * Network changes are used to update the connectivity state of the underlying OkHttp-backed
@@ -89,6 +90,11 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
     private DefaultNetworkCallback defaultNetworkCallback;
     private NetworkReceiver networkReceiver;
 
+    private final Object lock = new Object();
+
+    // May only go from true to false, and lock must be held when assigning this
+    private volatile boolean needToUnregisterListener = true;
+
     @VisibleForTesting
     AndroidChannel(final ManagedChannel delegate, Context context) {
       this.delegate = delegate;
@@ -113,6 +119,21 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
         IntentFilter networkIntentFilter =
             new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
         context.registerReceiver(networkReceiver, networkIntentFilter);
+      }
+    }
+
+    private void unregisterNetworkListener() {
+      if (needToUnregisterListener) {
+        synchronized (lock) {
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && connectivityManager != null) {
+            connectivityManager.unregisterNetworkCallback(defaultNetworkCallback);
+            defaultNetworkCallback = null;
+          } else {
+            context.unregisterReceiver(networkReceiver);
+            networkReceiver = null;
+          }
+          needToUnregisterListener = false;
+        }
       }
     }
 
@@ -172,14 +193,6 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
     @Override
     public void enterIdle() {
       delegate.enterIdle();
-    }
-
-    private void unregisterNetworkListener() {
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-        connectivityManager.unregisterNetworkCallback(defaultNetworkCallback);
-      } else {
-        context.unregisterReceiver(networkReceiver);
-      }
     }
 
     /** Respond to changes in the default network. Only used on API levels 24+. */

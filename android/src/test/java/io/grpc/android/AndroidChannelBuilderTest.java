@@ -81,8 +81,8 @@ public final class AndroidChannelBuilderTest {
   }
 
   @Test
-  @Config(sdk = 16)
-  public void resetConnectBackoff_api16() {
+  @Config(sdk = 23)
+  public void resetConnectBackoff_api23() {
     TestChannel delegateChannel = new TestChannel();
     ManagedChannel androidChannel =
         new AndroidChannelBuilder.AndroidChannel(
@@ -119,7 +119,7 @@ public final class AndroidChannelBuilderTest {
         new Intent(ConnectivityManager.CONNECTIVITY_ACTION));
     assertThat(delegateChannel.resetCount).isEqualTo(2);
 
-    // Disconnect, then shutdown the channel and verify that the broadcast reciever has been
+    // Disconnect, then shutdown the channel and verify that the broadcast receiver has been
     // unregistered
     shadowConnectivityManager.setActiveNetworkInfo(null);
     RuntimeEnvironment.application.sendBroadcast(
@@ -137,7 +137,7 @@ public final class AndroidChannelBuilderTest {
   @Test
   @Config(sdk = 24)
   public void resetConnectBackoffAndEnterIdle_api24() {
-    shadowConnectivityManager.setActiveNetworkInfo(MOBILE_CONNECTED);
+    shadowConnectivityManager.setActiveNetworkInfo(MOBILE_DISCONNECTED);
     TestChannel delegateChannel = new TestChannel();
     ManagedChannel androidChannel =
         new AndroidChannelBuilder.AndroidChannel(
@@ -145,22 +145,25 @@ public final class AndroidChannelBuilderTest {
     assertThat(delegateChannel.resetCount).isEqualTo(0);
     assertThat(delegateChannel.enterIdleCount).isEqualTo(0);
 
+    // Establish an initial network connection
+    shadowConnectivityManager.setActiveNetworkInfo(MOBILE_CONNECTED);
+    assertThat(delegateChannel.resetCount).isEqualTo(1);
+    assertThat(delegateChannel.enterIdleCount).isEqualTo(0);
+
     // Switch to another network to trigger enterIdle()
     shadowConnectivityManager.setActiveNetworkInfo(WIFI_CONNECTED);
-    assertThat(delegateChannel.resetCount).isEqualTo(0);
+    assertThat(delegateChannel.resetCount).isEqualTo(1);
     assertThat(delegateChannel.enterIdleCount).isEqualTo(1);
 
+    // Switch to an offline network and then to null
+    shadowConnectivityManager.setActiveNetworkInfo(WIFI_DISCONNECTED);
     shadowConnectivityManager.setActiveNetworkInfo(null);
-    assertThat(delegateChannel.resetCount).isEqualTo(0);
-    assertThat(delegateChannel.enterIdleCount).isEqualTo(1);
-
-    shadowConnectivityManager.setActiveNetworkInfo(MOBILE_DISCONNECTED);
-    assertThat(delegateChannel.resetCount).isEqualTo(0);
+    assertThat(delegateChannel.resetCount).isEqualTo(1);
     assertThat(delegateChannel.enterIdleCount).isEqualTo(1);
 
     // Establish a connection
     shadowConnectivityManager.setActiveNetworkInfo(MOBILE_CONNECTED);
-    assertThat(delegateChannel.resetCount).isEqualTo(1);
+    assertThat(delegateChannel.resetCount).isEqualTo(2);
     assertThat(delegateChannel.enterIdleCount).isEqualTo(1);
 
     // Disconnect, then shutdown the channel and verify that the callback has been unregistered
@@ -168,10 +171,64 @@ public final class AndroidChannelBuilderTest {
     androidChannel.shutdown();
     shadowConnectivityManager.setActiveNetworkInfo(MOBILE_CONNECTED);
 
-    assertThat(delegateChannel.resetCount).isEqualTo(1);
+    assertThat(delegateChannel.resetCount).isEqualTo(2);
     assertThat(delegateChannel.enterIdleCount).isEqualTo(1);
   }
 
+  @Test
+  @Config(sdk = 24)
+  public void newChannelWithConnection_entersIdleOnConnectionChange_api24() {
+    shadowConnectivityManager.setActiveNetworkInfo(MOBILE_CONNECTED);
+    TestChannel delegateChannel = new TestChannel();
+    ManagedChannel androidChannel =
+        new AndroidChannelBuilder.AndroidChannel(
+            delegateChannel, RuntimeEnvironment.application.getApplicationContext());
+
+    shadowConnectivityManager.setActiveNetworkInfo(WIFI_CONNECTED);
+    assertThat(delegateChannel.resetCount).isEqualTo(0);
+    assertThat(delegateChannel.enterIdleCount).isEqualTo(1);
+
+    androidChannel.shutdown();
+  }
+
+  @Test
+  @Config(sdk = 23)
+  public void shutdownNowUnregistersBroadcastReceiver_api23() {
+    TestChannel delegateChannel = new TestChannel();
+    ManagedChannel androidChannel =
+        new AndroidChannelBuilder.AndroidChannel(
+            delegateChannel, RuntimeEnvironment.application.getApplicationContext());
+
+    shadowConnectivityManager.setActiveNetworkInfo(null);
+    RuntimeEnvironment.application.sendBroadcast(
+        new Intent(ConnectivityManager.CONNECTIVITY_ACTION));
+    androidChannel.shutdownNow();
+    shadowConnectivityManager.setActiveNetworkInfo(WIFI_CONNECTED);
+    RuntimeEnvironment.application.sendBroadcast(
+        new Intent(ConnectivityManager.CONNECTIVITY_ACTION));
+
+    assertThat(delegateChannel.resetCount).isEqualTo(0);
+  }
+
+  @Test
+  @Config(sdk = 24)
+  public void shutdownNowUnregistersNetworkCallback_api24() {
+    shadowConnectivityManager.setActiveNetworkInfo(null);
+    TestChannel delegateChannel = new TestChannel();
+    ManagedChannel androidChannel =
+        new AndroidChannelBuilder.AndroidChannel(
+            delegateChannel, RuntimeEnvironment.application.getApplicationContext());
+
+    androidChannel.shutdownNow();
+    shadowConnectivityManager.setActiveNetworkInfo(WIFI_CONNECTED);
+
+    assertThat(delegateChannel.resetCount).isEqualTo(0);
+  }
+
+  /**
+   * Extends Robolectric ShadowConnectivityManager to handle Android N's
+   * registerDefaultNetworkCallback API.
+   */
   @Implements(value = ConnectivityManager.class)
   public static class ShadowDefaultNetworkListenerConnectivityManager
       extends ShadowConnectivityManager {
@@ -185,16 +242,13 @@ public final class AndroidChannelBuilderTest {
     public void setActiveNetworkInfo(NetworkInfo activeNetworkInfo) {
       if (getApiLevel() >= N) {
         NetworkInfo previousNetworkInfo = getActiveNetworkInfo();
-        if (activeNetworkInfo != previousNetworkInfo) {
-          if (activeNetworkInfo != null && activeNetworkInfo.isConnected()) {
-            notifyDefaultNetworkCallbacksOnAvailable(
-                ShadowNetwork.newInstance(
-                    activeNetworkInfo.getType() /* use type as network ID */));
-          } else if (previousNetworkInfo != null && previousNetworkInfo.isConnected()) {
-            notifyDefaultNetworkCallbacksOnLost(
-                ShadowNetwork.newInstance(
-                    previousNetworkInfo.getType() /* use type as network ID */));
-          }
+        if (activeNetworkInfo != null && activeNetworkInfo.isConnected()) {
+          notifyDefaultNetworkCallbacksOnAvailable(
+              ShadowNetwork.newInstance(activeNetworkInfo.getType() /* use type as network ID */));
+        } else if (previousNetworkInfo != null) {
+          notifyDefaultNetworkCallbacksOnLost(
+              ShadowNetwork.newInstance(
+                  previousNetworkInfo.getType() /* use type as network ID */));
         }
       }
       super.setActiveNetworkInfo(activeNetworkInfo);
@@ -222,7 +276,7 @@ public final class AndroidChannelBuilderTest {
     @Override
     public void unregisterNetworkCallback(ConnectivityManager.NetworkCallback networkCallback) {
       if (getApiLevel() >= N) {
-        if (networkCallback != null && defaultNetworkCallbacks.contains(networkCallback)) {
+        if (networkCallback != null || defaultNetworkCallbacks.contains(networkCallback)) {
           defaultNetworkCallbacks.remove(networkCallback);
         }
       }
