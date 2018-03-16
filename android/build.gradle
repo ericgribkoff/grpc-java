@@ -45,8 +45,6 @@ dependencies {
     implementation 'io.grpc:grpc-okhttp:1.12.0-SNAPSHOT' // CURRENT_GRPC_VERSION
 
     testImplementation 'junit:junit:4.12'
-//    testImplementation 'org.mockito:mockito-core:1.10.19'
     testImplementation 'org.robolectric:robolectric:3.7.1'
     testImplementation 'com.google.truth:truth:0.39'
-//    testImplementation 'org.robolectric:robolectric:3.8-SNAPSHOT'
 }
