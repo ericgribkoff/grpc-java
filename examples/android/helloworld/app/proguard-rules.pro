@@ -15,3 +15,6 @@
 -dontwarn javax.naming.**
 -dontwarn okio.**
 -dontwarn sun.misc.Unsafe
+
+-whyareyoukeeping class com.google.common.collect.*
+-verbose

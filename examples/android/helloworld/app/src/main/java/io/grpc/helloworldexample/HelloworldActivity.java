@@ -28,15 +28,23 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+
+import io.grpc.Channel;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.android.AndroidChannelBuilder;
 import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
+import io.grpc.stub.StreamObserver;
+
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.ref.WeakReference;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+
+import static android.os.AsyncTask.THREAD_POOL_EXECUTOR;
 
 public class HelloworldActivity extends AppCompatActivity {
   private Button sendButton;
@@ -44,6 +52,7 @@ public class HelloworldActivity extends AppCompatActivity {
   private EditText portEdit;
   private EditText messageEdit;
   private TextView resultText;
+  private ManagedChannel channel;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -55,6 +64,9 @@ public class HelloworldActivity extends AppCompatActivity {
     messageEdit = (EditText) findViewById(R.id.message_edit_text);
     resultText = (TextView) findViewById(R.id.grpc_response_text);
     resultText.setMovementMethod(new ScrollingMovementMethod());
+
+    hostEdit.setText("localhost");
+    portEdit.setText("50051");
   }
 
   public void sendMessage(View view) {
@@ -62,29 +74,50 @@ public class HelloworldActivity extends AppCompatActivity {
         .hideSoftInputFromWindow(hostEdit.getWindowToken(), 0);
     sendButton.setEnabled(false);
     resultText.setText("");
-    new GrpcTask(this)
-        .execute(
-            hostEdit.getText().toString(),
-            messageEdit.getText().toString(),
-            portEdit.getText().toString());
+    initChannel();
+    new GrpcTask(this, channel)
+        .executeOnExecutor(THREAD_POOL_EXECUTOR, messageEdit.getText().toString());
+  }
+
+  public void initiateStream(View view) {
+    initChannel();
+    new GrpcStreamingTask(channel)
+        .executeOnExecutor(THREAD_POOL_EXECUTOR);
+  }
+
+  public void resetChannel(View view) {
+    if (channel != null) {
+      channel.shutdown();
+      channel = null;
+    }
+  }
+
+  private void initChannel() {
+    if (channel == null) {
+      String host = hostEdit.getText().toString();
+      String portStr = portEdit.getText().toString();
+      int port = TextUtils.isEmpty(portStr) ? 0 : Integer.valueOf(portStr);
+      channel =
+          AndroidChannelBuilder.forAddress(host, port, getApplicationContext())
+              .usePlaintext()
+              .build();
+    }
   }
 
   private static class GrpcTask extends AsyncTask<String, Void, String> {
     private final WeakReference<Activity> activityReference;
-    private ManagedChannel channel;
+    private final Channel channel;
 
-    private GrpcTask(Activity activity) {
+    private GrpcTask(Activity activity, Channel channel) {
       this.activityReference = new WeakReference<Activity>(activity);
+      this.channel = channel;
     }
 
     @Override
     protected String doInBackground(String... params) {
-      String host = params[0];
-      String message = params[1];
-      String portStr = params[2];
-      int port = TextUtils.isEmpty(portStr) ? 0 : Integer.valueOf(portStr);
+      String message = params[0];
       try {
-        channel = ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build();
+        // TODO(ericgribkoff) Channel could be shutdown by this point
         GreeterGrpc.GreeterBlockingStub stub = GreeterGrpc.newBlockingStub(channel);
         HelloRequest request = HelloRequest.newBuilder().setName(message).build();
         HelloReply reply = stub.sayHello(request);
@@ -100,11 +133,6 @@ public class HelloworldActivity extends AppCompatActivity {
 
     @Override
     protected void onPostExecute(String result) {
-      try {
-        channel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-      }
       Activity activity = activityReference.get();
       if (activity == null) {
         return;
@@ -115,4 +143,58 @@ public class HelloworldActivity extends AppCompatActivity {
       sendButton.setEnabled(true);
     }
   }
+
+  private static class GrpcStreamingTask extends AsyncTask<Void, Void, Void> {
+    private final Channel channel;
+
+    private GrpcStreamingTask(Channel channel) {
+      this.channel = channel;
+    }
+
+    @Override
+    protected Void doInBackground(Void... params) {
+      try {
+        // TODO(ericgribkoff) Channel could be shutdown by this point
+        GreeterGrpc.GreeterStub stub = GreeterGrpc.newStub(channel);
+        InfiniteStreamObserver responseObserver = new InfiniteStreamObserver();
+        final StreamObserver<HelloRequest> requestObserver = stub.infiniteStream(responseObserver);
+        responseObserver.requestObserver = requestObserver;
+        requestObserver.onNext(HelloRequest.getDefaultInstance());
+        responseObserver.latch.await(1000, TimeUnit.SECONDS);
+      } catch (Exception e) {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        e.printStackTrace(pw);
+        pw.flush();
+      }
+      return null;
+    }
+  }
+
+  private static class InfiniteStreamObserver implements StreamObserver<HelloReply> {
+    StreamObserver<HelloRequest> requestObserver;
+    CountDownLatch latch = new CountDownLatch(1);
+
+    @Override
+    public void onNext(HelloReply value) {
+      try {
+        Thread.sleep(1000);
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+      requestObserver.onNext(HelloRequest.getDefaultInstance());
+    }
+
+    @Override
+    public void onError(Throwable t) {
+      t.printStackTrace();
+      latch.countDown();
+    }
+
+    @Override
+    public void onCompleted() {
+      System.out.println("Stream onCompleted");
+      latch.countDown();
+    }
+  };
 }

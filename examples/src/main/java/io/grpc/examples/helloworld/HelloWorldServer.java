@@ -81,5 +81,27 @@ public class HelloWorldServer {
       responseObserver.onNext(reply);
       responseObserver.onCompleted();
     }
+
+    @Override
+    public StreamObserver<HelloRequest> infiniteStream(
+        final StreamObserver<HelloReply> responseObserver) {
+      return new StreamObserver<HelloRequest>() {
+        @Override
+        public void onNext(HelloRequest note) {
+          responseObserver.onNext(HelloReply.getDefaultInstance());
+        }
+
+        @Override
+        public void onError(Throwable t) {
+          System.out.println("infiniteStream cancelled");
+          t.printStackTrace();
+        }
+
+        @Override
+        public void onCompleted() {
+          responseObserver.onCompleted();
+        }
+      };
+    }
   }
 }
