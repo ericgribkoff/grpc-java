@@ -25,8 +25,6 @@ import io.grpc.internal.GrpcUtil;
 import io.grpc.okhttp.OkHttpChannelBuilder;
 import java.util.concurrent.TimeUnit;
 
-import javax.annotation.Nullable;
-
 /**
  * Builds a {@link ManagedChannel} that automatically monitors the Android device's network state.
  * Network changes are used to update the connectivity state of the underlying OkHttp-backed
@@ -89,7 +87,7 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
 
     private final ManagedChannel delegate;
     private final Context context;
-    @Nullable private final ConnectivityManager connectivityManager;
+    private final ConnectivityManager connectivityManager;
 
     private DefaultNetworkCallback defaultNetworkCallback;
     private NetworkReceiver networkReceiver;
@@ -104,11 +102,15 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
 
       // Android N added the registerDefaultNetworkCallback API to listen to changes in the device's
       // default network. For earlier Android API levels, use the BroadcastReceiver API.
-      if (connectivityManager != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-        defaultNetworkCallback =
-            new DefaultNetworkCallback(connectivityManager.getActiveNetworkInfo());
-        NetworkRequest.Builder builder = new NetworkRequest.Builder();
-        connectivityManager.registerNetworkCallback(builder.build(), defaultNetworkCallback);
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && connectivityManager != null) {
+        NetworkInfo currentNetwork = connectivityManager.getActiveNetworkInfo();
+
+        // The connection status may change before registration of the listener is complete, but
+        // this will at worst result in invoking resetConnectBackoff() instead of enterIdle() (or
+        // vice versa) on the first network change.
+        boolean isConnected = currentNetwork != null && currentNetwork.isConnected();
+
+        defaultNetworkCallback = new DefaultNetworkCallback(isConnected);
         connectivityManager.registerDefaultNetworkCallback(defaultNetworkCallback);
       } else {
         networkReceiver = new NetworkReceiver();
@@ -186,11 +188,10 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
     /** Respond to changes in the default network. Only used on API levels 24+. */
     @TargetApi(Build.VERSION_CODES.N)
     private class DefaultNetworkCallback extends ConnectivityManager.NetworkCallback {
+      private boolean isConnected = false;
 
-      private boolean isConnected;
-
-      DefaultNetworkCallback(NetworkInfo currentNetwork) {
-        isConnected = currentNetwork != null && currentNetwork.isConnected();
+      private DefaultNetworkCallback(boolean isConnected) {
+        this.isConnected = isConnected;
       }
 
       @Override
@@ -218,11 +219,11 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
         ConnectivityManager conn =
             (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo networkInfo = conn.getActiveNetworkInfo();
-        boolean connected = networkInfo != null && networkInfo.isConnected();
-        if (!isConnected && connected) {
+        boolean wasConnected = isConnected;
+        isConnected = networkInfo != null && networkInfo.isConnected();
+        if (isConnected && !wasConnected) {
           delegate.resetConnectBackoff();
         }
-        isConnected = connected;
       }
     }
   }
