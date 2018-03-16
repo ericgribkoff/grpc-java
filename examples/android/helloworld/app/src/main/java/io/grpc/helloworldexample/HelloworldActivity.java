@@ -23,6 +23,7 @@ import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
 import android.text.method.ScrollingMovementMethod;
+import android.util.Log;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
@@ -36,8 +37,13 @@ import io.grpc.android.AndroidChannelBuilder;
 import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
+import io.grpc.testing.integration.Messages;
+import io.grpc.testing.integration.Messages.StreamingOutputCallRequest;
+import io.grpc.testing.integration.Messages.StreamingOutputCallResponse;
 import io.grpc.stub.StreamObserver;
+import io.grpc.testing.integration.TestServiceGrpc;
 
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.ref.WeakReference;
@@ -65,8 +71,23 @@ public class HelloworldActivity extends AppCompatActivity {
     resultText = (TextView) findViewById(R.id.grpc_response_text);
     resultText.setMovementMethod(new ScrollingMovementMethod());
 
-    hostEdit.setText("localhost");
-    portEdit.setText("50051");
+    hostEdit.setText("grpc-test.sandbox.googleapis.com");
+    portEdit.setText("443");
+
+    String loggingConfig =
+            "handlers=java.util.logging.ConsoleHandler\n"
+                    + "io.grpc.level=FINE\n"
+                    + "java.util.logging.ConsoleHandler.level=FINE\n"
+                    + "java.util.logging.ConsoleHandler.formatter=java.util.logging.SimpleFormatter";
+    try {
+      java.util.logging.LogManager.getLogManager()
+              .readConfiguration(
+                      new java.io.ByteArrayInputStream(
+                              loggingConfig.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+
   }
 
   public void sendMessage(View view) {
@@ -79,9 +100,11 @@ public class HelloworldActivity extends AppCompatActivity {
         .executeOnExecutor(THREAD_POOL_EXECUTOR, messageEdit.getText().toString());
   }
 
+  private int streamCount = 0;
+
   public void initiateStream(View view) {
     initChannel();
-    new GrpcStreamingTask(channel)
+    new GrpcStreamingTask(channel, streamCount++)
         .executeOnExecutor(THREAD_POOL_EXECUTOR);
   }
 
@@ -99,7 +122,7 @@ public class HelloworldActivity extends AppCompatActivity {
       int port = TextUtils.isEmpty(portStr) ? 0 : Integer.valueOf(portStr);
       channel =
           AndroidChannelBuilder.forAddress(host, port, getApplicationContext())
-              .usePlaintext()
+//              .usePlaintext()
               .build();
     }
   }
@@ -146,20 +169,22 @@ public class HelloworldActivity extends AppCompatActivity {
 
   private static class GrpcStreamingTask extends AsyncTask<Void, Void, Void> {
     private final Channel channel;
+    private final int id;
 
-    private GrpcStreamingTask(Channel channel) {
+    private GrpcStreamingTask(Channel channel, int id) {
       this.channel = channel;
+      this.id = id;
     }
 
     @Override
     protected Void doInBackground(Void... params) {
       try {
         // TODO(ericgribkoff) Channel could be shutdown by this point
-        GreeterGrpc.GreeterStub stub = GreeterGrpc.newStub(channel);
-        InfiniteStreamObserver responseObserver = new InfiniteStreamObserver();
-        final StreamObserver<HelloRequest> requestObserver = stub.infiniteStream(responseObserver);
+        TestServiceGrpc.TestServiceStub stub = TestServiceGrpc.newStub(channel);
+        InfiniteStreamObserver responseObserver = new InfiniteStreamObserver(id);
+        final StreamObserver<StreamingOutputCallRequest> requestObserver = stub.fullDuplexCall(responseObserver);
         responseObserver.requestObserver = requestObserver;
-        requestObserver.onNext(HelloRequest.getDefaultInstance());
+        requestObserver.onNext(getRequest());
         responseObserver.latch.await(1000, TimeUnit.SECONDS);
       } catch (Exception e) {
         StringWriter sw = new StringWriter();
@@ -171,29 +196,41 @@ public class HelloworldActivity extends AppCompatActivity {
     }
   }
 
-  private static class InfiniteStreamObserver implements StreamObserver<HelloReply> {
-    StreamObserver<HelloRequest> requestObserver;
+  private static StreamingOutputCallRequest getRequest() {
+    return StreamingOutputCallRequest.newBuilder()
+        .addResponseParameters(Messages.ResponseParameters.newBuilder().setSize(31415))
+        .build();
+  }
+
+  private static class InfiniteStreamObserver implements StreamObserver<StreamingOutputCallResponse> {
+    private final int id;
+    StreamObserver<StreamingOutputCallRequest> requestObserver;
     CountDownLatch latch = new CountDownLatch(1);
 
+    private InfiniteStreamObserver(int id) {
+      this.id = id;
+    }
+
     @Override
-    public void onNext(HelloReply value) {
+    public void onNext(StreamingOutputCallResponse value) {
       try {
         Thread.sleep(1000);
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
-      requestObserver.onNext(HelloRequest.getDefaultInstance());
+      Log.d("grpc", "Sending request on infinite stream " + id);
+      requestObserver.onNext(getRequest());
     }
 
     @Override
     public void onError(Throwable t) {
-      t.printStackTrace();
+      Log.d("grpc", "Infinite stream " + id + " encountered an error", t);
       latch.countDown();
     }
 
     @Override
     public void onCompleted() {
-      System.out.println("Stream onCompleted");
+      Log.d("grpc", "Infinite stream " + id + " is not so infinite");
       latch.countDown();
     }
   };
