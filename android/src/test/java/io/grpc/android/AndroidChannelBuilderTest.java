@@ -53,11 +53,8 @@ import io.grpc.MethodDescriptor;
 @RunWith(RobolectricTestRunner.class)
 @Config(shadows={AndroidChannelBuilderTest.ShadowDefaultNetworkListenerConnectivityManager.class})
 public final class AndroidChannelBuilderTest {
-//  private TestChannel delegateChannel;
-//  private ManagedChannel androidChannel;
   private ConnectivityManager connectivityManager;
   private ShadowConnectivityManager shadowConnectivityManager;
-//  private ShadowNetworkInfo shadowOfActiveNetworkInfo;
 
   private final static NetworkInfo WIFI_CONNECTED = ShadowNetworkInfo.newInstance(NetworkInfo.DetailedState.CONNECTED,
           ConnectivityManager.TYPE_WIFI, 0, true, true);
@@ -78,13 +75,32 @@ public final class AndroidChannelBuilderTest {
 
   @Test
   @Config(sdk = 16)
-  public void newConnectionResetsConnectBackoff_api16() {
-    shadowConnectivityManager.setActiveNetworkInfo(WIFI_DISCONNECTED);
+  public void resetConnectBackoff_api16() {
     TestChannel delegateChannel = new TestChannel();
     ManagedChannel androidChannel = new AndroidChannelBuilder.AndroidChannel(delegateChannel, RuntimeEnvironment.application.getApplicationContext());
     assertThat(delegateChannel.resetCount).isEqualTo(0);
 
+    // On API levels < 24, the broadcast receiver will invoke resetConnectBackoff() on the first
+    // connectivity action broadcast regardless of previous connection status.
     shadowConnectivityManager.setActiveNetworkInfo(WIFI_CONNECTED);
+    RuntimeEnvironment.application.sendBroadcast(new Intent(ConnectivityManager.CONNECTIVITY_ACTION));
+
+
+    androidChannel.shutdown();
+
+    assertThat(delegateChannel.resetCount).isEqualTo(1);
+    assertThat(delegateChannel.enterIdleCount).isEqualTo(0); // never called on
+  }
+
+  @Test
+  @Config(sdk = 16)
+  public void startDisconnected_newConnectionResetsConnectBackoff_api16() {
+    shadowConnectivityManager.setActiveNetworkInfo(MOBILE_DISCONNECTED);
+    TestChannel delegateChannel = new TestChannel();
+    ManagedChannel androidChannel = new AndroidChannelBuilder.AndroidChannel(delegateChannel, RuntimeEnvironment.application.getApplicationContext());
+    assertThat(delegateChannel.resetCount).isEqualTo(0);
+
+    shadowConnectivityManager.setActiveNetworkInfo(MOBILE_CONNECTED);
     RuntimeEnvironment.application.sendBroadcast(new Intent(ConnectivityManager.CONNECTIVITY_ACTION));
     androidChannel.shutdown();
 
@@ -93,50 +109,42 @@ public final class AndroidChannelBuilderTest {
 
   @Test
   @Config(sdk = 24)
-  public void newConnectionResetsConnectBackoff_api24() {
-    shadowConnectivityManager.setActiveNetworkInfo(WIFI_DISCONNECTED);
-    TestChannel delegateChannel = new TestChannel();
-    ManagedChannel androidChannel = new AndroidChannelBuilder.AndroidChannel(delegateChannel, RuntimeEnvironment.application.getApplicationContext());
-
-    assertThat(delegateChannel.resetCount).isEqualTo(0);
-
-    NetworkInfo networkInfo = ShadowNetworkInfo.newInstance(
-            null,
-            ConnectivityManager.TYPE_MOBILE_HIPRI,
-            TelephonyManager.NETWORK_TYPE_EDGE,
-            true,
-            false);
-    shadowConnectivityManager.setActiveNetworkInfo(networkInfo);
-    androidChannel.shutdown();
-
-    assertThat(delegateChannel.resetCount).isEqualTo(1);
-
-
-  }
-
-  @Test
-  @Config(sdk = 24)
-  public void changedConnectionEntersIdle_api24() {
-    shadowConnectivityManager.setActiveNetworkInfo(WIFI_CONNECTED);
+  public void startConnected_newConnectionEntersIdle_api24() {
+    shadowConnectivityManager.setActiveNetworkInfo(MOBILE_CONNECTED);
     TestChannel delegateChannel = new TestChannel();
     ManagedChannel androidChannel =  new AndroidChannelBuilder.AndroidChannel(delegateChannel, RuntimeEnvironment.application.getApplicationContext());
 
     assertThat(delegateChannel.resetCount).isEqualTo(0);
     assertThat(delegateChannel.enterIdleCount).isEqualTo(0);
 
-    shadowConnectivityManager.setActiveNetworkInfo(MOBILE_CONNECTED);
+    shadowConnectivityManager.setActiveNetworkInfo(WIFI_CONNECTED);
+    androidChannel.shutdown();
 
     assertThat(delegateChannel.resetCount).isEqualTo(0);
     assertThat(delegateChannel.enterIdleCount).isEqualTo(1);
 
+  }
+
+  @Test
+  @Config(sdk = 24)
+  public void startDisconnected_newConnectionResetsConnectBackoff_api24() {
+    shadowConnectivityManager.setActiveNetworkInfo(MOBILE_DISCONNECTED);
+    TestChannel delegateChannel = new TestChannel();
+    ManagedChannel androidChannel = new AndroidChannelBuilder.AndroidChannel(delegateChannel, RuntimeEnvironment.application.getApplicationContext());
+
+    assertThat(delegateChannel.resetCount).isEqualTo(0);
+    assertThat(delegateChannel.enterIdleCount).isEqualTo(0);
+
+    shadowConnectivityManager.setActiveNetworkInfo(MOBILE_CONNECTED);
     androidChannel.shutdown();
+
+    assertThat(delegateChannel.resetCount).isEqualTo(1);
+    assertThat(delegateChannel.enterIdleCount).isEqualTo(0);
   }
 
   @Test
   @Config(sdk = 16)
   public void channelShutdownUnregistersCallbacks_api16() {
-    Context context = RuntimeEnvironment.application.getApplicationContext();
-
     shadowConnectivityManager.setActiveNetworkInfo(WIFI_DISCONNECTED);
     TestChannel delegateChannel = new TestChannel();
     ManagedChannel androidChannel = new AndroidChannelBuilder.AndroidChannel(delegateChannel, RuntimeEnvironment.application.getApplicationContext());
@@ -155,10 +163,7 @@ public final class AndroidChannelBuilderTest {
     TestChannel delegateChannel = new TestChannel();
     ManagedChannel androidChannel =  new AndroidChannelBuilder.AndroidChannel(delegateChannel, RuntimeEnvironment.application.getApplicationContext());
 
-    assertThat(delegateChannel.resetCount).isEqualTo(0);
-
     androidChannel.shutdown();
-
 
     shadowConnectivityManager.setActiveNetworkInfo(WIFI_CONNECTED);
 
