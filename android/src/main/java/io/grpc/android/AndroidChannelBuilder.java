@@ -88,7 +88,6 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
 
     private DefaultNetworkCallback defaultNetworkCallback;
     private NetworkReceiver networkReceiver;
-    private IntentFilter networkIntentFilter;
 
     @VisibleForTesting
     AndroidChannel(final ManagedChannel delegate, Context context) {
@@ -111,7 +110,8 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
         connectivityManager.registerDefaultNetworkCallback(defaultNetworkCallback);
       } else {
         networkReceiver = new NetworkReceiver();
-        networkIntentFilter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
+        IntentFilter networkIntentFilter =
+            new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
         context.registerReceiver(networkReceiver, networkIntentFilter);
       }
     }
