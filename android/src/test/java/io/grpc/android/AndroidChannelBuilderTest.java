@@ -81,15 +81,41 @@ public final class AndroidChannelBuilderTest {
     assertThat(delegateChannel.resetCount).isEqualTo(0);
 
     // On API levels < 24, the broadcast receiver will invoke resetConnectBackoff() on the first
-    // connectivity action broadcast regardless of previous connection status.
+    // connectivity action broadcast regardless of previous connection status
     shadowConnectivityManager.setActiveNetworkInfo(WIFI_CONNECTED);
     RuntimeEnvironment.application.sendBroadcast(new Intent(ConnectivityManager.CONNECTIVITY_ACTION));
-
-
-    androidChannel.shutdown();
-
     assertThat(delegateChannel.resetCount).isEqualTo(1);
-    assertThat(delegateChannel.enterIdleCount).isEqualTo(0); // never called on
+
+    // The broadcast receiver may fire when the active network status has not actually changed
+    RuntimeEnvironment.application.sendBroadcast(new Intent(ConnectivityManager.CONNECTIVITY_ACTION));
+    assertThat(delegateChannel.resetCount).isEqualTo(1);
+
+    // Drop the connection
+    shadowConnectivityManager.setActiveNetworkInfo(null);
+    RuntimeEnvironment.application.sendBroadcast(new Intent(ConnectivityManager.CONNECTIVITY_ACTION));
+    assertThat(delegateChannel.resetCount).isEqualTo(1);
+
+    // Notify that a new but not connected network is available
+    shadowConnectivityManager.setActiveNetworkInfo(MOBILE_DISCONNECTED);
+    RuntimeEnvironment.application.sendBroadcast(new Intent(ConnectivityManager.CONNECTIVITY_ACTION));
+    assertThat(delegateChannel.resetCount).isEqualTo(1);
+
+    // Establish a connection
+    shadowConnectivityManager.setActiveNetworkInfo(MOBILE_CONNECTED);
+    RuntimeEnvironment.application.sendBroadcast(new Intent(ConnectivityManager.CONNECTIVITY_ACTION));
+    assertThat(delegateChannel.resetCount).isEqualTo(2);
+
+    // Disconnect, then shutdown the channel and verify that the broadcast reciever has been
+    // unregistered
+    shadowConnectivityManager.setActiveNetworkInfo(null);
+    RuntimeEnvironment.application.sendBroadcast(new Intent(ConnectivityManager.CONNECTIVITY_ACTION));
+    androidChannel.shutdown();
+    shadowConnectivityManager.setActiveNetworkInfo(MOBILE_CONNECTED);
+    RuntimeEnvironment.application.sendBroadcast(new Intent(ConnectivityManager.CONNECTIVITY_ACTION));
+
+    assertThat(delegateChannel.resetCount).isEqualTo(2);
+    // enterIdle is not called on API levels < 24
+    assertThat(delegateChannel.enterIdleCount).isEqualTo(0);
   }
 
   @Test
