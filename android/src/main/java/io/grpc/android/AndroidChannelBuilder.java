@@ -8,11 +8,8 @@ import android.content.IntentFilter;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkInfo;
-import android.net.NetworkRequest;
 import android.os.Build;
-
 import com.google.common.annotations.VisibleForTesting;
-
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.ConnectivityState;
