@@ -18,7 +18,7 @@ package io.grpc.testing.integration;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.io.Files;
-import io.grpc.ManagedChannel;
+import io.grpc.*;
 import io.grpc.alts.AltsChannelBuilder;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.GrpcUtil;
@@ -28,10 +28,13 @@ import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.okhttp.OkHttpChannelBuilder;
 import io.grpc.okhttp.internal.Platform;
+import io.grpc.stub.StreamObserver;
 import io.netty.handler.ssl.SslContext;
 import java.io.File;
 import java.io.FileInputStream;
 import java.nio.charset.Charset;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import javax.net.ssl.SSLSocketFactory;
 
 /**
@@ -205,6 +208,82 @@ public class TestServiceClient {
     System.out.println("Test completed.");
   }
 
+  private static class CustomListener extends ClientCall.Listener<Messages.StreamingOutputCallResponse> {
+    @Override
+    public void onHeaders(Metadata headers) {}
+
+    @Override
+    public void onMessage(Messages.StreamingOutputCallResponse message) {
+//        System.out.println("onMessage: " + message);
+    }
+
+    @Override
+    public void onClose(Status status, Metadata trailers) {
+//        new Exception().printStackTrace(System.out);
+//        System.out.println("onClose");
+//        call.halfClose();
+    }
+
+    @Override
+    public void onReady() {}
+  }
+
+  private void blah() {
+    new CustomListener();
+  }
+
+  private void doCall(Channel channel, final CountDownLatch latch) {
+    final ClientCall<Messages.StreamingOutputCallRequest, Messages.StreamingOutputCallResponse> call =
+            channel.newCall(TestServiceGrpc.getFullDuplexCallMethod(), CallOptions.DEFAULT);
+    call.start(
+            new CustomListener(),
+//            new ClientCall.Listener<Messages.StreamingOutputCallResponse>() {
+//      @Override
+//      public void onHeaders(Metadata headers) {}
+//
+//      @Override
+//      public void onMessage(Messages.StreamingOutputCallResponse message) {
+////        System.out.println("onMessage: " + message);
+//      }
+//
+//      @Override
+//      public void onClose(Status status, Metadata trailers) {
+////        new Exception().printStackTrace(System.out);
+////        System.out.println("onClose");
+//        latch.countDown();
+////        call.halfClose();
+//      }
+//
+//      @Override
+//      public void onReady() {}
+//    },
+            new Metadata());
+    call.sendMessage(Messages.StreamingOutputCallRequest.newBuilder().build()); //getDefaultInstance());
+    call.request(1);
+//    call.halfClose();
+  }
+
+  private void doAsyncCall(Channel channel) {
+            TestServiceGrpc.TestServiceStub asyncStub = TestServiceGrpc.newStub(channel);
+        StreamObserver<Messages.StreamingOutputCallRequest> requestObserver = asyncStub.fullDuplexCall(new StreamObserver<Messages.StreamingOutputCallResponse>() {
+          @Override
+          public void onNext(Messages.StreamingOutputCallResponse value) {
+            System.out.println("onNext: " + value);
+          }
+
+          @Override
+          public void onError(Throwable t) {
+            System.out.println("onError");
+          }
+
+          @Override
+          public void onCompleted() {
+            System.out.println("onCompleted");
+          }
+        });
+        requestObserver.onNext(Messages.StreamingOutputCallRequest.getDefaultInstance());
+  }
+
   private void runTest(TestCases testCase) throws Exception {
     switch (testCase) {
       case EMPTY_UNARY:
@@ -244,9 +323,75 @@ public class TestServiceClient {
         tester.serverCompressedStreaming();
         break;
 
-      case PING_PONG:
-        tester.pingPong();
+      case PING_PONG: {
+//        tester.pingPong();
+
+        Channel channel = tester.createChannel();
+
+        int iterations = 100;
+        final CountDownLatch latch = new CountDownLatch(iterations);
+        for (int j=0; j<100; j++) {
+          for (int i = 0; i < iterations; i++) {
+            doCall(channel, latch);
+            blah();
+//          doAsyncCall(channel);
+          }
+          System.out.println("looping again");
+          Thread.sleep(1000);
+        }
+
+//        ClientCall<Messages.StreamingOutputCallRequest, Messages.StreamingOutputCallResponse> call =
+//                channel.newCall(TestServiceGrpc.getFullDuplexCallMethod(), CallOptions.DEFAULT);
+//        call.start(new ClientCall.Listener<Messages.StreamingOutputCallResponse>() {
+//          @Override
+//          public void onHeaders(Metadata headers) {}
+//
+//          @Override
+//          public void onMessage(Messages.StreamingOutputCallResponse message) {
+//            System.out.println("onMessage: " + message);
+//          }
+//
+//          @Override
+//          public void onClose(Status status, Metadata trailers) {
+//            new Exception().printStackTrace(System.out);
+//            System.out.println("onClose");
+//            latch.countDown();
+//          }
+//
+//          @Override
+//          public void onReady() {}
+//        }, new Metadata());
+//        call.sendMessage(Messages.StreamingOutputCallRequest.getDefaultInstance());
+//        call.request(1);
+
+//        TestServiceGrpc.TestServiceStub asyncStub = TestServiceGrpc.newStub(channel);
+//        StreamObserver<Messages.StreamingOutputCallRequest> requestObserver = asyncStub.fullDuplexCall(new StreamObserver<Messages.StreamingOutputCallResponse>() {
+//          @Override
+//          public void onNext(Messages.StreamingOutputCallResponse value) {
+//            System.out.println("onNext: " + value);
+//          }
+//
+//          @Override
+//          public void onError(Throwable t) {
+//            System.out.println("onError");
+//            latch.countDown();
+//          }
+//
+//          @Override
+//          public void onCompleted() {
+//            System.out.println("onCompleted");
+//            latch.countDown();
+//          }
+//        });
+//        requestObserver.onNext(Messages.StreamingOutputCallRequest.getDefaultInstance());
+        latch.await(100, TimeUnit.SECONDS);
+
+//        Thread.sleep(10000);
+        System.out.println("Done");
+        Thread.sleep(100000);
+        System.out.println("more done");
         break;
+      }
 
       case EMPTY_STREAM:
         tester.emptyStream();

@@ -173,33 +173,43 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
   @Override
   public StreamObserver<Messages.StreamingOutputCallRequest> fullDuplexCall(
       final StreamObserver<Messages.StreamingOutputCallResponse> responseObserver) {
-    final ResponseDispatcher dispatcher = new ResponseDispatcher(responseObserver);
-    return new StreamObserver<StreamingOutputCallRequest>() {
-      @Override
-      public void onNext(StreamingOutputCallRequest request) {
-        if (request.hasResponseStatus()) {
-          dispatcher.cancel();
-          dispatcher.onError(Status.fromCodeValue(request.getResponseStatus().getCode())
-              .withDescription(request.getResponseStatus().getMessage())
-              .asRuntimeException());
-          return;
-        }
-        dispatcher.enqueue(toChunkQueue(request));
-      }
+        return new StreamObserver<Messages.StreamingOutputCallRequest>() {
+          @Override
+          public void onNext(Messages.StreamingOutputCallRequest request) {
+            responseObserver.onNext(Messages.StreamingOutputCallResponse.newBuilder().build());
+            responseObserver.onCompleted();
+          }
 
-      @Override
-      public void onCompleted() {
-        if (!dispatcher.isCancelled()) {
-          // Tell the dispatcher that all input has been received.
-          dispatcher.completeInput();
-        }
-      }
-
-      @Override
-      public void onError(Throwable cause) {
-        dispatcher.onError(cause);
-      }
-    };
+          @Override public void onError(Throwable throwable) {}
+          @Override public void onCompleted() {}
+        };
+//    final ResponseDispatcher dispatcher = new ResponseDispatcher(responseObserver);
+//    return new StreamObserver<StreamingOutputCallRequest>() {
+//      @Override
+//      public void onNext(StreamingOutputCallRequest request) {
+//        if (request.hasResponseStatus()) {
+//          dispatcher.cancel();
+//          dispatcher.onError(Status.fromCodeValue(request.getResponseStatus().getCode())
+//              .withDescription(request.getResponseStatus().getMessage())
+//              .asRuntimeException());
+//          return;
+//        }
+//        dispatcher.enqueue(toChunkQueue(request));
+//      }
+//
+//      @Override
+//      public void onCompleted() {
+//        if (!dispatcher.isCancelled()) {
+//          // Tell the dispatcher that all input has been received.
+//          dispatcher.completeInput();
+//        }
+//      }
+//
+//      @Override
+//      public void onError(Throwable cause) {
+//        dispatcher.onError(cause);
+//      }
+//    };
   }
 
   /**
