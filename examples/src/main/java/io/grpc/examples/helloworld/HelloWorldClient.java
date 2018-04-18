@@ -16,9 +16,12 @@
 
 package io.grpc.examples.helloworld;
 
+import io.grpc.CallOptions;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.MethodDescriptor;
 import io.grpc.StatusRuntimeException;
+import io.grpc.stub.ClientCalls;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -37,7 +40,7 @@ public class HelloWorldClient {
     this(ManagedChannelBuilder.forAddress(host, port)
         // Channels are secure by default (via SSL/TLS). For the example we disable TLS to avoid
         // needing certificates.
-        .usePlaintext(true)
+        // .usePlaintext(true)
         .build());
   }
 
@@ -54,10 +57,14 @@ public class HelloWorldClient {
   /** Say hello to server. */
   public void greet(String name) {
     logger.info("Will try to greet " + name + " ...");
+    MethodDescriptor<HelloRequest, HelloReply> methodDescriptor =
+        GreeterGrpc.getSayHelloMethod().toBuilder().setFullMethodName("google.apps.workflow.approval.v1.AppsWorkflowApprovalService/CreateApproval").build();
     HelloRequest request = HelloRequest.newBuilder().setName(name).build();
     HelloReply response;
     try {
-      response = blockingStub.sayHello(request);
+      response = ClientCalls.blockingUnaryCall(
+          channel, methodDescriptor, CallOptions.DEFAULT, request);
+      // response = blockingStub.sayHello(request);
     } catch (StatusRuntimeException e) {
       logger.log(Level.WARNING, "RPC failed: {0}", e.getStatus());
       return;
@@ -70,7 +77,7 @@ public class HelloWorldClient {
    * greeting.
    */
   public static void main(String[] args) throws Exception {
-    HelloWorldClient client = new HelloWorldClient("localhost", 50051);
+    HelloWorldClient client = new HelloWorldClient("people-pa.googleapis.com", 443);
     try {
       /* Access a service running on the local machine on port 50051 */
       String user = "world";

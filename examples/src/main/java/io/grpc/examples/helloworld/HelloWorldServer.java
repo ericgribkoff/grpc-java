@@ -30,9 +30,8 @@ public class HelloWorldServer {
 
   private Server server;
 
-  private void start() throws IOException {
+  private void start(int port) throws IOException {
     /* The port on which the server should run */
-    int port = 50051;
     server = ServerBuilder.forPort(port)
         .addService(new GreeterImpl())
         .build()
@@ -68,8 +67,9 @@ public class HelloWorldServer {
    * Main launches the server from the command line.
    */
   public static void main(String[] args) throws IOException, InterruptedException {
+    int port = Integer.parseInt(args[0]);
     final HelloWorldServer server = new HelloWorldServer();
-    server.start();
+    server.start(port);
     server.blockUntilShutdown();
   }
 
@@ -80,6 +80,27 @@ public class HelloWorldServer {
       HelloReply reply = HelloReply.newBuilder().setMessage("Hello " + req.getName()).build();
       responseObserver.onNext(reply);
       responseObserver.onCompleted();
+    }
+
+    @Override
+    public StreamObserver<HelloRequest> sayHelloStreaming(final StreamObserver<HelloReply> responseObserver) {
+      return new StreamObserver<HelloRequest>() {
+        @Override
+        public void onNext(HelloRequest req) {
+          HelloReply reply = HelloReply.newBuilder().setMessage("Hello " + req.getName()).build();
+          responseObserver.onNext(reply);
+        }
+
+        @Override
+        public void onError(Throwable t) {
+          System.out.println("cancelled");
+        }
+
+        @Override
+        public void onCompleted() {
+          responseObserver.onCompleted();
+        }
+      };
     }
   }
 }
