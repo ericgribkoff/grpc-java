@@ -37,6 +37,8 @@ import io.grpc.ClientInterceptors.CheckedForwardingClientCall;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.android.AndroidChannelBuilder;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -65,7 +67,9 @@ public class TesterActivity extends AppCompatActivity
     buttons.add((Button) findViewById(R.id.ping_pong_button));
 
     hostEdit = (EditText) findViewById(R.id.host_edit_text);
+    hostEdit.setText("grpc-test.sandbox.googleapis.com");
     portEdit = (EditText) findViewById(R.id.port_edit_text);
+    portEdit.setText("443");
     resultText = (TextView) findViewById(R.id.grpc_response_text);
     getCheckBox = (CheckBox) findViewById(R.id.get_checkbox);
     testCertCheckBox = (CheckBox) findViewById(R.id.test_cert_checkbox);
@@ -73,6 +77,21 @@ public class TesterActivity extends AppCompatActivity
     ProviderInstaller.installIfNeededAsync(this, this);
     // Disable buttons until the security provider installing finishes.
     enableButtons(false);
+
+    String loggingConfig =
+        "handlers=java.util.logging.ConsoleHandler\n"
+            + "io.grpc.level=FINE\n"
+            + "java.util.logging.ConsoleHandler.level=FINE\n"
+            + "java.util.logging.ConsoleHandler.formatter=java.util.logging.SimpleFormatter";
+    try {
+      java.util.logging.LogManager.getLogManager()
+          .readConfiguration(
+              new java.io.ByteArrayInputStream(
+                  loggingConfig.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+
   }
 
   public void startEmptyUnary(View view) {
@@ -127,7 +146,10 @@ public class TesterActivity extends AppCompatActivity
       testCert = null;
     }
     ManagedChannel channel =
-        TesterOkHttpChannelBuilder.build(host, port, serverHostOverride, true, testCert);
+        AndroidChannelBuilder.forAddress(host, port)
+            .context(this.getApplicationContext())
+            .build();
+        // TesterOkHttpChannelBuilder.build(host, port, serverHostOverride, true, testCert);
 
     List<ClientInterceptor> interceptors = new ArrayList<ClientInterceptor>();
     if (getCheckBox.isChecked()) {

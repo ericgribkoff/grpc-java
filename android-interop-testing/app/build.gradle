@@ -71,6 +71,7 @@ dependencies {
     implementation 'junit:junit:4.12'
 
     // You need to build grpc-java to obtain the grpc libraries below.
+    implementation 'io.grpc:grpc-android:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     implementation 'io.grpc:grpc-auth:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     implementation 'io.grpc:grpc-okhttp:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     implementation 'io.grpc:grpc-protobuf-lite:1.14.0-SNAPSHOT' // CURRENT_GRPC_VERSION
