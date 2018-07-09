@@ -33,6 +33,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.concurrent.Executor;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
@@ -48,6 +50,8 @@ import javax.annotation.concurrent.GuardedBy;
  */
 final class DelayedClientTransport implements ManagedClientTransport {
   private final LogId lodId = LogId.allocate(getClass().getName());
+
+  static final Logger logger = Logger.getLogger(DelayedClientTransport.class.getName());
 
   private final Object lock = new Object();
 
@@ -176,6 +180,7 @@ final class DelayedClientTransport implements ManagedClientTransport {
    */
   @GuardedBy("lock")
   private PendingStream createPendingStream(PickSubchannelArgs args) {
+    // logger.log(Level.FINE, "createPendingStream");
     PendingStream pendingStream = new PendingStream(args);
     pendingStreams.add(pendingStream);
     if (getPendingStreamsCount() == 1) {

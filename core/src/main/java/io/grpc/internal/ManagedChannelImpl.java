@@ -360,6 +360,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
       rescheduleIdleTimer();
     }
     if (lbHelper != null) {
+      logger.log(Level.FINE, "not exiting idle since lbHelper != null");
       return;
     }
     logger.log(Level.FINE, "[{0}] Exiting idle mode", getLogId());
@@ -752,6 +753,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
 
   // Called from channelExecutor
   private void updateSubchannelPicker(SubchannelPicker newPicker) {
+    logger.log(Level.FINE, "updateSubchannelPicker() called: [{0}]", newPicker);
     subchannelPicker = newPicker;
     delayedTransport.reprocess(newPicker);
   }
@@ -797,6 +799,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
     @Override
     public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method,
         CallOptions callOptions) {
+      // logger.log(Level.FINE, "newCall");
       return new ClientCallImpl<ReqT, RespT>(
               method,
               getCallExecutor(callOptions),
@@ -1257,6 +1260,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
         public void run() {
           // Call LB only if it's not shutdown.  If LB is shutdown, lbHelper won't match.
           if (NameResolverListenerImpl.this.helper != ManagedChannelImpl.this.lbHelper) {
+            logger.log(Level.FINE, "LB is shutdown");
             return;
           }
 

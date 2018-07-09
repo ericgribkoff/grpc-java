@@ -54,6 +54,7 @@ public class TesterActivity extends AppCompatActivity
   private TextView resultText;
   private CheckBox getCheckBox;
   private CheckBox testCertCheckBox;
+  private ManagedChannel channel;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -122,14 +123,15 @@ public class TesterActivity extends AppCompatActivity
 
   @Override
   public void onComplete(String result) {
+    channel.shutdown();
     resultText.setText(result);
-    enableButtons(true);
+    // enableButtons(true);
   }
 
   private void startTest(String testCase) {
     ((InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(
         hostEdit.getWindowToken(), 0);
-    enableButtons(false);
+    // enableButtons(false);
     resultText.setText("Testing...");
 
     String host = hostEdit.getText().toString();
@@ -145,7 +147,7 @@ public class TesterActivity extends AppCompatActivity
       serverHostOverride = null;
       testCert = null;
     }
-    ManagedChannel channel =
+    channel =
         AndroidChannelBuilder.forAddress(host, port)
             .context(this.getApplicationContext())
             .build();

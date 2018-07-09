@@ -215,8 +215,8 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
         // The connection status may change before registration of the listener is complete, but
         // this will at worst result in invoking resetConnectBackoff() instead of enterIdle() (or
         // vice versa) on the first network change.
-        boolean isConnected = false;//currentNetwork != null && currentNetwork.isConnected();
-        Log.w(LOG_TAG, "isConnected: " + isConnected);
+        boolean isConnected = true;//currentNetwork != null && currentNetwork.isConnected();
+        // Log.w(LOG_TAG, "isConnected: " + isConnected);
 
         final DefaultNetworkCallback defaultNetworkCallback =
             new DefaultNetworkCallback(isConnected);
@@ -323,12 +323,12 @@ public final class AndroidChannelBuilder extends ForwardingChannelBuilder<Androi
 
       @Override
       public void onAvailable(Network network) {
-        Log.w(LOG_TAG, "onAvailable called (currently isConnected = " + isConnected + ")");
+        // Log.w(LOG_TAG, "onAvailable called (currently isConnected = " + isConnected + ")");
         if (isConnected) {
-          Log.w(LOG_TAG, "Invoking enterIdle");
+          // Log.w(LOG_TAG, "Invoking enterIdle");
           delegate.enterIdle();
         } else {
-          Log.w(LOG_TAG, "Invoking resetConnectBackoff");
+          // Log.w(LOG_TAG, "Invoking resetConnectBackoff");
           delegate.resetConnectBackoff();
         }
         isConnected = true;
