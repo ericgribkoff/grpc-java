@@ -1044,6 +1044,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
               handleInternalSubchannelState(newState);
               // Call LB only if it's not shutdown.  If LB is shutdown, lbHelper won't match.
               if (LbHelperImpl.this == ManagedChannelImpl.this.lbHelper) {
+                logger.log(Level.FINE, "LB is shutdown");
                 lb.handleSubchannelState(subchannel, newState);
               }
             }
@@ -1308,6 +1309,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
                 public void run() {
                   // Call LB only if it's not shutdown.  If LB is shutdown, lbHelper won't match.
                   if (NameResolverListenerImpl.this.helper != ManagedChannelImpl.this.lbHelper) {
+                    logger.log(Level.FINE, "LB is shutdown");
                     return;
                   }
                   helper.lb.handleNameResolutionError(error);

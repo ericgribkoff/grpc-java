@@ -57,6 +57,13 @@ public class HelloWorldClient {
     HelloRequest request = HelloRequest.newBuilder().setName(name).build();
     HelloReply response;
     try {
+      // Lambda Runnable
+      Runnable task = () -> {
+        channel.enterIdle();
+      };
+
+      // start the thread
+      new Thread(task).start();
       response = blockingStub.sayHello(request);
     } catch (StatusRuntimeException e) {
       logger.log(Level.WARNING, "RPC failed: {0}", e.getStatus());
@@ -70,16 +77,18 @@ public class HelloWorldClient {
    * greeting.
    */
   public static void main(String[] args) throws Exception {
-    HelloWorldClient client = new HelloWorldClient("localhost", 50051);
-    try {
-      /* Access a service running on the local machine on port 50051 */
-      String user = "world";
-      if (args.length > 0) {
-        user = args[0]; /* Use the arg as the name to greet if provided */
+    for (int i = 0; i < 1000; i++) {
+      HelloWorldClient client = new HelloWorldClient("localhost", 50051);
+      try {
+        /* Access a service running on the local machine on port 50051 */
+        String user = "world";
+        if (args.length > 0) {
+          user = args[0]; /* Use the arg as the name to greet if provided */
+        }
+        client.greet(user);
+      } finally {
+        client.shutdown();
       }
-      client.greet(user);
-    } finally {
-      client.shutdown();
     }
   }
 }

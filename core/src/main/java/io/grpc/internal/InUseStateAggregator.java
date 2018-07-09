@@ -36,7 +36,7 @@ abstract class InUseStateAggregator<T> {
     int origSize = inUseObjects.size();
     if (inUse) {
       inUseObjects.add(object);
-      System.out.println("origSize: " + origSize);
+//      System.out.println("origSize: " + origSize);
       if (origSize == 0) {
         handleInUse();
       }
