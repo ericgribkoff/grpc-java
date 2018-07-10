@@ -163,9 +163,15 @@ final class DnsNameResolver extends NameResolver {
   private final Runnable resolutionRunnable = new Runnable() {
       @Override
       public void run() {
+//        try {
+//          Thread.sleep(5);
+//        } catch (InterruptedException e) {
+//          e.printStackTrace();
+//        }
         Listener savedListener;
         synchronized (DnsNameResolver.this) {
           if (shutdown) {
+            logger.log(Level.FINE, "Not resolving since shutdown");
             return;
           }
           savedListener = listener;

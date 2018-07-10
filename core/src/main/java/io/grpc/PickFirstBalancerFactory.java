@@ -29,6 +29,8 @@ import io.grpc.LoadBalancer.SubchannelPicker;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * A {@link LoadBalancer} that provides no load balancing mechanism over the
@@ -37,6 +39,8 @@ import java.util.List;
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
 public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
+
+  static final Logger logger = Logger.getLogger(PickFirstBalancerFactory.class.getName());
 
   private static final PickFirstBalancerFactory INSTANCE = new PickFirstBalancerFactory();
 
@@ -67,6 +71,7 @@ public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
     @Override
     public void handleResolvedAddressGroups(
         List<EquivalentAddressGroup> servers, Attributes attributes) {
+      logger.log(Level.FINE, "handleResolvedAddressGroups");
       // Flatten servers list received from name resolver into single address group. This means that
       // as far as load balancer is concerned, there's virtually one single server with multiple
       // addresses so the connection will be created only for the first address (pick first).
@@ -98,8 +103,10 @@ public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
     public void handleSubchannelState(Subchannel subchannel, ConnectivityStateInfo stateInfo) {
       ConnectivityState currentState = stateInfo.getState();
       if (subchannel != this.subchannel || currentState == SHUTDOWN) {
+        logger.log(Level.FINE, "old subchannel or shutdown: " + currentState);
         return;
       }
+      logger.log(Level.FINE, "handleSubchannelState " + currentState);
 
       PickResult pickResult;
       switch (currentState) {
@@ -159,6 +166,7 @@ public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
 
     @Override
     public void requestConnection() {
+      logger.log(Level.FINE, "requestConnection");
       Subchannel subchannel = result.getSubchannel();
       if (subchannel != null) {
         subchannel.requestConnection();

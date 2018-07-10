@@ -22,11 +22,16 @@ import io.grpc.StatusRuntimeException;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A simple client that requests a greeting from the {@link HelloWorldServer}.
  */
 public class HelloWorldClient {
+  private final ExecutorService executor = Executors.newFixedThreadPool(10);
   private static final Logger logger = Logger.getLogger(HelloWorldClient.class.getName());
 
   private final ManagedChannel channel;
@@ -48,28 +53,36 @@ public class HelloWorldClient {
   }
 
   public void shutdown() throws InterruptedException {
-    channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
+//    channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
+    channel.shutdownNow();
   }
 
   /** Say hello to server. */
-  public void greet(String name) {
-    logger.info("Will try to greet " + name + " ...");
+  public boolean greet(String name) {
+//    logger.info("Will try to greet " + name + " ...");
     HelloRequest request = HelloRequest.newBuilder().setName(name).build();
     HelloReply response;
+    CountDownLatch latch = new CountDownLatch(1);
     try {
       // Lambda Runnable
       Runnable task = () -> {
         channel.enterIdle();
+        latch.countDown();
       };
 
-      // start the thread
+//      executor.execute(task);
       new Thread(task).start();
       response = blockingStub.sayHello(request);
+      latch.await(1, TimeUnit.SECONDS);
     } catch (StatusRuntimeException e) {
       logger.log(Level.WARNING, "RPC failed: {0}", e.getStatus());
-      return;
+      return false;
+    } catch (Exception e) {
+      e.printStackTrace();
+      return false;
     }
-    logger.info("Greeting: " + response.getMessage());
+//    logger.info("Greeting: " + response.getMessage());
+    return true;
   }
 
   /**
@@ -77,7 +90,9 @@ public class HelloWorldClient {
    * greeting.
    */
   public static void main(String[] args) throws Exception {
-    for (int i = 0; i < 1000; i++) {
+    int total = 100000;
+    int success = 0;
+    for (int i = 0; i < total; i++) {
       HelloWorldClient client = new HelloWorldClient("localhost", 50051);
       try {
         /* Access a service running on the local machine on port 50051 */
@@ -85,10 +100,16 @@ public class HelloWorldClient {
         if (args.length > 0) {
           user = args[0]; /* Use the arg as the name to greet if provided */
         }
-        client.greet(user);
+        if (client.greet(user)) {
+          success++;
+        }
+        if (i % 100 == 0) {
+          System.out.println("Success: " + success + " So far: " + (i+1));
+        }
       } finally {
         client.shutdown();
       }
     }
+    System.out.println("Success: " + success + " Total: " + total);
   }
 }

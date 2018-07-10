@@ -180,7 +180,7 @@ final class DelayedClientTransport implements ManagedClientTransport {
    */
   @GuardedBy("lock")
   private PendingStream createPendingStream(PickSubchannelArgs args) {
-    // logger.log(Level.FINE, "createPendingStream");
+    logger.log(Level.FINE, "createPendingStream");
     PendingStream pendingStream = new PendingStream(args);
     pendingStreams.add(pendingStream);
     if (getPendingStreamsCount() == 1) {
@@ -283,6 +283,8 @@ final class DelayedClientTransport implements ManagedClientTransport {
       lastPicker = picker;
       lastPickerVersion++;
       if (picker == null || !hasPendingStreams()) {
+        logger.log(Level.FINE, "picker == null: " + (picker == null));
+        logger.log(Level.FINE, "number pending streams: " + getPendingStreamsCount());
         return;
       }
       toProcess = new ArrayList<PendingStream>(pendingStreams);

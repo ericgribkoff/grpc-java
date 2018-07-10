@@ -374,6 +374,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
     } catch (Throwable t) {
       listener.onError(Status.fromThrowable(t));
     }
+    logger.log(Level.FINE, "[{0}] Done exiting idle mode", getLogId());
   }
 
   // Must be run from channelExecutor
@@ -904,6 +905,9 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
         }
         cancelIdleTimer(/* permanent= */ false);
         enterIdleMode();
+        if (delayedTransport.hasPendingStreams()) {
+          exitIdleMode();
+        }
       }
     }
 
@@ -1107,6 +1111,7 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
             @Override
             public void run() {
               if (LbHelperImpl.this != lbHelper) {
+                logger.log(Level.FINE, "LbHelperImpl is old");
                 return;
               }
               updateSubchannelPicker(newPicker);
@@ -1261,7 +1266,11 @@ final class ManagedChannelImpl extends ManagedChannel implements Instrumented<Ch
         public void run() {
           // Call LB only if it's not shutdown.  If LB is shutdown, lbHelper won't match.
           if (NameResolverListenerImpl.this.helper != ManagedChannelImpl.this.lbHelper) {
-            logger.log(Level.FINE, "LB is shutdown");
+            logger.log(Level.FINE, "LB is shutdown: " + delayedTransport.getPendingStreamsCount());
+
+//            if (delayedTransport.getPendingStreamsCount() > 0) {
+//              shutdownNow();
+//            }
             return;
           }
 
