@@ -33,6 +33,8 @@ import io.grpc.ManagedChannelBuilder;
 import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
+import java.io.Closeable;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.ref.WeakReference;
@@ -69,9 +71,27 @@ public class HelloworldActivity extends AppCompatActivity {
             portEdit.getText().toString());
   }
 
+  private static class CloseableChannel implements Closeable {
+    private final ManagedChannel channel;
+
+    private CloseableChannel(ManagedChannel channel) {
+      this.channel = channel;
+    }
+
+    @Override
+    public void close() throws IOException {
+      try {
+        channel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
+        System.out.println("channel shutdown!");
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    }
+  }
+
   private static class GrpcTask extends AsyncTask<String, Void, String> {
     private final WeakReference<Activity> activityReference;
-    private ManagedChannel channel;
+    // private ManagedChannel channel;
 
     private GrpcTask(Activity activity) {
       this.activityReference = new WeakReference<Activity>(activity);
@@ -83,9 +103,8 @@ public class HelloworldActivity extends AppCompatActivity {
       String message = params[1];
       String portStr = params[2];
       int port = TextUtils.isEmpty(portStr) ? 0 : Integer.valueOf(portStr);
-      try {
-        channel = ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build();
-        GreeterGrpc.GreeterBlockingStub stub = GreeterGrpc.newBlockingStub(channel);
+      try (CloseableChannel channel = new CloseableChannel(ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build())) {
+        GreeterGrpc.GreeterBlockingStub stub = GreeterGrpc.newBlockingStub(channel.channel);
         HelloRequest request = HelloRequest.newBuilder().setName(message).build();
         HelloReply reply = stub.sayHello(request);
         return reply.getMessage();
@@ -100,11 +119,11 @@ public class HelloworldActivity extends AppCompatActivity {
 
     @Override
     protected void onPostExecute(String result) {
-      try {
-        channel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-      }
+      // try {
+      //   channel.shutdown().awaitTermination(1, TimeUnit.SECONDS);
+      // } catch (InterruptedException e) {
+      //   Thread.currentThread().interrupt();
+      // }
       Activity activity = activityReference.get();
       if (activity == null) {
         return;
