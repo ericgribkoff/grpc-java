@@ -23,6 +23,8 @@ import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
 import io.grpc.stub.StreamObserver;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.logging.Logger;
 
 /** An example gRPC server for use in demonstrating xDS functionality. */
@@ -85,7 +87,16 @@ public final class HelloWorldXdsServer {
   private static class GreeterImpl extends GreeterGrpc.GreeterImplBase {
     @Override
     public void sayHello(HelloRequest req, StreamObserver<HelloReply> responseObserver) {
-      HelloReply reply = HelloReply.newBuilder().setMessage("Hello " + req.getName()).build();
+      String host;
+      try {
+        host = InetAddress.getLocalHost().getHostName();
+      } catch (UnknownHostException e) {
+        host = "failed to get host " + e;
+      }
+      HelloReply reply =
+          HelloReply.newBuilder()
+              .setMessage("Hello " + req.getName() + ", this is " + host)
+              .build();
       responseObserver.onNext(reply);
       responseObserver.onCompleted();
     }
