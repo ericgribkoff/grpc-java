@@ -40,19 +40,6 @@ public final class HelloWorldXdsClient {
   private int time = 1;
 
   public static void main(String[] args) throws InterruptedException {
-
-try{ 
-      String loggingConfig =
-	  "handlers=java.util.logging.ConsoleHandler\n"
-	      + "io.grpc.level=FINE\n"
-	      + "java.util.logging.ConsoleHandler.level=FINE\n"
-	      + "java.util.logging.ConsoleHandler.formatter=java.util.logging.SimpleFormatter";
-      java.util.logging.LogManager.getLogManager()
-	  .readConfiguration(
-	      new java.io.ByteArrayInputStream(
-		  loggingConfig.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
-} catch (Throwable t) {
-}
     new HelloWorldXdsClient().run(args);
   }
 
