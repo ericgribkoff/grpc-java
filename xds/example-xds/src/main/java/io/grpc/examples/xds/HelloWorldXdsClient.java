@@ -87,6 +87,19 @@ public final class HelloWorldXdsClient {
   }
 
   private void run(String[] args) throws InterruptedException {
+try{ 
+      String loggingConfig =
+	  "handlers=java.util.logging.ConsoleHandler\n"
+	      + "io.grpc.xds.level=FINEST\n"
+	      + "io.grpc.ChannelLogger.level=FINEST\n"
+	      + "java.util.logging.ConsoleHandler.level=FINEST\n"
+	      + "java.util.logging.ConsoleHandler.formatter=java.util.logging.SimpleFormatter";
+      java.util.logging.LogManager.getLogManager()
+	  .readConfiguration(
+	      new java.io.ByteArrayInputStream(
+		  loggingConfig.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+} catch (Throwable t) {
+}
     parseArgs(args);
     ManagedChannel managedChannel = ManagedChannelBuilder.forTarget(address).usePlaintext().build();
     RemoteAddressInterceptor interceptor = new RemoteAddressInterceptor();
