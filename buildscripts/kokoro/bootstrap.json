@@ -1,0 +1,24 @@
+{
+  "node": {
+    "id": "doesnt matter",
+    "locality": {
+      "zone": "us-central1-a",
+      "region": "region",
+      "sub_zone": "sub_zone"
+    },
+    "metadata": {
+      "TRAFFICDIRECTOR_GRPC_HOSTNAME": "",
+      "TRAFFICDIRECTOR_NETWORK_NAME": "",
+      "TRAFFICDIRECTOR_GCP_PROJECT_NUMBER": "TO_REPLACE"
+    }
+  },
+  "xds_servers": [{
+    "server_uri": "trafficdirector.googleapis.com:443",
+    "channel_creds": [
+      {
+        "type": "google_default",
+        "config": {}
+      }
+    ]
+  }]
+}
