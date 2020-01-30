@@ -33,6 +33,10 @@ argp.add_argument(
     '--test_case',
     default=None,
     type=str)
+argp.add_argument(
+    '--clean_up',
+    default=False,
+    type=bool)
 args = argp.parse_args()
 
 def GetBackends():
@@ -139,7 +143,7 @@ def BackendsRestartTest():
         print('outside of threshold for ', backend, stats.rpcs_by_peer[backend], prior_distribution[backend])
         sys.exit(1)
 
-def CreateInstanceTemplate(compute, name, project_id):
+def create_instance_template(compute, name, grpc_port, project_id):
   config = {
         'name': name,
         'properties': {
@@ -155,9 +159,12 @@ def CreateInstanceTemplate(compute, name, project_id):
                   'https://www.googleapis.com/auth/cloud-platform',
               ]
           }],
-
+          #'canIpForward': True,
           'networkInterfaces': [
           {
+            'accessConfigs': [
+              {'type': 'ONE_TO_ONE_NAT'}
+            ],
             'network': 'global/networks/default'
           }],
 
@@ -190,7 +197,7 @@ pushd grpc-java
 pushd interop-testing
 ../gradlew installDist -x test -PskipCodegen=true -PskipAndroid=true
  
-nohup build/install/grpc-interop-testing/bin/xds-test-server --port=50051 1>/dev/null &"""
+nohup build/install/grpc-interop-testing/bin/xds-test-server --port=%d 1>/dev/null &""" % grpc_port
               }]
           }
       }
@@ -199,7 +206,7 @@ nohup build/install/grpc-interop-testing/bin/xds-test-server --port=50051 1>/dev
   result = compute.instanceTemplates().insert(project=project_id, body=config).execute()
   return result
 
-def CreateInstanceGroup(compute, name, size, template_url, project_id, zone):
+def create_instance_group(compute, name, size, grpc_port, template_url, project_id, zone):
   config = {
         'name': name,
         'instanceTemplate': template_url,
@@ -207,7 +214,7 @@ def CreateInstanceGroup(compute, name, size, template_url, project_id, zone):
         'namedPorts': [
           {
             'name': 'grpc',
-            'port': 50051
+            'port': grpc_port
           }
         ]
   }
@@ -215,7 +222,7 @@ def CreateInstanceGroup(compute, name, size, template_url, project_id, zone):
   result = compute.instanceGroupManagers().insert(project=project_id, zone=zone, body=config).execute()
   return result
 
-def CreateHealthCheck(compute, name, project_id):
+def create_health_check(compute, name, project_id):
   config = {
         'name': name,
         'type': 'TCP',
@@ -226,7 +233,7 @@ def CreateHealthCheck(compute, name, project_id):
   result = compute.healthChecks().insert(project=project_id, body=config).execute()
   return result
 
-def CreateHealthCheckFirewallRule(compute, name, project_id):
+def create_health_check_firewall_rule(compute, name, project_id):
   config = {
         'name': name,
         'direction': 'INGRESS',
@@ -244,12 +251,7 @@ def CreateHealthCheckFirewallRule(compute, name, project_id):
   result = compute.firewalls().insert(project=project_id, body=config).execute()
   return result
 
-# gcloud compute backend-services add-backend grpc-td-service \
-#     --instance-group ${INSTANCE_GROUP} \
-#     --instance-group-zone us-central1-a \
-#     --global
-
-def CreateBackendService(compute, name, instance_group, health_check, project_id):
+def create_backend_service(compute, name, instance_group, health_check, project_id):
   config = {
         'name': name,
         'loadBalancingScheme': 'INTERNAL_SELF_MANAGED',
@@ -257,7 +259,7 @@ def CreateBackendService(compute, name, instance_group, health_check, project_id
           health_check
         ],
         'portName': 'grpc',
-        'protocl': 'HTTP2',
+        'protocol': 'HTTP2',
         'backends': [
           {
             'group': instance_group,
@@ -265,6 +267,43 @@ def CreateBackendService(compute, name, instance_group, health_check, project_id
         ]
   }
   result = compute.backendServices().insert(project=project_id, body=config).execute()
+  return result
+
+def create_url_maps(compute, name, backend_service_url, host_name, project_id):
+  path_matcher_name = 'path-matcher'
+  config = {
+        'name': name,
+        'defaultService': backend_service_url,  
+        'pathMatchers': [{
+          'name': path_matcher_name,
+          'defaultService': backend_service_url,
+        }],
+        'hostRules': [{
+          'hosts': [host_name],
+          'pathMatcher': path_matcher_name
+        }]
+  }
+  result = compute.urlMaps().insert(project=project_id, body=config).execute()
+  return result
+
+def create_target_http_proxies(compute, name, url_map_url, project_id):
+  config = {
+    'name': name,
+    'url_map': url_map_url,
+  }
+  result = compute.targetHttpProxies().insert(project=project_id, body=config).execute()
+  return result
+
+def create_global_forwarding_rules(compute, name, grpc_port, target_http_proxy_url, project_id):
+  config = {
+    'name': name,
+    'loadBalancingScheme': 'INTERNAL_SELF_MANAGED',
+    'portRange': str(grpc_port),
+    'IPAddress': '0.0.0.0',
+    # 'IPProtocol': 'TCP',
+    'target': target_http_proxy_url,
+  }
+  result = compute.globalForwardingRules().insert(project=project_id, body=config).execute()
   return result
 
 def wait_for_global_operation(compute, project, operation):
@@ -306,77 +345,104 @@ INSTANCE_GROUP_SIZE = 2
 HEALTH_CHECK_NAME = 'test-hc'
 FIREWALL_RULE_NAME = 'test-fw-rule'
 BACKEND_SERVICE_NAME = 'test-backend-service'
+URL_MAP_NAME = 'test-map'
+HOST_NAME = 'grpc-test'
+TARGET_PROXY_NAME = 'test-target-proxy'
+FORWARDING_RULE_NAME = 'test-forwarding-rule2'
+GRPC_PORT = 50051
 
 compute = googleapiclient.discovery.build('compute', 'v1')
 
 try:
-  # result = CreateInstanceTemplate(compute, TEMPLATE_NAME, PROJECT_ID)
-  # print(result)
-  # template_url = result['targetLink']
-  # wait_for_global_operation(compute, PROJECT_ID, result['name'])
-
-  # template_url = 'https://www.googleapis.com/compute/v1/projects/ericgribkoff-grpcz/global/instanceTemplates/test-template'
-  # result = CreateInstanceGroup(compute, INSTANCE_GROUP_NAME, INSTANCE_GROUP_SIZE, template_url, PROJECT_ID, ZONE)
-  # instance_group_url = result['targetLink']
-  # print(result)
-  # wait_for_zone_operation(compute, PROJECT_ID, ZONE, result['name'])
-
-  url = 'https://www.googleapis.com/compute/v1/projects/ericgribkoff-grpcz/zones/us-central1-a/instanceGroupManagers/test-ig'
-
-  print(compute.instanceGroupManagers().list(project=PROJECT_ID, zone=ZONE).execute())
-  result = compute.instanceGroupManagers().get(project=PROJECT_ID, zone=ZONE, instanceGroupManager=INSTANCE_GROUP_NAME).execute()
-  working_url = result['instanceGroup']
+  result = create_instance_template(compute, TEMPLATE_NAME, GRPC_PORT, PROJECT_ID)
   print(result)
+  template_url = result['targetLink']
+  wait_for_global_operation(compute, PROJECT_ID, result['name'])
 
-  result = CreateHealthCheck(compute, HEALTH_CHECK_NAME, PROJECT_ID)
+  result = create_instance_group(compute, INSTANCE_GROUP_NAME, INSTANCE_GROUP_SIZE, GRPC_PORT, template_url, PROJECT_ID, ZONE)
+  print(result)
+  wait_for_zone_operation(compute, PROJECT_ID, ZONE, result['name'])
+  result = compute.instanceGroupManagers().get(project=PROJECT_ID, zone=ZONE, instanceGroupManager=INSTANCE_GROUP_NAME).execute()
+  instance_group_url = result['instanceGroup']
+
+  result = create_health_check(compute, HEALTH_CHECK_NAME, PROJECT_ID)
   health_check_url = result['targetLink']
   print(result)
   wait_for_global_operation(compute, PROJECT_ID, result['name'])
 
+  result = create_health_check_firewall_rule(compute, FIREWALL_RULE_NAME, PROJECT_ID)
+  print(result)
+  wait_for_global_operation(compute, PROJECT_ID, result['name'])
 
-  # result = CreateHealthCheckFirewallRule(compute, FIREWALL_RULE_NAME, PROJECT_ID)
-  # print(result)
-  # wait_for_global_operation(compute, PROJECT_ID, result['name'])
+  result = create_backend_service(compute, BACKEND_SERVICE_NAME, instance_group_url, health_check_url, PROJECT_ID)
+  print(result)
+  backend_service_url = result['targetLink']
+  wait_for_global_operation(compute, PROJECT_ID, result['name'])
 
-  result = CreateBackendService(compute, BACKEND_SERVICE_NAME,
-      working_url, health_check_url, PROJECT_ID)
+  result = create_url_maps(compute, URL_MAP_NAME, backend_service_url, HOST_NAME, PROJECT_ID)
+  print(result)
+  url_map_url = result['targetLink']
+  wait_for_global_operation(compute, PROJECT_ID, result['name'])
 
-  # result = CreateBackendService(compute, BACKEND_SERVICE_NAME, 'https://www.googleapis.com/compute/v1/projects/ericgribkoff-grpcz/zones/us-central1-a/instanceGroups/test-ig', health_check_url, PROJECT_ID)
+  result = create_target_http_proxies(compute, TARGET_PROXY_NAME, url_map_url, PROJECT_ID)
+  print(result)
+  target_http_proxy_url = result['targetLink']
+  wait_for_global_operation(compute, PROJECT_ID, result['name'])
+  
+  result = create_global_forwarding_rules(compute, FORWARDING_RULE_NAME, GRPC_PORT, target_http_proxy_url, PROJECT_ID)
   print(result)
   wait_for_global_operation(compute, PROJECT_ID, result['name'])
 except googleapiclient.errors.HttpError as http_error:
   print('failed to set up backends', http_error)
 finally:
-  pass
-  # try:
-  #   result = compute.backendServices().delete(project=PROJECT_ID, backendService=BACKEND_SERVICE_NAME).execute()
-  #   wait_for_global_operation(compute, PROJECT_ID, result['name'])
-  # except googleapiclient.errors.HttpError as http_error:
-  #   print('delete failed', http_error)
+  if args.clean_up:
+    try:
+      result = compute.globalForwardingRules().delete(project=PROJECT_ID, forwardingRule=FORWARDING_RULE_NAME).execute()
+      wait_for_global_operation(compute, PROJECT_ID, result['name'])
+    except googleapiclient.errors.HttpError as http_error:
+     print('delete failed', http_error)
 
-  # try:
-  #   result = compute.firewalls().delete(project=PROJECT_ID, firewall=FIREWALL_RULE_NAME).execute()
-  #   wait_for_global_operation(compute, PROJECT_ID, result['name'])
-  # except googleapiclient.errors.HttpError as http_error:
-  #   print('delete failed', http_error)
+    try:
+      result = compute.targetHttpProxies().delete(project=PROJECT_ID, targetHttpProxy=TARGET_PROXY_NAME).execute()
+      wait_for_global_operation(compute, PROJECT_ID, result['name'])
+    except googleapiclient.errors.HttpError as http_error:
+     print('delete failed', http_error)
 
-  # try:
-  #   result = compute.healthChecks().delete(project=PROJECT_ID, healthCheck=HEALTH_CHECK_NAME).execute()
-  #   wait_for_global_operation(compute, PROJECT_ID, result['name'])
-  # except googleapiclient.errors.HttpError as http_error:
-  #   print('delete failed', http_error)
+    try:
+      result = compute.urlMaps().delete(project=PROJECT_ID, urlMap=URL_MAP_NAME).execute()
+      wait_for_global_operation(compute, PROJECT_ID, result['name'])
+    except googleapiclient.errors.HttpError as http_error:
+     print('delete failed', http_error)
 
-  # try:
-  #   result = compute.instanceGroupManagers().delete(project=PROJECT_ID, zone=ZONE, instanceGroupManager=INSTANCE_GROUP_NAME).execute()
-  #   wait_for_global_operation(compute, PROJECT_ID, result['name'])
-  # except googleapiclient.errors.HttpError as http_error:
-  #   print('delete failed', http_error)
+    try:
+      result = compute.backendServices().delete(project=PROJECT_ID, backendService=BACKEND_SERVICE_NAME).execute()
+      wait_for_global_operation(compute, PROJECT_ID, result['name'])
+    except googleapiclient.errors.HttpError as http_error:
+      print('delete failed', http_error)
 
-  # try:
-  #   result = compute.instanceTemplates().delete(project=PROJECT_ID, instanceTemplate=TEMPLATE_NAME).execute()
-  #   wait_for_global_operation(compute, PROJECT_ID, result['name'])
-  # except googleapiclient.errors.HttpError as http_error:
-   # print('delete failed', http_error)
+    try:
+      result = compute.firewalls().delete(project=PROJECT_ID, firewall=FIREWALL_RULE_NAME).execute()
+      wait_for_global_operation(compute, PROJECT_ID, result['name'])
+    except googleapiclient.errors.HttpError as http_error:
+      print('delete failed', http_error)
+
+    try:
+      result = compute.healthChecks().delete(project=PROJECT_ID, healthCheck=HEALTH_CHECK_NAME).execute()
+      wait_for_global_operation(compute, PROJECT_ID, result['name'])
+    except googleapiclient.errors.HttpError as http_error:
+      print('delete failed', http_error)
+
+    try:
+      result = compute.instanceGroupManagers().delete(project=PROJECT_ID, zone=ZONE, instanceGroupManager=INSTANCE_GROUP_NAME).execute()
+      wait_for_zone_operation(compute, PROJECT_ID, ZONE, result['name'])
+    except googleapiclient.errors.HttpError as http_error:
+      print('delete failed', http_error)
+
+    try:
+      result = compute.instanceTemplates().delete(project=PROJECT_ID, instanceTemplate=TEMPLATE_NAME).execute()
+      wait_for_global_operation(compute, PROJECT_ID, result['name'])
+    except googleapiclient.errors.HttpError as http_error:
+     print('delete failed', http_error)
 
 
 # TODO: Support test_case=all
