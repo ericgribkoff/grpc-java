@@ -19,14 +19,12 @@ from __future__ import print_function
 import argparse
 import googleapiclient.discovery
 import grpc
-import subprocess
 import sys
 import time
 
 import test_pb2
 import test_pb2_grpc
 
-_GET_BACKENDS = 'gcloud compute instance-groups managed list-instances grpc-td-server-ig --zone=us-central1-a --format=value(NAME)'.split(' ')
 
 argp = argparse.ArgumentParser(description='Run xds test.')
 argp.add_argument(
@@ -36,15 +34,10 @@ argp.add_argument(
 argp.add_argument(
     '--clean_up',
     default=False,
-    type=bool)
+    action='store_true')
 args = argp.parse_args()
 
-def GetBackends():
-    res = subprocess.run(_GET_BACKENDS, stdout=subprocess.PIPE, check=True, universal_newlines=True)
-    backends = res.stdout.split('\n')[:-1]
-    return backends
-
-def GetClientStats(num_rpcs, timeout_sec):
+def get_client_stats(num_rpcs, timeout_sec):
     with grpc.insecure_channel('localhost:50052') as channel:
       stub = test_pb2_grpc.LoadBalancerStatsServiceStub(channel)
       request = test_pb2.LoadBalancerStatsRequest()
@@ -55,15 +48,15 @@ def GetClientStats(num_rpcs, timeout_sec):
         print('Invoked massage client stats RPC: %s', response)
         return response
       except grpc.RpcError as rpc_error:
-        print('Failed to get massage client stats, aborting test.')
+        raise Exception('Failed to get massage client stats, aborting test.')
 
 
-def WaitUntilOnlyGivenBackendsReceiveLoad(backends, timeout_sec):
+def wait_until_only_given_backends_receive_load(backends, timeout_sec):
     start_time = time.time()
     error_msg = None
     while time.time() - start_time <= timeout_sec:
       error_msg = None
-      stats = GetClientStats(max(len(backends), 1), timeout_sec)
+      stats = get_client_stats(max(len(backends), 1), timeout_sec)
       rpcs_by_peer = stats.rpcs_by_peer
       for backend in backends:
         if backend not in rpcs_by_peer:
@@ -74,17 +67,15 @@ def WaitUntilOnlyGivenBackendsReceiveLoad(backends, timeout_sec):
       if not error_msg:
         print('wait successful')
         return
-    print('test failed', error_msg)
-    sys.exit(1)
+    raise Exception('test failed', error_msg)
 
-def PingPong():
+def test_ping_pong(backends):
     timeout_sec = 10
-    backends = GetBackends()
     start_time = time.time()
     error_msg = None
     while time.time() - start_time <= timeout_sec:
       error_msg = None
-      stats = GetClientStats(50, timeout_sec)
+      stats = get_client_stats(50, timeout_sec)
       rpcs_by_peer = stats.rpcs_by_peer
       for backend in backends:
         if backend not in rpcs_by_peer:
@@ -94,29 +85,25 @@ def PingPong():
         error_msg = 'Unexpected backend received load: %s' % (rpcs_by_peer,)
       if not error_msg:
         print('test passed')
-        sys.exit(0) 
-    print('test failed', error_msg)
-    sys.exit(1)
+        return
+    raise Exception('test failed', error_msg)
 
-def RoundRobin():
+def test_round_robin(backends):
     timeout_sec = 10
     threshold = 1
-    backends = GetBackends()
-    WaitUntilOnlyGivenBackendsReceiveLoad(backends, timeout_sec)
-    stats = GetClientStats(50, timeout_sec)
+    wait_until_only_given_backends_receive_load(backends, timeout_sec)
+    stats = get_client_stats(50, timeout_sec)
     requests_received = [stats.rpcs_by_peer[x] for x in stats.rpcs_by_peer]
     total_requests_received = sum([stats.rpcs_by_peer[x] for x in stats.rpcs_by_peer])
     expected_requests = total_requests_received / len(backends)
     for backend in backends:
       if abs(stats.rpcs_by_peer[backend] - expected_requests) > threshold:
-        print('outside of threshold for ', backend, stats)
-        sys.exit(1)
+        raise Exception('outside of threshold for ', backend, stats)
 
-def BackendsRestartTest():
+def test_backends_restart(backends):
     timeout_sec = 10
-    backends = GetBackends()
-    WaitUntilOnlyGivenBackendsReceiveLoad(backends, timeout_sec)
-    stats = GetClientStats(50, timeout_sec)
+    wait_until_only_given_backends_receive_load(backends, timeout_sec)
+    stats = get_client_stats(50, timeout_sec)
     prior_distribution = stats.rpcs_by_peer
 
     _STOP_TEMPLATE = 'gcloud compute instances stop %s --zone=us-central1-a'
@@ -125,7 +112,7 @@ def BackendsRestartTest():
         print(res)
 
     timeout_sec=120
-    WaitUntilOnlyGivenBackendsReceiveLoad([], timeout_sec)
+    wait_until_only_given_backends_receive_load([], timeout_sec)
 
     _START_TEMPLATE = 'gcloud compute instances start %s --zone=us-central1-a'
     for backend in backends:
@@ -133,15 +120,14 @@ def BackendsRestartTest():
         print(res)
 
     timeout_sec=600
-    WaitUntilOnlyGivenBackendsReceiveLoad(backends, timeout_sec)
+    wait_until_only_given_backends_receive_load(backends, timeout_sec)
 
     timeout_sec = 10
     threshold = 1
-    stats = GetClientStats(50, timeout_sec)
+    stats = get_client_stats(50, timeout_sec)
     for backend in backends:
       if abs(stats.rpcs_by_peer[backend] - prior_distribution[backend]) > threshold:
-        print('outside of threshold for ', backend, stats.rpcs_by_peer[backend], prior_distribution[backend])
-        sys.exit(1)
+        raise Exception('outside of threshold for ', backend, stats.rpcs_by_peer[backend], prior_distribution[backend])
 
 def create_instance_template(compute, name, grpc_port, project_id):
   config = {
@@ -354,44 +340,79 @@ GRPC_PORT = 50051
 compute = googleapiclient.discovery.build('compute', 'v1')
 
 try:
-  result = create_instance_template(compute, TEMPLATE_NAME, GRPC_PORT, PROJECT_ID)
-  print(result)
-  template_url = result['targetLink']
-  wait_for_global_operation(compute, PROJECT_ID, result['name'])
+  # result = create_instance_template(compute, TEMPLATE_NAME, GRPC_PORT, PROJECT_ID)
+  # print(result)
+  # template_url = result['targetLink']
+  # wait_for_global_operation(compute, PROJECT_ID, result['name'])
 
-  result = create_instance_group(compute, INSTANCE_GROUP_NAME, INSTANCE_GROUP_SIZE, GRPC_PORT, template_url, PROJECT_ID, ZONE)
-  print(result)
-  wait_for_zone_operation(compute, PROJECT_ID, ZONE, result['name'])
-  result = compute.instanceGroupManagers().get(project=PROJECT_ID, zone=ZONE, instanceGroupManager=INSTANCE_GROUP_NAME).execute()
-  instance_group_url = result['instanceGroup']
+  # result = create_instance_group(compute, INSTANCE_GROUP_NAME, INSTANCE_GROUP_SIZE, GRPC_PORT, template_url, PROJECT_ID, ZONE)
+  # print(result)
+  # wait_for_zone_operation(compute, PROJECT_ID, ZONE, result['name'])
+  # result = compute.instanceGroupManagers().get(project=PROJECT_ID, zone=ZONE, instanceGroupManager=INSTANCE_GROUP_NAME).execute()
+  # instance_group_url = result['instanceGroup']
 
-  result = create_health_check(compute, HEALTH_CHECK_NAME, PROJECT_ID)
-  health_check_url = result['targetLink']
-  print(result)
-  wait_for_global_operation(compute, PROJECT_ID, result['name'])
+  # result = create_health_check(compute, HEALTH_CHECK_NAME, PROJECT_ID)
+  # health_check_url = result['targetLink']
+  # print(result)
+  # wait_for_global_operation(compute, PROJECT_ID, result['name'])
 
-  result = create_health_check_firewall_rule(compute, FIREWALL_RULE_NAME, PROJECT_ID)
-  print(result)
-  wait_for_global_operation(compute, PROJECT_ID, result['name'])
+  # result = create_health_check_firewall_rule(compute, FIREWALL_RULE_NAME, PROJECT_ID)
+  # print(result)
+  # wait_for_global_operation(compute, PROJECT_ID, result['name'])
 
-  result = create_backend_service(compute, BACKEND_SERVICE_NAME, instance_group_url, health_check_url, PROJECT_ID)
-  print(result)
-  backend_service_url = result['targetLink']
-  wait_for_global_operation(compute, PROJECT_ID, result['name'])
+  # result = create_backend_service(compute, BACKEND_SERVICE_NAME, instance_group_url, health_check_url, PROJECT_ID)
+  # print(result)
+  # backend_service_url = result['targetLink']
+  # wait_for_global_operation(compute, PROJECT_ID, result['name'])
 
-  result = create_url_maps(compute, URL_MAP_NAME, backend_service_url, HOST_NAME, PROJECT_ID)
-  print(result)
-  url_map_url = result['targetLink']
-  wait_for_global_operation(compute, PROJECT_ID, result['name'])
+  # result = create_url_maps(compute, URL_MAP_NAME, backend_service_url, HOST_NAME, PROJECT_ID)
+  # print(result)
+  # url_map_url = result['targetLink']
+  # wait_for_global_operation(compute, PROJECT_ID, result['name'])
 
-  result = create_target_http_proxies(compute, TARGET_PROXY_NAME, url_map_url, PROJECT_ID)
-  print(result)
-  target_http_proxy_url = result['targetLink']
-  wait_for_global_operation(compute, PROJECT_ID, result['name'])
+  # result = create_target_http_proxies(compute, TARGET_PROXY_NAME, url_map_url, PROJECT_ID)
+  # print(result)
+  # target_http_proxy_url = result['targetLink']
+  # wait_for_global_operation(compute, PROJECT_ID, result['name'])
   
-  result = create_global_forwarding_rules(compute, FORWARDING_RULE_NAME, GRPC_PORT, target_http_proxy_url, PROJECT_ID)
-  print(result)
-  wait_for_global_operation(compute, PROJECT_ID, result['name'])
+  # result = create_global_forwarding_rules(compute, FORWARDING_RULE_NAME, GRPC_PORT, target_http_proxy_url, PROJECT_ID)
+  # print(result)
+  # wait_for_global_operation(compute, PROJECT_ID, result['name'])
+
+  backends = []
+  result = compute.instanceGroups().listInstances(project=PROJECT_ID, zone=ZONE, instanceGroup=INSTANCE_GROUP_NAME).execute()
+  for item in result['items']:
+    # listInstances() returns the full URL of the instance, which ends with
+    # the instance name. compute.instances().get() requires using the instance
+    # name (not the full URL) to look up instance details, so we just extract
+    # the name manually.
+    instance_name = item['instance'].split('/')[-1]
+    backends.append(instance_name)
+
+  if args.test_case == 'all':
+    causes = []
+    try:
+      test_ping_pong(backends)
+    except Exception as e:
+      causes.append(e)
+    try:
+      test_round_robin(backends)
+    except Exception as e:
+      causes.append(e)
+    #test_backends_restart()
+    if causes:
+      print('%d test(s) failed' % len(causes))
+      print(causes)
+      sys.exit(1)
+  elif args.test_case == 'ping_pong':
+    test_ping_pong(backends)
+  elif args.test_case == 'round_robin':
+    test_round_robin(backends)
+  elif args.test_case == 'backends_restart':
+    test_backends_restart(backends)
+  else:
+    print("Unknown test case")
+    sys.exit(1)
 except googleapiclient.errors.HttpError as http_error:
   print('failed to set up backends', http_error)
 finally:
@@ -445,14 +466,3 @@ finally:
      print('delete failed', http_error)
 
 
-# TODO: Support test_case=all
-
-# if args.test_case == "ping_pong":
-#     PingPong()
-# elif args.test_case == "round_robin":
-#     RoundRobin()
-# elif args.test_case == "backends_restart":
-#     BackendsRestart()
-# else:
-#     print("Unknown test case")
-#     sys.exit(1)
