@@ -64,7 +64,11 @@ public class HelloWorldServer {
     });
     while (true) {
       GreeterGrpc.GreeterBlockingStub blockingStub = GreeterGrpc.newBlockingStub(channel);
+      try {
       System.out.println(blockingStub.sayHello(HelloRequest.getDefaultInstance()));
+      } except (Exception e) {
+        System.out.println(e);
+      }
       Thread.sleep(1000);
     }
 
