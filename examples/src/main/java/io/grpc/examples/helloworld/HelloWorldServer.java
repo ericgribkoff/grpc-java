@@ -66,7 +66,7 @@ public class HelloWorldServer {
       GreeterGrpc.GreeterBlockingStub blockingStub = GreeterGrpc.newBlockingStub(channel);
       try {
       System.out.println(blockingStub.sayHello(HelloRequest.getDefaultInstance()));
-      } except (Exception e) {
+      } catch (Exception e) {
         System.out.println(e);
       }
       Thread.sleep(1000);
