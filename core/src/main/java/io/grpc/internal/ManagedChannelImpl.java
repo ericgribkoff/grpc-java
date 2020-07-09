@@ -296,6 +296,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
         ChannelStats.Builder builder = new InternalChannelz.ChannelStats.Builder();
         channelCallTracer.updateBuilder(builder);
         channelTracer.updateBuilder(builder);
+        builder.setNameResolver(nameResolver.getStats());
         builder.setTarget(target).setState(channelStateManager.getState());
         List<InternalWithLogId> children = new ArrayList<>();
         children.addAll(subchannels);

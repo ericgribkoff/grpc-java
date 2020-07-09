@@ -69,6 +69,10 @@ public abstract class NameResolver {
    */
   public abstract String getServiceAuthority();
 
+  public String getStats() {
+    return null;
+  }
+
   /**
    * Starts the resolution.
    *

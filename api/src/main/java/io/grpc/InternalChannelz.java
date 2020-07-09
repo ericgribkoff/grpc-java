@@ -363,6 +363,7 @@ public final class InternalChannelz {
   public static final class ChannelStats {
     public final String target;
     public final ConnectivityState state;
+    @Nullable public final String nameResolver;
     @Nullable public final ChannelTrace channelTrace;
     public final long callsStarted;
     public final long callsSucceeded;
@@ -377,6 +378,7 @@ public final class InternalChannelz {
     private ChannelStats(
         String target,
         ConnectivityState state,
+        @Nulalble String nameResolver,
         @Nullable ChannelTrace channelTrace,
         long callsStarted,
         long callsSucceeded,
@@ -390,6 +392,7 @@ public final class InternalChannelz {
               + "neither can have both");
       this.target = target;
       this.state = state;
+      this.nameResolver = nameResolver;
       this.channelTrace = channelTrace;
       this.callsStarted = callsStarted;
       this.callsSucceeded = callsSucceeded;
@@ -402,6 +405,7 @@ public final class InternalChannelz {
     public static final class Builder {
       private String target;
       private ConnectivityState state;
+      private String nameResolver;
       private ChannelTrace channelTrace;
       private long callsStarted;
       private long callsSucceeded;
@@ -417,6 +421,11 @@ public final class InternalChannelz {
 
       public Builder setState(ConnectivityState state) {
         this.state = state;
+        return this;
+      }
+
+      public Builder setNameResolver(String nameResolver) {
+        this.nameResolver = nameResolver;
         return this;
       }
 
@@ -466,6 +475,7 @@ public final class InternalChannelz {
         return new ChannelStats(
             target,
             state,
+            nameResolver,
             channelTrace,
             callsStarted,
             callsSucceeded,
