@@ -198,6 +198,9 @@ final class XdsClientImpl extends XdsClient {
 
   @Override
   String getStats() {
+    if (adsStream != null) {
+      return adsStream.lastResponse.toString();
+    }
     return "xdsClientStats";
   }
 
@@ -1313,6 +1316,8 @@ final class XdsClientImpl extends XdsClient {
     private StreamObserver<DiscoveryRequest> requestWriter;
     private boolean responseReceived;
     private boolean closed;
+    @Nullable
+    private DiscoveryResponse lastResponse;
 
     // Last successfully applied version_info for each resource type. Starts with empty string.
     // A version_info is used to update management server with client's most recent knowledge of
@@ -1358,6 +1363,7 @@ final class XdsClientImpl extends XdsClient {
             return;
           }
           responseReceived = true;
+          lastResponse = response;
           String typeUrl = response.getTypeUrl();
           // Nonce in each response is echoed back in the following ACK/NACK request. It is
           // used for management server to identify which response the client is ACKing/NACking.
