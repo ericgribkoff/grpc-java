@@ -47,7 +47,7 @@ public class HelloWorldServer {
         .build()
         .start();
     logger.info("Server started, listening on " + port);
-    channel = ManagedChannelBuilder.forTarget("xds:///grpc-test").usePlaintext().build();
+    channel = ManagedChannelBuilder.forTarget("xds:///grpc-test:8102").usePlaintext().build();
     channel.getState(true);    
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
