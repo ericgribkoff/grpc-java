@@ -378,7 +378,7 @@ public final class InternalChannelz {
     private ChannelStats(
         String target,
         ConnectivityState state,
-        @Nulalble String nameResolver,
+        @Nullable String nameResolver,
         @Nullable ChannelTrace channelTrace,
         long callsStarted,
         long callsSucceeded,
