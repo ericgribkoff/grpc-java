@@ -42,8 +42,9 @@ public class HelloWorldClient {
   }
 
   /** Say hello to server. */
-  public void greet(String name) {
+  public void greet(String name) throws Exception {
     logger.info("Will try to greet " + name + " ...");
+    while (true) {
     HelloRequest request = HelloRequest.newBuilder().setName(name).build();
     HelloReply response;
     try {
@@ -53,6 +54,8 @@ public class HelloWorldClient {
       return;
     }
     logger.info("Greeting: " + response.getMessage());
+    Thread.sleep(100);
+    }
   }
 
   /**

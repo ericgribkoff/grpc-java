@@ -16,8 +16,13 @@
 
 package io.grpc.examples.helloworld;
 
+import io.grpc.Channel;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.protobuf.services.ProtoReflectionService;
+import io.grpc.services.ChannelzService;
 import io.grpc.stub.StreamObserver;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
@@ -30,15 +35,20 @@ public class HelloWorldServer {
   private static final Logger logger = Logger.getLogger(HelloWorldServer.class.getName());
 
   private Server server;
+  private ManagedChannel channel;
 
   private void start() throws IOException {
     /* The port on which the server should run */
     int port = 50051;
     server = ServerBuilder.forPort(port)
         .addService(new GreeterImpl())
+        .addService(ChannelzService.newInstance(30))
+        .addService(ProtoReflectionService.newInstance())
         .build()
         .start();
     logger.info("Server started, listening on " + port);
+    channel = ManagedChannelBuilder.forTarget("xds:///grpc-test").usePlaintext().build();
+    channel.getState(true);
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
       public void run() {
