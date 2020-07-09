@@ -56,6 +56,10 @@ import javax.annotation.Nullable;
  */
 abstract class XdsClient {
 
+  String getStats() {
+    return null;
+  }
+
   /**
    * Data class containing the results of performing a series of resource discovery RPCs via
    * LDS/RDS/VHDS protocols. The results may include configurations for path/host rewriting,

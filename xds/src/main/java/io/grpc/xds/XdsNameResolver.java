@@ -106,7 +106,11 @@ final class XdsNameResolver extends NameResolver {
   @Override
   public String getStats() {
     System.out.println("xds!");
-    return "xds";
+    String ret = "xds\n";
+    if (xdsClient != null) {
+      ret += xdsClient.getStats();
+    }
+    return ret;
   }
 
   @Override

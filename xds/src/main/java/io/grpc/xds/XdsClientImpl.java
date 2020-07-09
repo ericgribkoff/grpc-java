@@ -196,6 +196,11 @@ final class XdsClientImpl extends XdsClient {
   private ListenerWatcher listenerWatcher;
   private int listenerPort = -1;
 
+  @Override
+  String getStats() {
+    return "xdsClientStats";
+  }
+
   XdsClientImpl(
       String targetName,
       List<ServerInfo> servers,  // list of management servers
