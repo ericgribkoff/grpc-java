@@ -37,7 +37,7 @@ public class HelloWorldServer {
   private Server server;
   private ManagedChannel channel;
 
-  private void start() throws IOException {
+  private void start() throws Exception {
     /* The port on which the server should run */
     int port = 50051;
     server = ServerBuilder.forPort(port)
@@ -48,7 +48,7 @@ public class HelloWorldServer {
         .start();
     logger.info("Server started, listening on " + port);
     channel = ManagedChannelBuilder.forTarget("xds:///grpc-test").usePlaintext().build();
-    channel.getState(true);
+    channel.getState(true);    
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
       public void run() {
@@ -62,6 +62,12 @@ public class HelloWorldServer {
         System.err.println("*** server shut down");
       }
     });
+    while (true) {
+      GreeterGrpc.GreeterBlockingStub blockingStub = GreeterGrpc.newBlockingStub(channel);
+      System.out.println(blockingStub.sayHello(HelloRequest.getDefaultInstance()));
+      Thread.sleep(1000);
+    }
+
   }
 
   private void stop() throws InterruptedException {
@@ -82,7 +88,7 @@ public class HelloWorldServer {
   /**
    * Main launches the server from the command line.
    */
-  public static void main(String[] args) throws IOException, InterruptedException {
+  public static void main(String[] args) throws Exception {
     final HelloWorldServer server = new HelloWorldServer();
     server.start();
     server.blockUntilShutdown();
