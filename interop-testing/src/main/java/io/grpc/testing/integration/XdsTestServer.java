@@ -38,6 +38,9 @@ import java.util.logging.Logger;
 
 /** Interop test server that implements the xDS testing service. */
 public final class XdsTestServer {
+  static final Metadata.Key<String> HOSTNAME_KEY =
+      Metadata.Key.of("hostname", Metadata.ASCII_STRING_MARSHALLER);
+
   private static Logger logger = Logger.getLogger(XdsTestServer.class.getName());
 
   private int port = 8080;
@@ -201,9 +204,6 @@ public final class XdsTestServer {
   }
 
   private static class HostnameInterceptor implements ServerInterceptor {
-    private static final Metadata.Key<String> HOSTNAME_KEY =
-        Metadata.Key.of("hostname", Metadata.ASCII_STRING_MARSHALLER);
-
     private final String host;
 
     private HostnameInterceptor(String host) {

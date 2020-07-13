@@ -285,9 +285,10 @@ public final class XdsTestClient {
               new ClientCall.Listener<EmptyProtos.Empty>() {
                 private String hostname;
 
-                // @Override
-                // public void onMessage(Empty response) {
-                // }
+                @Override
+                public void onHeaders(Metadata headers) {
+                  hostname = headers.get(XdsTestServer.HOSTNAME_KEY);
+                }
 
                 @Override
                 public void onClose(Status status, Metadata trailers) {
@@ -322,8 +323,12 @@ public final class XdsTestClient {
                 private String hostname;
 
                 @Override
+                public void onHeaders(Metadata headers) {
+                  hostname = headers.get(XdsTestServer.HOSTNAME_KEY);
+                }
+
+                @Override
                 public void onMessage(SimpleResponse response) {
-                  hostname = response.getHostname();
                   // TODO(ericgribkoff) Currently some test environments cannot access the stats RPC
                   // service and rely on parsing stdout.
                   if (printResponse) {
