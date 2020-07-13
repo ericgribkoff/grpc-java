@@ -275,6 +275,12 @@ public final class XdsTestClient {
               channel.newCall(
                   TestServiceGrpc.getEmptyCallMethod(),
                   CallOptions.DEFAULT.withDeadlineAfter(rpcTimeoutSec, TimeUnit.SECONDS));
+          Metadata headers;
+          if (metadata.containsKey(rpcType)) {
+            headers = metadata.get(rpcType);
+          } else {
+            headers = new Metadata();
+          }
           call.start(
               new ClientCall.Listener<EmptyProtos.Empty>() {
                 private String hostname;
@@ -293,7 +299,7 @@ public final class XdsTestClient {
                   }
                 }
               },
-              metadata.get(rpcType));
+              headers);
 
           call.sendMessage(EmptyProtos.Empty.getDefaultInstance());
           call.request(1);
@@ -305,6 +311,12 @@ public final class XdsTestClient {
               channel.newCall(
                   TestServiceGrpc.getUnaryCallMethod(),
                   CallOptions.DEFAULT.withDeadlineAfter(rpcTimeoutSec, TimeUnit.SECONDS));
+          Metadata headers;
+          if (metadata.containsKey(rpcType)) {
+            headers = metadata.get(rpcType);
+          } else {
+            headers = new Metadata();
+          }
           call.start(
               new ClientCall.Listener<SimpleResponse>() {
                 private String hostname;
@@ -333,7 +345,7 @@ public final class XdsTestClient {
                   }
                 }
               },
-              metadata.get(rpcType));
+              headers);
 
           call.sendMessage(request);
           call.request(1);
