@@ -184,7 +184,7 @@ public final class XdsTestClient {
 
   private static Map<RpcType, Metadata> parseMetadata(String metadataArg) {
     Map<RpcType, Metadata> rpcMetadata = new HashMap<>();
-    for (String metadata : Splitter.on(',').split(metadataArg)) {
+    for (String metadata : Splitter.on(',').omitEmptyStrings().split(metadataArg)) {
       List<String> parts = Splitter.on(':').splitToList(metadata);
       if (parts.size() != 3) {
         throw new IllegalArgumentException("Invalid metadata: '" + metadata + "'");
