@@ -19,7 +19,6 @@ package io.grpc.testing.integration;
 import com.google.common.base.CaseFormat;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.primitives.Ints;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
@@ -32,13 +31,11 @@ import io.grpc.ClientCall;
 import io.grpc.Grpc;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
 import io.grpc.Server;
 import io.grpc.Status;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
-import io.grpc.testing.integration.EmptyProtos;
 import io.grpc.testing.integration.Messages.LoadBalancerStatsRequest;
 import io.grpc.testing.integration.Messages.LoadBalancerStatsResponse;
 import io.grpc.testing.integration.Messages.SimpleRequest;
@@ -342,29 +339,29 @@ public final class XdsTestClient {
           call.request(1);
           call.halfClose();
         }
-
-        
       }
     }
 
     long nanosPerQuery = TimeUnit.SECONDS.toNanos(1) / qps;
 
     for (RpcType rpcType : rpc) {
-        ListenableScheduledFuture<?> future = exec.scheduleAtFixedRate(new PeriodicRpc(rpcType), 0, nanosPerQuery, TimeUnit.NANOSECONDS);
+      ListenableScheduledFuture<?> future =
+          exec.scheduleAtFixedRate(
+              new PeriodicRpc(rpcType), 0, nanosPerQuery, TimeUnit.NANOSECONDS);
 
-         Futures.addCallback(
-        future,
-        new FutureCallback<Object>() {
+      Futures.addCallback(
+          future,
+          new FutureCallback<Object>() {
 
-          @Override
-          public void onFailure(Throwable t) {
-            failure.setException(t);
-          }
+            @Override
+            public void onFailure(Throwable t) {
+              failure.setException(t);
+            }
 
-          @Override
-          public void onSuccess(Object o) {}
-        },
-        MoreExecutors.directExecutor());
+            @Override
+            public void onSuccess(Object o) {}
+          },
+          MoreExecutors.directExecutor());
     }
 
     failure.get();
@@ -417,7 +414,9 @@ public final class XdsTestClient {
             }
             if (rpcsByTypeAndPeer.containsKey(rpcType)) {
               if (rpcsByTypeAndPeer.get(rpcType).containsKey(hostname)) {
-                rpcsByTypeAndPeer.get(rpcType).put(hostname, rpcsByTypeAndPeer.get(rpcType).get(hostname) + 1);
+                rpcsByTypeAndPeer
+                    .get(rpcType)
+                    .put(hostname, rpcsByTypeAndPeer.get(rpcType).get(hostname) + 1);
               } else {
                 rpcsByTypeAndPeer.get(rpcType).put(hostname, 1);
               }
@@ -448,7 +447,8 @@ public final class XdsTestClient {
       synchronized (lock) {
         builder.putAllRpcsByPeer(rpcsByPeer);
         for (Map.Entry<String, Map<String, Integer>> entry : rpcsByTypeAndPeer.entrySet()) {
-          LoadBalancerStatsResponse.RpcsByPeer.Builder rpcs = LoadBalancerStatsResponse.RpcsByPeer.newBuilder();
+          LoadBalancerStatsResponse.RpcsByPeer.Builder rpcs =
+              LoadBalancerStatsResponse.RpcsByPeer.newBuilder();
           rpcs.putAllRpcsByPeer(entry.getValue());
           builder.putRpcsByType(entry.getKey(), rpcs.build());
         }

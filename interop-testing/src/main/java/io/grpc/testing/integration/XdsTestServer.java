@@ -28,7 +28,6 @@ import io.grpc.netty.NettyServerBuilder;
 import io.grpc.protobuf.services.ProtoReflectionService;
 import io.grpc.services.HealthStatusManager;
 import io.grpc.stub.StreamObserver;
-import io.grpc.testing.integration.EmptyProtos;
 import io.grpc.testing.integration.Messages.SimpleRequest;
 import io.grpc.testing.integration.Messages.SimpleResponse;
 import java.net.InetAddress;
@@ -128,7 +127,9 @@ public final class XdsTestServer {
     health = new HealthStatusManager();
     server =
         NettyServerBuilder.forPort(port)
-            .addService(ServerInterceptors.intercept(new TestServiceImpl(serverId, host), new HostnameInterceptor(host)))
+            .addService(
+                ServerInterceptors.intercept(
+                    new TestServiceImpl(serverId, host), new HostnameInterceptor(host)))
             .addService(new XdsUpdateHealthServiceImpl(health))
             .addService(health.getHealthService())
             .addService(ProtoReflectionService.newInstance())
@@ -160,7 +161,8 @@ public final class XdsTestServer {
     }
 
     @Override
-    public void emptyCall(EmptyProtos.Empty req, StreamObserver<EmptyProtos.Empty> responseObserver) {
+    public void emptyCall(
+        EmptyProtos.Empty req, StreamObserver<EmptyProtos.Empty> responseObserver) {
       responseObserver.onNext(EmptyProtos.Empty.getDefaultInstance());
       responseObserver.onCompleted();
     }
@@ -198,28 +200,30 @@ public final class XdsTestServer {
     }
   }
 
-private static class HostnameInterceptor implements ServerInterceptor {
-  private static final Metadata.Key<String> HOSTNAME_KEY =
-      Metadata.Key.of("hostname", Metadata.ASCII_STRING_MARSHALLER);
+  private static class HostnameInterceptor implements ServerInterceptor {
+    private static final Metadata.Key<String> HOSTNAME_KEY =
+        Metadata.Key.of("hostname", Metadata.ASCII_STRING_MARSHALLER);
 
-  private final String host;
+    private final String host;
 
-  private HostnameInterceptor(String host) {
-    this.host = host;
+    private HostnameInterceptor(String host) {
+      this.host = host;
+    }
+
+    @Override
+    public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+        ServerCall<ReqT, RespT> call,
+        final Metadata requestHeaders,
+        ServerCallHandler<ReqT, RespT> next) {
+      return next.startCall(
+          new SimpleForwardingServerCall<ReqT, RespT>(call) {
+            @Override
+            public void sendHeaders(Metadata responseHeaders) {
+              responseHeaders.put(HOSTNAME_KEY, host);
+              super.sendHeaders(responseHeaders);
+            }
+          },
+          requestHeaders);
+    }
   }
-
-  @Override
-  public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-      ServerCall<ReqT, RespT> call,
-      final Metadata requestHeaders,
-      ServerCallHandler<ReqT, RespT> next) {
-    return next.startCall(new SimpleForwardingServerCall<ReqT, RespT>(call) {
-      @Override
-      public void sendHeaders(Metadata responseHeaders) {
-        responseHeaders.put(HOSTNAME_KEY, host);
-        super.sendHeaders(responseHeaders);
-      }
-    }, requestHeaders);
-  }
-}
 }
