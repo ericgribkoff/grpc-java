@@ -414,7 +414,7 @@ public class TestServiceClient {
           }
         }
         NettyChannelBuilder nettyBuilder =
-            NettyChannelBuilder.forAddress(serverHost, serverPort)
+            NettyChannelBuilder.forTarget(serverHost)
                 .flowControlWindow(65 * 1024)
                 .negotiationType(useTls ? NegotiationType.TLS :
                   (useH2cUpgrade ? NegotiationType.PLAINTEXT_UPGRADE : NegotiationType.PLAINTEXT))

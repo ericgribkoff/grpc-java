@@ -197,6 +197,7 @@ final class XdsNameResolver extends NameResolver {
           Attributes.newBuilder()
               .set(XdsAttributes.XDS_CLIENT_POOL, xdsClientPool)
               .build();
+      // TODO(ericgribkoff) Plug in whether to use tracing here? If we use service config as enabling mechanism, this seems appropriate
       ConfigOrError parsedServiceConfig = serviceConfigParser.parseServiceConfig(serviceConfig);
       ResolutionResult result =
           ResolutionResult.newBuilder()

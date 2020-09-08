@@ -51,7 +51,9 @@ public class HelloworldActivity extends AppCompatActivity {
     setContentView(R.layout.activity_helloworld);
     sendButton = (Button) findViewById(R.id.send_button);
     hostEdit = (EditText) findViewById(R.id.host_edit_text);
+    hostEdit.setText("library-example.googleapis.com");
     portEdit = (EditText) findViewById(R.id.port_edit_text);
+    portEdit.setText("443");
     messageEdit = (EditText) findViewById(R.id.message_edit_text);
     resultText = (TextView) findViewById(R.id.grpc_response_text);
     resultText.setMovementMethod(new ScrollingMovementMethod());

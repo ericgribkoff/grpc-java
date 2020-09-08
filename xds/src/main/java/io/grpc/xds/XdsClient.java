@@ -640,6 +640,10 @@ abstract class XdsClient {
             logger.log(XdsLogLevel.INFO, "Using channel credentials: google_default");
             channelBuilder = GoogleDefaultChannelBuilder.forTarget(serverUri);
             break;
+          } else if (creds.getType().equals("insecure")) {
+            logger.log(XdsLogLevel.INFO, "Using channel credentials: insecure");
+            channelBuilder = ManagedChannelBuilder.forTarget(serverUri).usePlaintext();
+            break;
           }
         }
         if (channelBuilder == null) {

@@ -16,6 +16,18 @@
 
 package io.grpc.testing.integration;
 
+import com.google.protobuf.Any;
+import com.google.protobuf.UInt32Value;
+import io.envoyproxy.envoy.config.core.v3.AggregatedConfigSource;
+import io.envoyproxy.envoy.config.core.v3.ConfigSource;
+import io.envoyproxy.envoy.config.core.v3.HealthStatus;
+import io.envoyproxy.envoy.config.core.v3.Locality;
+import io.envoyproxy.envoy.config.core.v3.SocketAddress;
+import io.envoyproxy.envoy.config.endpoint.v3.Endpoint;
+import io.envoyproxy.envoy.config.endpoint.v3.LocalityLbEndpoints;
+import io.envoyproxy.envoy.config.listener.v3.ApiListener;
+import io.envoyproxy.envoy.config.route.v3.RouteAction;
+import io.envoyproxy.envoy.config.route.v3.RouteMatch;
 import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
 import io.grpc.Metadata;
 import io.grpc.Server;
@@ -35,6 +47,24 @@ import java.net.UnknownHostException;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import io.envoyproxy.envoy.config.cluster.v3.Cluster;
+import io.envoyproxy.envoy.config.cluster.v3.Cluster.DiscoveryType;
+import io.envoyproxy.envoy.config.cluster.v3.Cluster.EdsClusterConfig;
+import io.envoyproxy.envoy.config.cluster.v3.Cluster.LbPolicy;
+import io.envoyproxy.envoy.config.core.v3.Address;
+import io.envoyproxy.envoy.config.endpoint.v3.ClusterLoadAssignment;
+import io.envoyproxy.envoy.config.endpoint.v3.LbEndpoint;
+import io.envoyproxy.envoy.config.listener.v3.FilterChain;
+import io.envoyproxy.envoy.config.listener.v3.FilterChainMatch;
+import io.envoyproxy.envoy.config.listener.v3.Listener;
+import io.envoyproxy.envoy.config.route.v3.Route;
+import io.envoyproxy.envoy.config.route.v3.RouteConfiguration;
+import io.envoyproxy.envoy.config.route.v3.VirtualHost;
+import io.envoyproxy.envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager;
+import io.envoyproxy.envoy.extensions.filters.network.http_connection_manager.v3.Rds;
+import io.envoyproxy.envoy.service.discovery.v3.AggregatedDiscoveryServiceGrpc;
+import io.envoyproxy.envoy.service.discovery.v3.DiscoveryRequest;
+import io.envoyproxy.envoy.service.discovery.v3.DiscoveryResponse;
 
 /** Interop test server that implements the xDS testing service. */
 public final class XdsTestServer {
@@ -135,6 +165,7 @@ public final class XdsTestServer {
                     new TestServiceImpl(serverId, host), new HostnameInterceptor(host)))
             .addService(new XdsUpdateHealthServiceImpl(health))
             .addService(health.getHealthService())
+            .addService(new AdsImpl(port))
             .addService(ProtoReflectionService.newInstance())
             .build()
             .start();
@@ -151,6 +182,116 @@ public final class XdsTestServer {
   private void blockUntilShutdown() throws InterruptedException {
     if (server != null) {
       server.awaitTermination();
+    }
+  }
+
+  private static class AdsImpl extends AggregatedDiscoveryServiceGrpc.AggregatedDiscoveryServiceImplBase {
+    private static String CDS = "type.googleapis.com/envoy.config.cluster.v3.Cluster";
+    private static String EDS = "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment";
+    private static String LDS = "type.googleapis.com/envoy.config.listener.v3.Listener";
+    private static String RDS = "type.googleapis.com/envoy.config.route.v3.RouteConfiguration";
+    private static String ROUTE_CONFIG_NAME = "URL_MAP";
+    private static String CLUSTER_NAME = "CLUSTER_NAME";
+    private static String SUBZONE = "SUBZONE";
+
+    private final int port;
+
+    private String host = "uninitialized";
+    private boolean sentCds;
+    private boolean sentEds;
+    private boolean sentLds;
+    private boolean sentRds;
+
+    private AdsImpl(int port) {
+      this.port = port;
+    }
+
+    @Override
+    public StreamObserver<DiscoveryRequest> streamAggregatedResources(
+            final StreamObserver<DiscoveryResponse> responseObserver) {
+      return new StreamObserver<DiscoveryRequest>() {
+        @Override
+        public void onNext(DiscoveryRequest request) {
+          System.out.println(request);
+          if (request.getTypeUrl().equals(LDS) && !sentLds) {
+            host = request.getResourceNames(0);
+            DiscoveryResponse.Builder response = DiscoveryResponse.newBuilder().setTypeUrl(LDS);
+            Listener.Builder listener = Listener.newBuilder();
+            listener.setName(host);
+            HttpConnectionManager.Builder httpManager = HttpConnectionManager.newBuilder();
+            httpManager.setRds(
+                Rds.newBuilder()
+                    .setConfigSource(
+                        ConfigSource.newBuilder()
+                            .setAds(AggregatedConfigSource.getDefaultInstance()))
+                    .setRouteConfigName(ROUTE_CONFIG_NAME));
+            listener.setApiListener(
+                ApiListener.newBuilder().setApiListener(Any.pack(httpManager.build())).build());
+            response.addResources(Any.pack(listener.build()));
+            responseObserver.onNext(response.build());
+            sentLds = true;
+          } else if (request.getTypeUrl().equals(RDS) && !sentRds) {
+            DiscoveryResponse.Builder response = DiscoveryResponse.newBuilder().setTypeUrl(RDS);
+            RouteConfiguration.Builder route = RouteConfiguration.newBuilder();
+            route.setName(ROUTE_CONFIG_NAME);
+            VirtualHost.Builder virtualHost = VirtualHost.newBuilder();
+            virtualHost.addDomains(host);
+            virtualHost.addRoutes(
+                Route.newBuilder()
+                    .setMatch(RouteMatch.newBuilder().setPrefix(""))
+                    .setRoute(RouteAction.newBuilder().setCluster(CLUSTER_NAME)));
+            route.addVirtualHosts(virtualHost.build());
+            response.addResources(Any.pack(route.build()));
+            responseObserver.onNext(response.build());
+            sentRds = true;
+          } else if (request.getTypeUrl().equals(CDS) && !sentCds) {
+            DiscoveryResponse.Builder response = DiscoveryResponse.newBuilder().setTypeUrl(CDS);
+            Cluster.Builder cluster = Cluster.newBuilder();
+            cluster.setName(CLUSTER_NAME);
+            cluster.setType(DiscoveryType.EDS);
+            cluster.setEdsClusterConfig(
+                EdsClusterConfig.newBuilder()
+                    .setEdsConfig(
+                        ConfigSource.newBuilder()
+                            .setAds(AggregatedConfigSource.getDefaultInstance())));
+            response.addResources(Any.pack(cluster.build()));
+            responseObserver.onNext(response.build());
+            sentCds = true;
+          } else if (request.getTypeUrl().equals(EDS) && !sentEds) {
+            DiscoveryResponse.Builder response = DiscoveryResponse.newBuilder().setTypeUrl(EDS);
+            ClusterLoadAssignment.Builder cla = ClusterLoadAssignment.newBuilder();
+            cla.setClusterName(CLUSTER_NAME);
+            LbEndpoint.Builder endpoint = LbEndpoint.newBuilder();
+            endpoint.setHealthStatus(HealthStatus.HEALTHY);
+            endpoint.setEndpoint(
+                Endpoint.newBuilder()
+                    .setAddress(
+                        Address.newBuilder()
+                            .setSocketAddress(
+                                SocketAddress.newBuilder()
+                                    .setAddress("0.0.0.0")
+                                    .setPortValue(port))));
+            cla.addEndpoints(
+                LocalityLbEndpoints.newBuilder()
+                    .addLbEndpoints(endpoint)
+                    .setLocality(Locality.newBuilder().setSubZone(SUBZONE))
+                    .setLoadBalancingWeight(UInt32Value.of(100)));
+            response.addResources(Any.pack(cla.build()));
+            responseObserver.onNext(response.build());
+            sentEds = true;
+          }
+        }
+
+        @Override
+        public void onError(Throwable t) {
+          logger.log(Level.WARNING, "onError", t);
+        }
+
+        @Override
+        public void onCompleted() {
+          responseObserver.onCompleted();
+        }
+      };
     }
   }
 
