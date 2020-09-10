@@ -17,6 +17,7 @@
 package io.grpc.testing.integration;
 
 import com.google.protobuf.Any;
+import com.google.protobuf.BoolValue;
 import com.google.protobuf.UInt32Value;
 import io.envoyproxy.envoy.config.core.v3.AggregatedConfigSource;
 import io.envoyproxy.envoy.config.core.v3.ConfigSource;
@@ -62,6 +63,7 @@ import io.envoyproxy.envoy.config.route.v3.RouteConfiguration;
 import io.envoyproxy.envoy.config.route.v3.VirtualHost;
 import io.envoyproxy.envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager;
 import io.envoyproxy.envoy.extensions.filters.network.http_connection_manager.v3.Rds;
+// import io.envoyproxy.envoy.extensions.filters.http.grpc_stats.v3.FilterConfig;
 import io.envoyproxy.envoy.service.discovery.v3.AggregatedDiscoveryServiceGrpc;
 import io.envoyproxy.envoy.service.discovery.v3.DiscoveryRequest;
 import io.envoyproxy.envoy.service.discovery.v3.DiscoveryResponse;
@@ -79,9 +81,7 @@ public final class XdsTestServer {
   private Server server;
   private String host;
 
-  /**
-   * The main application allowing this client to be launched from the command line.
-   */
+  /** The main application allowing this client to be launched from the command line. */
   public static void main(String[] args) throws Exception {
     final XdsTestServer server = new XdsTestServer();
     server.parseArgs(args);
@@ -185,9 +185,11 @@ public final class XdsTestServer {
     }
   }
 
-  private static class AdsImpl extends AggregatedDiscoveryServiceGrpc.AggregatedDiscoveryServiceImplBase {
+  private static class AdsImpl
+      extends AggregatedDiscoveryServiceGrpc.AggregatedDiscoveryServiceImplBase {
     private static String CDS = "type.googleapis.com/envoy.config.cluster.v3.Cluster";
-    private static String EDS = "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment";
+    private static String EDS =
+        "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment";
     private static String LDS = "type.googleapis.com/envoy.config.listener.v3.Listener";
     private static String RDS = "type.googleapis.com/envoy.config.route.v3.RouteConfiguration";
     private static String ROUTE_CONFIG_NAME = "URL_MAP";
@@ -208,7 +210,7 @@ public final class XdsTestServer {
 
     @Override
     public StreamObserver<DiscoveryRequest> streamAggregatedResources(
-            final StreamObserver<DiscoveryResponse> responseObserver) {
+        final StreamObserver<DiscoveryResponse> responseObserver) {
       return new StreamObserver<DiscoveryRequest>() {
         @Override
         public void onNext(DiscoveryRequest request) {
@@ -236,9 +238,15 @@ public final class XdsTestServer {
             route.setName(ROUTE_CONFIG_NAME);
             VirtualHost.Builder virtualHost = VirtualHost.newBuilder();
             virtualHost.addDomains(host);
+            io.envoyproxy.envoy.extensions.filters.http.grpc_stats.v3.FilterConfig.Builder
+                statsFilter =
+                    io.envoyproxy.envoy.extensions.filters.http.grpc_stats.v3.FilterConfig
+                        .newBuilder();
+            statsFilter.setStatsForAllMethods(BoolValue.of(true));
             virtualHost.addRoutes(
                 Route.newBuilder()
                     .setMatch(RouteMatch.newBuilder().setPrefix(""))
+                    .putTypedPerFilterConfig("envoy.grpc_statistics", Any.pack(statsFilter.build()))
                     .setRoute(RouteAction.newBuilder().setCluster(CLUSTER_NAME)));
             route.addVirtualHosts(virtualHost.build());
             response.addResources(Any.pack(route.build()));

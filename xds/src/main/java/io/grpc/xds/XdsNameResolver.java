@@ -173,14 +173,14 @@ final class XdsNameResolver extends NameResolver {
               "Received config update from xDS client {0}: cluster_name={1}",
               xdsClient,
               clusterName);
-          rawLbConfig = generateCdsRawConfig(clusterName);
+          rawLbConfig = generateCdsRawConfig(clusterName, defaultRoute.getGrpcStatsFilter());
         } else {
           logger.log(
               XdsLogLevel.INFO,
               "Received config update with one weighted cluster route from xDS client {0}",
               xdsClient);
           List<ClusterWeight> clusterWeights = defaultRoute.getRouteAction().getWeightedCluster();
-          rawLbConfig = generateWeightedTargetRawConfig(clusterWeights);
+          rawLbConfig = generateWeightedTargetRawConfig(clusterWeights, defaultRoute.getGrpcStatsFilter());
         }
       }
 
@@ -243,7 +243,7 @@ final class XdsNameResolver extends NameResolver {
       } else {
         if (routeAction.getCluster() != null) {
           actionName = "cds:" + routeAction.getCluster();
-          actionPolicy = generateCdsRawConfig(routeAction.getCluster());
+          actionPolicy = generateCdsRawConfig(routeAction.getCluster(), route.getGrpcStatsFilter());
         } else {
           StringBuilder sb = new StringBuilder("weighted:");
           List<ClusterWeight> clusterWeights = routeAction.getWeightedCluster();
@@ -259,7 +259,7 @@ final class XdsNameResolver extends NameResolver {
             // is just suboptimal and won't cause a problem.
             actionName = actionName + "_" + existingActions.size();
           }
-          actionPolicy = generateWeightedTargetRawConfig(clusterWeights);
+          actionPolicy = generateWeightedTargetRawConfig(clusterWeights, route.getGrpcStatsFilter());
         }
         existingActions.put(routeAction, actionName);
         List<?> childPolicies = ImmutableList.of(actionPolicy);
@@ -349,10 +349,10 @@ final class XdsNameResolver extends NameResolver {
 
   @VisibleForTesting
   static ImmutableMap<String, ?> generateWeightedTargetRawConfig(
-      List<ClusterWeight> clusterWeights) {
+      List<ClusterWeight> clusterWeights, boolean grpcStatsFilter) {
     Map<String, Object> targets = new LinkedHashMap<>();
     for (ClusterWeight clusterWeight : clusterWeights) {
-      Map<String, ?> childPolicy = generateCdsRawConfig(clusterWeight.getName());
+      Map<String, ?> childPolicy = generateCdsRawConfig(clusterWeight.getName(), grpcStatsFilter);
       Map<String, ?> weightedConfig = ImmutableMap.of(
           "weight",
           (double) clusterWeight.getWeight(),
@@ -365,8 +365,8 @@ final class XdsNameResolver extends NameResolver {
         ImmutableMap.of("targets", targets));
   }
 
-  private static ImmutableMap<String, ?> generateCdsRawConfig(String clusterName) {
-    return ImmutableMap.of(XdsLbPolicies.CDS_POLICY_NAME, ImmutableMap.of("cluster", clusterName));
+  private static ImmutableMap<String, ?> generateCdsRawConfig(String clusterName, boolean grpcStatsFilter) {
+    return ImmutableMap.of(XdsLbPolicies.CDS_POLICY_NAME, ImmutableMap.of("cluster", clusterName, "stats", grpcStatsFilter));
   }
 
   @Override

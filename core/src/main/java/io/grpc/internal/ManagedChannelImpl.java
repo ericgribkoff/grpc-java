@@ -1433,6 +1433,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
               effectiveServiceConfig = EMPTY_SERVICE_CONFIG;
             }
             if (!effectiveServiceConfig.equals(lastServiceConfig)) {
+              System.out.println(effectiveServiceConfig);
               channelLogger.log(
                   ChannelLogLevel.INFO,
                   "Service config changed{0}",
@@ -1967,6 +1968,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
 
     @Override
     public ConfigOrError parseServiceConfig(Map<String, ?> rawServiceConfig) {
+      System.out.println("parseServiceConfig: " + rawServiceConfig);
       try {
         Object loadBalancingPolicySelection;
         ConfigOrError choiceFromLoadBalancer =
