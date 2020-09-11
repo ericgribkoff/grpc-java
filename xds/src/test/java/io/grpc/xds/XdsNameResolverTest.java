@@ -49,7 +49,7 @@ public class XdsNameResolverTest {
     List<ClusterWeight> clusterWeights =
         Arrays.asList(
             new ClusterWeight("cluster-foo", 30), new ClusterWeight("cluster-bar", 50));
-    Map<String, ?> config = XdsNameResolver.generateWeightedTargetRawConfig(clusterWeights, false);
+    Map<String, ?> config = XdsNameResolver.generateWeightedTargetRawConfig(clusterWeights);
     String expectedJson = "{\n"
         + "  \"weighted_target_experimental\": {\n"
         + "    \"targets\": {\n"

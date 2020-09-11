@@ -842,18 +842,11 @@ final class EnvoyProtoData {
   static final class Route {
     private final RouteMatch routeMatch;
     private final RouteAction routeAction;
-    private final boolean grpcStatsFilter; // Will need some amount of non-boolean config
 
     @VisibleForTesting
     Route(RouteMatch routeMatch, @Nullable RouteAction routeAction) {
-      this(routeMatch, routeAction, false);
-    }
-
-    @VisibleForTesting
-    Route(RouteMatch routeMatch, @Nullable RouteAction routeAction, boolean grpcStatsFilter) {
       this.routeMatch = routeMatch;
       this.routeAction = routeAction;
-      this.grpcStatsFilter = grpcStatsFilter;
     }
 
     RouteMatch getRouteMatch() {
@@ -862,10 +855,6 @@ final class EnvoyProtoData {
 
     RouteAction getRouteAction() {
       return routeAction;
-    }
-
-    boolean getGrpcStatsFilter() {
-      return grpcStatsFilter;
     }
 
     // TODO(chengyuanzhang): delete and do not use after routing feature is always ON.
@@ -888,13 +877,12 @@ final class EnvoyProtoData {
       }
       Route route = (Route) o;
       return Objects.equals(routeMatch, route.routeMatch)
-          && Objects.equals(routeAction, route.routeAction)
-          && Objects.equals(grpcStatsFilter, route.grpcStatsFilter);
+          && Objects.equals(routeAction, route.routeAction);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(routeMatch, routeAction, grpcStatsFilter);
+      return Objects.hash(routeMatch, routeAction);
     }
 
     @Override
@@ -902,7 +890,6 @@ final class EnvoyProtoData {
       return MoreObjects.toStringHelper(this)
           .add("routeMatch", routeMatch)
           .add("routeAction", routeAction)
-          .add("grpcStatsFilter", grpcStatsFilter)
           .toString();
     }
 
@@ -940,13 +927,7 @@ final class EnvoyProtoData {
         return StructOrError.fromError(
             "Invalid route [" + proto.getName() + "]: " + routeAction.getErrorDetail());
       }
-      boolean grpcStatsFilter = false;
-      for (Map.Entry<String, Any> entry : proto.getTypedPerFilterConfigMap().entrySet()) {
-        if (entry.getKey().equals("envoy.grpc_statistics")) {
-          grpcStatsFilter = true;
-        }
-      }
-      return StructOrError.fromStruct(new Route(routeMatch.getStruct(), routeAction.getStruct(), grpcStatsFilter));
+      return StructOrError.fromStruct(new Route(routeMatch.getStruct(), routeAction.getStruct()));
     }
 
     @VisibleForTesting

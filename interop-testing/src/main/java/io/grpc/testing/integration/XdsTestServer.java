@@ -29,6 +29,7 @@ import io.envoyproxy.envoy.config.endpoint.v3.LocalityLbEndpoints;
 import io.envoyproxy.envoy.config.listener.v3.ApiListener;
 import io.envoyproxy.envoy.config.route.v3.RouteAction;
 import io.envoyproxy.envoy.config.route.v3.RouteMatch;
+import io.envoyproxy.envoy.extensions.filters.network.http_connection_manager.v3.HttpFilter;
 import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
 import io.grpc.Metadata;
 import io.grpc.Server;
@@ -227,6 +228,7 @@ public final class XdsTestServer {
                         ConfigSource.newBuilder()
                             .setAds(AggregatedConfigSource.getDefaultInstance()))
                     .setRouteConfigName(ROUTE_CONFIG_NAME));
+            httpManager.addHttpFilters(HttpFilter.newBuilder().setName("envoy.filters.http.grpc_stats"));
             listener.setApiListener(
                 ApiListener.newBuilder().setApiListener(Any.pack(httpManager.build())).build());
             response.addResources(Any.pack(listener.build()));
@@ -238,15 +240,15 @@ public final class XdsTestServer {
             route.setName(ROUTE_CONFIG_NAME);
             VirtualHost.Builder virtualHost = VirtualHost.newBuilder();
             virtualHost.addDomains(host);
-            io.envoyproxy.envoy.extensions.filters.http.grpc_stats.v3.FilterConfig.Builder
-                statsFilter =
-                    io.envoyproxy.envoy.extensions.filters.http.grpc_stats.v3.FilterConfig
-                        .newBuilder();
-            statsFilter.setStatsForAllMethods(BoolValue.of(true));
+//            io.envoyproxy.envoy.extensions.filters.http.grpc_stats.v3.FilterConfig.Builder
+//                statsFilter =
+//                    io.envoyproxy.envoy.extensions.filters.http.grpc_stats.v3.FilterConfig
+//                        .newBuilder();
+//            statsFilter.setStatsForAllMethods(BoolValue.of(true));
             virtualHost.addRoutes(
                 Route.newBuilder()
                     .setMatch(RouteMatch.newBuilder().setPrefix(""))
-                    .putTypedPerFilterConfig("envoy.grpc_statistics", Any.pack(statsFilter.build()))
+//                    .putTypedPerFilterConfig("envoy.grpc_statistics", Any.pack(statsFilter.build()))
                     .setRoute(RouteAction.newBuilder().setCluster(CLUSTER_NAME)));
             route.addVirtualHosts(virtualHost.build());
             response.addResources(Any.pack(route.build()));

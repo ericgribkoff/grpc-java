@@ -43,6 +43,7 @@ import io.envoyproxy.envoy.config.route.v3.Route;
 import io.envoyproxy.envoy.config.route.v3.RouteConfiguration;
 import io.envoyproxy.envoy.config.route.v3.VirtualHost;
 import io.envoyproxy.envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager;
+import io.envoyproxy.envoy.extensions.filters.network.http_connection_manager.v3.HttpFilter;
 import io.envoyproxy.envoy.extensions.filters.network.http_connection_manager.v3.Rds;
 import io.envoyproxy.envoy.service.discovery.v3.AggregatedDiscoveryServiceGrpc;
 import io.envoyproxy.envoy.service.discovery.v3.DiscoveryRequest;
@@ -610,6 +611,8 @@ final class XdsClientImpl extends XdsClient {
       return;
     }
 
+    boolean grpcStats = false;
+
     String errorMessage = null;
     // Routes found in the in-lined RouteConfiguration, if exists.
     List<EnvoyProtoData.Route> routes = null;
@@ -619,6 +622,12 @@ final class XdsClientImpl extends XdsClient {
     // RouteConfiguration message or send an RDS request for dynamic resolution.
     if (requestedHttpConnManager != null) {
       logger.log(XdsLogLevel.DEBUG, "Found http connection manager");
+      for (HttpFilter filter : requestedHttpConnManager.getHttpFiltersList()) {
+        logger.log(XdsLogLevel.DEBUG, "filter: " + filter);
+        if (filter.getName().equals("envoy.filters.http.grpc_stats")) {
+          grpcStats = true;
+        }
+      }
       // The HttpConnectionManager message must either provide the RouteConfiguration directly
       // in-line or tell the client to use RDS to obtain it.
       // TODO(chengyuanzhang): if both route_config and rds are set, it should be either invalid
@@ -664,6 +673,7 @@ final class XdsClientImpl extends XdsClient {
         ldsRespTimer = null;
       }
     }
+    configWatcher.onGrpcStatsChanged(grpcStats);
     if (routes != null) {
       // Found  routes in the in-lined RouteConfiguration.
       logger.log(

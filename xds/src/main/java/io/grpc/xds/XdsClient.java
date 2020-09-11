@@ -65,13 +65,19 @@ abstract class XdsClient {
    */
   static final class ConfigUpdate {
     private final List<Route> routes;
+    private final boolean grpcStats;
 
-    private ConfigUpdate(List<Route> routes) {
+    private ConfigUpdate(List<Route> routes, boolean grpcStats) {
       this.routes = routes;
+      this.grpcStats = grpcStats;
     }
 
     List<Route> getRoutes() {
       return routes;
+    }
+
+    boolean getGrpcStats() {
+      return grpcStats;
     }
 
     @Override
@@ -80,6 +86,7 @@ abstract class XdsClient {
           MoreObjects
               .toStringHelper(this)
               .add("routes", routes)
+              .add("grpcStats", grpcStats)
               .toString();
     }
 
@@ -89,6 +96,7 @@ abstract class XdsClient {
 
     static final class Builder {
       private final List<Route> routes = new ArrayList<>();
+      private boolean grpcStats = false;
 
       // Use ConfigUpdate.newBuilder().
       private Builder() {
@@ -100,9 +108,14 @@ abstract class XdsClient {
         return this;
       }
 
+      Builder setGrpcStats() {
+        grpcStats = true;
+        return this;
+      }
+
       ConfigUpdate build() {
         checkState(!routes.isEmpty(), "routes is empty");
-        return new ConfigUpdate(Collections.unmodifiableList(routes));
+        return new ConfigUpdate(Collections.unmodifiableList(routes), grpcStats);
       }
     }
   }
@@ -433,6 +446,11 @@ abstract class XdsClient {
    * Config watcher interface. To be implemented by the xDS resolver.
    */
   interface ConfigWatcher extends ResourceWatcher {
+
+    /**
+     * Called when receiving an update grpc_stats filter configuration.
+     */
+    void onGrpcStatsChanged(boolean enableGrpcStats);
 
     /**
      * Called when receiving an update on virtual host configurations.

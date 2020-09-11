@@ -119,9 +119,15 @@ public final class ServiceConfigUtil {
     checkState(tokenRatio > 0f, "tokenRatio should be greater than zero");
     return new Throttle(maxTokens, tokenRatio);
   }
-//
-//  @Nullable
-//  static boolean grpcStats(@Nullable Map<String, ?> serviceConfig)
+
+  @Nullable
+  static boolean getGrpcStats(@Nullable Map<String, ?> serviceConfig) {
+    if (serviceConfig == null) {
+      return false;
+    }
+
+    return JsonUtil.getBoolean(serviceConfig, "grpcStats");
+  }
 
   @Nullable
   static Integer getMaxAttemptsFromRetryPolicy(Map<String, ?> retryPolicy) {

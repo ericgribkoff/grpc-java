@@ -47,6 +47,7 @@ final class ManagedChannelServiceConfig {
   private final Object loadBalancingConfig;
   @Nullable
   private final Map<String, ?> healthCheckingConfig;
+  private final boolean grpcStats;
 
   ManagedChannelServiceConfig(
       @Nullable MethodInfo defaultMethodConfig,
@@ -54,7 +55,8 @@ final class ManagedChannelServiceConfig {
       Map<String, MethodInfo> serviceMap,
       @Nullable Throttle retryThrottling,
       @Nullable Object loadBalancingConfig,
-      @Nullable Map<String, ?> healthCheckingConfig) {
+      @Nullable Map<String, ?> healthCheckingConfig,
+      boolean grpcStats) {
     this.defaultMethodConfig = defaultMethodConfig;
     this.serviceMethodMap = Collections.unmodifiableMap(new HashMap<>(serviceMethodMap));
     this.serviceMap = Collections.unmodifiableMap(new HashMap<>(serviceMap));
@@ -64,6 +66,7 @@ final class ManagedChannelServiceConfig {
         healthCheckingConfig != null
             ? Collections.unmodifiableMap(new HashMap<>(healthCheckingConfig))
             : null;
+    this.grpcStats = grpcStats;
   }
 
   /** Returns an empty {@link ManagedChannelServiceConfig}. */
@@ -75,7 +78,7 @@ final class ManagedChannelServiceConfig {
             new HashMap<String, MethodInfo>(),
             /* retryThrottling= */ null,
             /* loadBalancingConfig= */ null,
-            /* healthCheckingConfig= */ null);
+            /* healthCheckingConfig= */ null, false);
   }
 
   /**
@@ -91,6 +94,7 @@ final class ManagedChannelServiceConfig {
     if (retryEnabled) {
       retryThrottling = ServiceConfigUtil.getThrottlePolicy(serviceConfig);
     }
+    boolean grpcStats = ServiceConfigUtil.getGrpcStats(serviceConfig);
     Map<String, MethodInfo> serviceMethodMap = new HashMap<>();
     Map<String, MethodInfo> serviceMap = new HashMap<>();
     Map<String, ?> healthCheckingConfig =
@@ -110,7 +114,8 @@ final class ManagedChannelServiceConfig {
               serviceMap,
               retryThrottling,
               loadBalancingConfig,
-              healthCheckingConfig);
+              healthCheckingConfig,
+              grpcStats);
     }
 
     MethodInfo defaultMethodConfig = null;
@@ -159,7 +164,11 @@ final class ManagedChannelServiceConfig {
             serviceMap,
             retryThrottling,
             loadBalancingConfig,
-            healthCheckingConfig);
+            healthCheckingConfig, grpcStats);
+  }
+
+  boolean getGrpcStats() {
+    return grpcStats;
   }
 
   /**
@@ -209,12 +218,13 @@ final class ManagedChannelServiceConfig {
     return Objects.equal(serviceMethodMap, that.serviceMethodMap)
         && Objects.equal(serviceMap, that.serviceMap)
         && Objects.equal(retryThrottling, that.retryThrottling)
-        && Objects.equal(loadBalancingConfig, that.loadBalancingConfig);
+        && Objects.equal(loadBalancingConfig, that.loadBalancingConfig)
+        && Objects.equal(grpcStats, that.grpcStats);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(serviceMethodMap, serviceMap, retryThrottling, loadBalancingConfig);
+    return Objects.hashCode(serviceMethodMap, serviceMap, retryThrottling, loadBalancingConfig, grpcStats);
   }
 
   @Override
@@ -224,6 +234,7 @@ final class ManagedChannelServiceConfig {
         .add("serviceMap", serviceMap)
         .add("retryThrottling", retryThrottling)
         .add("loadBalancingConfig", loadBalancingConfig)
+        .add("grpcStats", grpcStats)
         .toString();
   }
 

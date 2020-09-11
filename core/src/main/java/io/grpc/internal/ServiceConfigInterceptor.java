@@ -23,7 +23,9 @@ import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
+import io.grpc.ClientStreamTracer;
 import io.grpc.Deadline;
+import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.internal.ManagedChannelServiceConfig.MethodInfo;
 import java.util.concurrent.TimeUnit;
@@ -63,6 +65,35 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
   @Override
   public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
       final MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+    if (initComplete && managedChannelServiceConfig.get() != null) {
+      System.out.println("Intercepting call! " + managedChannelServiceConfig.get().getGrpcStats());
+      if (managedChannelServiceConfig.get().getGrpcStats()) {
+        callOptions =
+            callOptions.withStreamTracerFactory(
+                new ClientStreamTracer.Factory() {
+                  @Override
+                  public ClientStreamTracer newClientStreamTracer(
+                      ClientStreamTracer.StreamInfo info, Metadata headers) {
+                    return new ClientStreamTracer() {
+                      @Override
+                      public void outboundHeaders() {
+                        System.out.println("tracer: outboundHeaders");
+                      }
+
+                      @Override
+                      public void inboundHeaders() {
+                        System.out.println("tracer: inboundHeaders");
+                      }
+
+                      @Override
+                      public void inboundTrailers(Metadata trailers) {
+                        System.out.println("tracer: inboundTrailers: " + trailers);
+                      }
+                    };
+                  }
+                });
+      }
+    }
     if (retryEnabled) {
       if (initComplete) {
         final RetryPolicy retryPolicy = getRetryPolicyFromConfig(method);
