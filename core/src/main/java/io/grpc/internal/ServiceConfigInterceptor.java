@@ -66,8 +66,10 @@ final class ServiceConfigInterceptor implements ClientInterceptor {
   public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
       final MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
     if (initComplete && managedChannelServiceConfig.get() != null) {
-      System.out.println("Intercepting call! " + managedChannelServiceConfig.get().getGrpcStats());
-      if (managedChannelServiceConfig.get().getGrpcStats()) {
+      final boolean grpcStats = managedChannelServiceConfig.get().getGrpcStats();
+      final boolean grpcTrace = managedChannelServiceConfig.get().getGrpcTrace();
+      System.out.println("Intercepting call! grpcStats: " + grpcStats + " grpcTrace: " + grpcTrace);
+      if (grpcStats || grpcTrace) {
         callOptions =
             callOptions.withStreamTracerFactory(
                 new ClientStreamTracer.Factory() {

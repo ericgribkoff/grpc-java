@@ -612,6 +612,7 @@ final class XdsClientImpl extends XdsClient {
     }
 
     boolean grpcStats = false;
+    boolean grpcTrace = false;
 
     String errorMessage = null;
     // Routes found in the in-lined RouteConfiguration, if exists.
@@ -627,6 +628,9 @@ final class XdsClientImpl extends XdsClient {
         if (filter.getName().equals("envoy.filters.http.grpc_stats")) {
           grpcStats = true;
         }
+      }
+      if (requestedHttpConnManager.hasTracing()) {
+        grpcTrace = true;
       }
       // The HttpConnectionManager message must either provide the RouteConfiguration directly
       // in-line or tell the client to use RDS to obtain it.
@@ -674,6 +678,7 @@ final class XdsClientImpl extends XdsClient {
       }
     }
     configWatcher.onGrpcStatsChanged(grpcStats);
+    configWatcher.onGrpcTraceChanged(grpcTrace);
     if (routes != null) {
       // Found  routes in the in-lined RouteConfiguration.
       logger.log(

@@ -149,6 +149,7 @@ final class XdsNameResolver extends NameResolver {
 
     final Listener2 listener;
     private boolean grpcStats;
+    private boolean grpcTrace;
 
     ConfigWatcherImpl(Listener2 listener) {
       this.listener = listener;
@@ -158,6 +159,12 @@ final class XdsNameResolver extends NameResolver {
     public void onGrpcStatsChanged(boolean grpcStats) {
       this.grpcStats = grpcStats;
     }
+
+    @Override
+    public void onGrpcTraceChanged(boolean grpcTrace) {
+      this.grpcTrace = grpcTrace;
+    }
+
 
     @Override
     public void onConfigChanged(ConfigUpdate update) {
@@ -191,7 +198,7 @@ final class XdsNameResolver extends NameResolver {
       }
 
       Map<String, ?> serviceConfig =
-          ImmutableMap.of("loadBalancingConfig", ImmutableList.of(rawLbConfig), "grpcStats", grpcStats);
+          ImmutableMap.of("loadBalancingConfig", ImmutableList.of(rawLbConfig), "grpcStats", grpcStats, "grpcTrace", grpcTrace);
       if (logger.isLoggable(XdsLogLevel.INFO)) {
         logger.log(
             XdsLogLevel.INFO,

@@ -229,6 +229,7 @@ public final class XdsTestServer {
                             .setAds(AggregatedConfigSource.getDefaultInstance()))
                     .setRouteConfigName(ROUTE_CONFIG_NAME));
             httpManager.addHttpFilters(HttpFilter.newBuilder().setName("envoy.filters.http.grpc_stats"));
+            httpManager.setTracing(HttpConnectionManager.Tracing.getDefaultInstance());
             listener.setApiListener(
                 ApiListener.newBuilder().setApiListener(Any.pack(httpManager.build())).build());
             response.addResources(Any.pack(listener.build()));

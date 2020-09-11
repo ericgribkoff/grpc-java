@@ -120,13 +120,20 @@ public final class ServiceConfigUtil {
     return new Throttle(maxTokens, tokenRatio);
   }
 
-  @Nullable
   static boolean getGrpcStats(@Nullable Map<String, ?> serviceConfig) {
     if (serviceConfig == null) {
       return false;
     }
 
     return JsonUtil.getBoolean(serviceConfig, "grpcStats");
+  }
+
+  static boolean getGrpcTrace(@Nullable Map<String, ?> serviceConfig) {
+    if (serviceConfig == null) {
+      return false;
+    }
+
+    return JsonUtil.getBoolean(serviceConfig, "grpcTrace");
   }
 
   @Nullable

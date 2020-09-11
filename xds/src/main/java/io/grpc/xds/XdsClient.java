@@ -450,7 +450,13 @@ abstract class XdsClient {
     /**
      * Called when receiving an update grpc_stats filter configuration.
      */
-    void onGrpcStatsChanged(boolean enableGrpcStats);
+    void onGrpcStatsChanged(boolean grpcStats);
+
+
+    /**
+     * Called when receiving a tracing httpconnectionmanager configuration.
+     */
+    void onGrpcTraceChanged(boolean grpcTrace);
 
     /**
      * Called when receiving an update on virtual host configurations.
