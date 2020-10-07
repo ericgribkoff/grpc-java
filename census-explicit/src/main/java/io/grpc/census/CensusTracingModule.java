@@ -39,6 +39,7 @@ import io.opencensus.trace.SpanContext;
 import io.opencensus.trace.Status;
 import io.opencensus.trace.Tracer;
 import io.opencensus.trace.propagation.BinaryFormat;
+import io.opencensus.trace.propagation.SpanContextParseException;
 import io.opencensus.trace.propagation.TextFormat;
 import io.opencensus.trace.unsafe.ContextUtils;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
@@ -89,6 +90,7 @@ final class CensusTracingModule {
   private final Tracer censusTracer;
   @VisibleForTesting
   final Metadata.Key<SpanContext> tracingHeader;
+  private final TextFormat censusPropagationTextFormat;
   private final TracingClientInterceptor clientInterceptor = new TracingClientInterceptor();
   private final ServerTracerFactory serverTracerFactory = new ServerTracerFactory();
 
@@ -113,29 +115,15 @@ final class CensusTracingModule {
               }
             }
           });
+    this.censusPropagationTextFormat = null;
   }
 
   CensusTracingModule(
           Tracer censusTracer, final TextFormat censusPropagationTextFormat) {
     this.censusTracer = checkNotNull(censusTracer, "censusTracer");
-    checkNotNull(censusPropagationTextFormat, "censusPropagationBinaryFormat");
-    this.tracingHeader =
-            Metadata.Key.of("traceparent", new Metadata.BinaryMarshaller<SpanContext>() {
-              @Override
-              public byte[] toBytes(SpanContext context) {
-                return censusPropagationBinaryFormat.toByteArray(context);
-              }
-
-              @Override
-              public SpanContext parseBytes(byte[] serialized) {
-                try {
-                  return censusPropagationBinaryFormat.fromByteArray(serialized);
-                } catch (Exception e) {
-                  logger.log(Level.FINE, "Failed to parse tracing header", e);
-                  return SpanContext.INVALID;
-                }
-              }
-            });
+    checkNotNull(censusPropagationTextFormat, "censusPropagationTextFormat");
+    this.tracingHeader = null;
+    this.censusPropagationTextFormat = censusPropagationTextFormat;
   }
 
   /**
@@ -268,8 +256,17 @@ final class CensusTracingModule {
     public ClientStreamTracer newClientStreamTracer(
         ClientStreamTracer.StreamInfo info, Metadata headers) {
       if (span != BlankSpan.INSTANCE) {
-        headers.discardAll(tracingHeader);
-        headers.put(tracingHeader, span.getContext());
+        if (tracingHeader != null) {
+          headers.discardAll(tracingHeader);
+          headers.put(tracingHeader, span.getContext());
+        } else {
+          censusPropagationTextFormat.inject(span.getContext(), headers, new TextFormat.Setter<Metadata>() {
+            @Override
+            public void put(Metadata carrier, String key, String value) {
+              carrier.put(Metadata.Key.of(key, Metadata.ASCII_STRING_MARSHALLER), value);
+            }
+          });
+        }
       }
       return new ClientTracer(span);
     }
@@ -388,7 +385,22 @@ final class CensusTracingModule {
     @SuppressWarnings("ReferenceEquality")
     @Override
     public ServerStreamTracer newServerStreamTracer(String fullMethodName, Metadata headers) {
-      SpanContext remoteSpan = headers.get(tracingHeader);
+      SpanContext remoteSpan;
+      if (tracingHeader != null) {
+        remoteSpan = headers.get(tracingHeader);
+      } else {
+        try {
+          remoteSpan = censusPropagationTextFormat.extract(headers, new TextFormat.Getter<Metadata>() {
+            @Nullable
+            @Override
+            public String get(Metadata carrier, String key) {
+              return carrier.get(Metadata.Key.of(key, Metadata.ASCII_STRING_MARSHALLER));
+            }
+          });
+        } catch (SpanContextParseException e) {
+          remoteSpan = null;
+        }
+      }
       if (remoteSpan == SpanContext.INVALID) {
         remoteSpan = null;
       }
