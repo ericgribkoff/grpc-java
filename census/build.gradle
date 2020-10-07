@@ -9,6 +9,7 @@ evaluationDependsOn(project(':grpc-api').path)
 
 dependencies {
     api project(':grpc-api')
+    implementation project(':grpc-census-explicit')
     guavaDependency 'implementation'
     censusApiDependency 'implementation'
     censusGrpcMetricDependency 'implementation'

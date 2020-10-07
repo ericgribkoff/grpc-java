@@ -54,6 +54,7 @@ dependencies {
 
     implementation project(':grpc-auth'),
             project(':grpc-census'),
+            project(':grpc-census-explicit'),
             project(':grpc-okhttp'),
             project(':grpc-protobuf-lite'),
             project(':grpc-stub'),
