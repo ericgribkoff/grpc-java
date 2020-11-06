@@ -17,6 +17,7 @@ public class Interceptors {
   }
 
   public static ClientInterceptor getTracingClientInterceptor() {
+
     CensusTracingModule censusTracing =
             new CensusTracingModule(
                     Tracing.getTracer(),

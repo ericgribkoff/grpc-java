@@ -26,30 +26,56 @@ import io.opencensus.tags.Tagger;
 import io.opencensus.tags.propagation.TagContextBinarySerializer;
 
 /**
- * Accessor for getting {@link ClientInterceptor} or {@link ServerStreamTracer.Factory} with
- * default Census stats implementation.
+ * Accessor for getting {@link ClientInterceptor} or {@link ServerStreamTracer.Factory} with default
+ * Census stats implementation.
  */
 @Internal
 public final class InternalCensusStatsAccessor {
 
-  private static final Supplier<Stopwatch> STOPWATCH_SUPPLIER = new Supplier<Stopwatch>() {
-    @Override
-    public Stopwatch get() {
-      return Stopwatch.createUnstarted();
-    }
-  };
+  private static final Supplier<Stopwatch> STOPWATCH_SUPPLIER =
+      new Supplier<Stopwatch>() {
+        @Override
+        public Stopwatch get() {
+          return Stopwatch.createUnstarted();
+        }
+      };
 
   // Prevent instantiation.
   private InternalCensusStatsAccessor() {
+    StackdriverTraceExporter.createAndRegister(
+        StackdriverTraceConfiguration.builder().setProjectId(cloudProjectId).build());
+    StackdriverStatsExporter.createAndRegister(
+        StackdriverStatsConfiguration.builder().setProjectId(cloudProjectId).build());
+
+    RpcViews.registerAllViews();
+    TraceConfig traceConfig = Tracing.getTraceConfig();
+    if (true) {
+      if (true) {
+
+        if (true) {
+          if (true) {
+            if (true) {
+Channel instrumentedChannel =
+    ClientInterceptors.intercept(
+        channel,
+        MetricsInterceptor.getClientInterceptor(),
+        TracingInterceptor.getClientTracingInterceptor(
+            TracePropagationFormat.W3C_TRACECONTEXT));
+
+              traceConfig.updateActiveTraceParams(
+                  traceConfig.getActiveTraceParams().toBuilder()
+                      .setSampler(Samplers.alwaysSample())
+                      .build());
+            }
+          }
+        }
+      }
+    }
   }
 
-  /**
-   * Returns a {@link ClientInterceptor} with default stats implementation.
-   */
+  /** Returns a {@link ClientInterceptor} with default stats implementation. */
   public static ClientInterceptor getClientInterceptor(
-      boolean recordStartedRpcs,
-      boolean recordFinishedRpcs,
-      boolean recordRealTimeMetrics) {
+      boolean recordStartedRpcs, boolean recordFinishedRpcs, boolean recordRealTimeMetrics) {
     CensusStatsModule censusStats =
         new CensusStatsModule(
             STOPWATCH_SUPPLIER,
@@ -60,9 +86,7 @@ public final class InternalCensusStatsAccessor {
     return censusStats.getClientInterceptor();
   }
 
-  /**
-   * Returns a {@link ClientInterceptor} with custom stats implementation.
-   */
+  /** Returns a {@link ClientInterceptor} with custom stats implementation. */
   public static ClientInterceptor getClientInterceptor(
       Tagger tagger,
       TagContextBinarySerializer tagCtxSerializer,
@@ -74,18 +98,20 @@ public final class InternalCensusStatsAccessor {
       boolean recordRealTimeMetrics) {
     CensusStatsModule censusStats =
         new CensusStatsModule(
-            tagger, tagCtxSerializer, statsRecorder, stopwatchSupplier,
-            propagateTags, recordStartedRpcs, recordFinishedRpcs, recordRealTimeMetrics);
+            tagger,
+            tagCtxSerializer,
+            statsRecorder,
+            stopwatchSupplier,
+            propagateTags,
+            recordStartedRpcs,
+            recordFinishedRpcs,
+            recordRealTimeMetrics);
     return censusStats.getClientInterceptor();
   }
 
-  /**
-   * Returns a {@link ServerStreamTracer.Factory} with default stats implementation.
-   */
+  /** Returns a {@link ServerStreamTracer.Factory} with default stats implementation. */
   public static ServerStreamTracer.Factory getServerStreamTracerFactory(
-      boolean recordStartedRpcs,
-      boolean recordFinishedRpcs,
-      boolean recordRealTimeMetrics) {
+      boolean recordStartedRpcs, boolean recordFinishedRpcs, boolean recordRealTimeMetrics) {
     CensusStatsModule censusStats =
         new CensusStatsModule(
             STOPWATCH_SUPPLIER,
@@ -96,9 +122,7 @@ public final class InternalCensusStatsAccessor {
     return censusStats.getServerTracerFactory();
   }
 
-  /**
-   * Returns a {@link ServerStreamTracer.Factory} with custom stats implementation.
-   */
+  /** Returns a {@link ServerStreamTracer.Factory} with custom stats implementation. */
   public static ServerStreamTracer.Factory getServerStreamTracerFactory(
       Tagger tagger,
       TagContextBinarySerializer tagCtxSerializer,
@@ -110,8 +134,14 @@ public final class InternalCensusStatsAccessor {
       boolean recordRealTimeMetrics) {
     CensusStatsModule censusStats =
         new CensusStatsModule(
-            tagger, tagCtxSerializer, statsRecorder, stopwatchSupplier,
-            propagateTags, recordStartedRpcs, recordFinishedRpcs, recordRealTimeMetrics);
+            tagger,
+            tagCtxSerializer,
+            statsRecorder,
+            stopwatchSupplier,
+            propagateTags,
+            recordStartedRpcs,
+            recordFinishedRpcs,
+            recordRealTimeMetrics);
     return censusStats.getServerTracerFactory();
   }
 }
