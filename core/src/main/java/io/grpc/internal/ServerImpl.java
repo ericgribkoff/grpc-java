@@ -48,6 +48,7 @@ import io.grpc.Metadata;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
+import io.grpc.ServerInterceptor2;
 import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.ServerTransportFilter;
@@ -542,6 +543,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
             if (method == null) {
               method = fallbackRegistry.lookupMethod(methodName, stream.getAuthority());
             }
+
             if (method == null) {
               Status status = Status.UNIMPLEMENTED.withDescription(
                   "Method not found: " + methodName);
@@ -554,6 +556,22 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
               context.cancel(null);
               return;
             }
+            for (final ServerInterceptor interceptor : interceptors) {
+              if (interceptor instanceof ServerInterceptor2) {
+                method = ((ServerInterceptor2) interceptor).interceptMethodDefinition(method);
+              } else {
+                // Converter
+                ServerInterceptor2 converter = new ServerInterceptor2() {
+                  @Override
+                  public <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> interceptMethodDefinition(ServerMethodDefinition<ReqT, RespT> method) {
+                    return method.withServerCallHandler(InternalServerInterceptors.interceptCallHandler(interceptor, method.getServerCallHandler()));
+                  }
+                };
+                method = converter.interceptMethodDefinition(method);
+              }
+            }
+//            StatsTraceContext statsTraceCtx =
+//                    StatsTraceContext.newServerContext(method.getStreamTracerFactories(), methodName, headers);
             listener = startCall(stream, methodName, method, headers, context, statsTraceCtx, tag);
           } catch (Throwable t) {
             stream.close(Status.fromThrowable(t), new Metadata());
@@ -617,9 +635,9 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
               stream.getAttributes(),
               stream.getAuthority()));
       ServerCallHandler<ReqT, RespT> handler = methodDef.getServerCallHandler();
-      for (ServerInterceptor interceptor : interceptors) {
-        handler = InternalServerInterceptors.interceptCallHandler(interceptor, handler);
-      }
+//      for (ServerInterceptor interceptor : interceptors) {
+//        handler = InternalServerInterceptors.interceptCallHandler(interceptor, handler);
+//      }
       ServerMethodDefinition<ReqT, RespT> interceptedDef = methodDef.withServerCallHandler(handler);
       ServerMethodDefinition<?, ?> wMethodDef = binlog == null
           ? interceptedDef : binlog.wrapMethodDefinition(interceptedDef);

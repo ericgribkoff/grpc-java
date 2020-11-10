@@ -16,6 +16,9 @@
 
 package io.grpc;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Definition of a method exposed by a {@link Server}.
  *
@@ -24,11 +27,13 @@ package io.grpc;
 public final class ServerMethodDefinition<ReqT, RespT> {
   private final MethodDescriptor<ReqT, RespT> method;
   private final ServerCallHandler<ReqT, RespT> handler;
+  private final List<ServerStreamTracer.Factory> streamTracerFactories;
 
   private ServerMethodDefinition(MethodDescriptor<ReqT, RespT> method,
       ServerCallHandler<ReqT, RespT> handler) {
     this.method = method;
     this.handler = handler;
+    this.streamTracerFactories = new ArrayList<>();
   }
 
   /**
@@ -63,5 +68,14 @@ public final class ServerMethodDefinition<ReqT, RespT> {
   public ServerMethodDefinition<ReqT, RespT> withServerCallHandler(
       ServerCallHandler<ReqT, RespT> handler) {
     return new ServerMethodDefinition<>(method, handler);
+  }
+
+  // To do - maintain immutability
+  public void addStreamTracer(ServerStreamTracer.Factory factory) {
+    streamTracerFactories.add(factory);
+  }
+
+  public List<? extends ServerStreamTracer.Factory> getStreamTracerFactories() {
+    return streamTracerFactories;
   }
 }
