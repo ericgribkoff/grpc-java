@@ -80,9 +80,9 @@ public final class StatsTraceContext {
       List<? extends ServerStreamTracer.Factory> factories,
       String fullMethodName,
       Metadata headers) {
-    if (factories.isEmpty()) {
-      return NOOP;
-    }
+//    if (factories.isEmpty()) {
+//      return NOOP;
+//    }
     StreamTracer[] tracers = new StreamTracer[factories.size()];
     for (int i = 0; i < tracers.length; i++) {
       tracers[i] = factories.get(i).newServerStreamTracer(fullMethodName, headers);
