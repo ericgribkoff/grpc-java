@@ -30,7 +30,8 @@ import javax.annotation.Nullable;
  * @since 1.33.0
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/7393")
-abstract class ForwardingServerBuilder<T extends ServerBuilder<T>> extends ServerBuilder<T> {
+abstract class
+ForwardingServerBuilder<T extends ServerBuilder<T>> extends ServerBuilder<T> {
 
   /** The default constructor. */
   protected ForwardingServerBuilder() {}
@@ -73,6 +74,12 @@ abstract class ForwardingServerBuilder<T extends ServerBuilder<T>> extends Serve
 
   @Override
   public T intercept(ServerInterceptor interceptor) {
+    delegate().intercept(interceptor);
+    return thisT();
+  }
+
+  @Override
+  public T intercept(ServerInterceptor2 interceptor) {
     delegate().intercept(interceptor);
     return thisT();
   }

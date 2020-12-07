@@ -51,6 +51,7 @@ import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptor2;
 import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
+import io.grpc.ServerStreamTracer;
 import io.grpc.ServerTransportFilter;
 import io.grpc.Status;
 import io.perfmark.Link;
@@ -102,6 +103,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
   // This is iterated on a per-call basis.  Use an array instead of a Collection to avoid iterator
   // creations.
   private final ServerInterceptor[] interceptors;
+  private final ServerInterceptor2[] interceptors2;
   private final long handshakeTimeoutMillis;
   @GuardedBy("lock") private boolean started;
   @GuardedBy("lock") private boolean shutdown;
@@ -157,6 +159,8 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
         new ArrayList<>(builder.transportFilters));
     this.interceptors =
         builder.interceptors.toArray(new ServerInterceptor[builder.interceptors.size()]);
+    this.interceptors2 =
+            builder.interceptors2.toArray(new ServerInterceptor2[builder.interceptors2.size()]);
     this.handshakeTimeoutMillis = builder.handshakeTimeoutMillis;
     this.binlog = builder.binlog;
     this.channelz = builder.channelz;
@@ -508,6 +512,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       final StatsTraceContext statsTraceCtx = Preconditions.checkNotNull(
           stream.statsTraceContext(), "statsTraceCtx not present from stream");
 
+      // Delay; augment later with stats trace context filter
       final Context.CancellableContext context = createContext(headers, statsTraceCtx);
 
       final Link link = PerfMark.linkOut();
@@ -556,20 +561,21 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
               context.cancel(null);
               return;
             }
-            for (final ServerInterceptor interceptor : interceptors) {
-              if (interceptor instanceof ServerInterceptor2) {
-                method = ((ServerInterceptor2) interceptor).interceptMethodDefinition(method);
-              } else {
-                // Converter
-                ServerInterceptor2 converter = new ServerInterceptor2() {
-                  @Override
-                  public <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> interceptMethodDefinition(ServerMethodDefinition<ReqT, RespT> method) {
-                    return method.withServerCallHandler(InternalServerInterceptors.interceptCallHandler(interceptor, method.getServerCallHandler()));
-                  }
-                };
-                method = converter.interceptMethodDefinition(method);
-              }
-            }
+//            // Move this into #startCall
+//            for (final ServerInterceptor interceptor : interceptors) {
+//              if (interceptor instanceof ServerInterceptor2) {
+//                method = ((ServerInterceptor2) interceptor).interceptMethodDefinition(method);
+//              } else {
+//                // Converter
+//                ServerInterceptor2 converter = new ServerInterceptor2() {
+//                  @Override
+//                  public <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> interceptMethodDefinition(ServerMethodDefinition<ReqT, RespT> method) {
+//                    return method.withServerCallHandler(InternalServerInterceptors.interceptCallHandler(interceptor, method.getServerCallHandler()));
+//                  }
+//                };
+//                method = converter.interceptMethodDefinition(method);
+//              }
+//            }
 //            StatsTraceContext statsTraceCtx =
 //                    StatsTraceContext.newServerContext(method.getStreamTracerFactories(), methodName, headers);
             listener = startCall(stream, methodName, method, headers, context, statsTraceCtx, tag);
@@ -629,16 +635,43 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
         ServerMethodDefinition<ReqT, RespT> methodDef, Metadata headers,
         Context.CancellableContext context, StatsTraceContext statsTraceCtx, Tag tag) {
       // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
+      // Update context here with methodDef.streamTracerFactories
+      // Updates statsTraceCtx here - interceptor
+      // Move this into #startCall
+      ServerMethodDefinition<ReqT, RespT> interceptedDef = methodDef;
+      for (final ServerInterceptor interceptor : interceptors) {
+        // TODO: ServerInterceptor2 is not a ServerInterceptor (?) so don't need this overload check
+        if (interceptor instanceof ServerInterceptor2) {
+          interceptedDef = ((ServerInterceptor2) interceptor).interceptMethodDefinition(interceptedDef);
+        } else {
+          // Converter
+          ServerInterceptor2 converter = new ServerInterceptor2() {
+            @Override
+            public <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> interceptMethodDefinition(ServerMethodDefinition<ReqT, RespT> method) {
+              return method.withServerCallHandler(InternalServerInterceptors.interceptCallHandler(interceptor, method.getServerCallHandler()));
+            }
+          };
+          interceptedDef = converter.interceptMethodDefinition(interceptedDef);
+        }
+      }
+      // TODO: make ready and augment with interceptedDef.getStreamTracerFactories
+      ArrayList<ServerStreamTracer> tracers = new ArrayList<ServerStreamTracer>();
+      for (ServerStreamTracer.Factory factory : interceptedDef.getStreamTracerFactories()) {
+        tracers.add(factory.newServerStreamTracer(fullMethodName, headers));
+      }
+      statsTraceCtx.addStreamTracers(tracers);
+//      statsTraceCtx.set(StatsTraceContext.newServerContext(interceptedDef.getStreamTracerFactories(), fullMethodName, headers));
+
       statsTraceCtx.serverCallStarted(
           new ServerCallInfoImpl<>(
-              methodDef.getMethodDescriptor(), // notify with original method descriptor
+              interceptedDef.getMethodDescriptor(), // notify with original method descriptor
               stream.getAttributes(),
               stream.getAuthority()));
-      ServerCallHandler<ReqT, RespT> handler = methodDef.getServerCallHandler();
-//      for (ServerInterceptor interceptor : interceptors) {
-//        handler = InternalServerInterceptors.interceptCallHandler(interceptor, handler);
-//      }
-      ServerMethodDefinition<ReqT, RespT> interceptedDef = methodDef.withServerCallHandler(handler);
+//      ServerCallHandler<ReqT, RespT> handler = methodDef.getServerCallHandler();
+////      for (ServerInterceptor interceptor : interceptors) {
+////        handler = InternalServerInterceptors.interceptCallHandler(interceptor, handler);
+////      }
+//      ServerMethodDefinition<ReqT, RespT> interceptedDef = methodDef.withServerCallHandler(handler);
       ServerMethodDefinition<?, ?> wMethodDef = binlog == null
           ? interceptedDef : binlog.wrapMethodDefinition(interceptedDef);
       return startWrappedCall(fullMethodName, wMethodDef, stream, headers, context, tag);

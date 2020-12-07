@@ -104,6 +104,11 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
     throw new UnsupportedOperationException();
   }
 
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/????")
+  public T intercept(ServerInterceptor2 interceptor) {
+    throw new UnsupportedOperationException();
+  }
+
   /**
    * Adds a {@link ServerTransportFilter}. The order of filters being added is the order they will
    * be executed.

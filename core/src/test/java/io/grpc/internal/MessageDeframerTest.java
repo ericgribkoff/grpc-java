@@ -51,6 +51,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPOutputStream;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;

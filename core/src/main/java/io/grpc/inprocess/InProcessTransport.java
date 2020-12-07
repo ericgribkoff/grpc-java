@@ -420,6 +420,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       InProcessServerStream(MethodDescriptor<?, ?> method, Metadata headers) {
         statsTraceCtx = StatsTraceContext.newServerContext(
             serverStreamTracerFactories, method.getFullMethodName(), headers);
+//        statsTraceCtx.readyToUse = true;
       }
 
       private synchronized void setListener(ClientStreamListener listener) {
@@ -812,6 +813,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
           if (GrpcUtil.shouldBeCountedForInUse(callOptions)) {
             inUseState.updateObjectInUse(InProcessTransport.InProcessStream.this, true);
           }
+          // This is async
           serverTransportListener.streamCreated(serverStream, method.getFullMethodName(), headers);
         }
       }
