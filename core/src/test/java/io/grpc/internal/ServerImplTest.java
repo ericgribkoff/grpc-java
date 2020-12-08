@@ -1177,7 +1177,9 @@ public class ServerImplTest {
     Metadata requestHeaders = new Metadata();
     StatsTraceContext statsTraceCtx =
         StatsTraceContext.newServerContext(streamTracerFactories, "Waiter/serve", requestHeaders);
-    when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
+    StatsTraceContext statsTraceCtx2 =
+            StatsTraceContext.newServerContext(streamTracerFactories, "Waiter/serve", requestHeaders);
+    when(stream.statsTraceContext()).thenReturn(statsTraceCtx, statsTraceCtx2);
 
     // This call will be handled by callHandler from the internal registry
     transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
