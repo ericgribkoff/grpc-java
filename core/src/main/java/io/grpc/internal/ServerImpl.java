@@ -654,12 +654,12 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
           interceptedDef = converter.interceptMethodDefinition(interceptedDef);
         }
       }
-      // TODO: remove :-)
-      try {
-        Thread.sleep(100);
-      } catch (InterruptedException e) {
-        e.printStackTrace();
-      }
+//      // TODO: remove :-)
+//      try {
+//        Thread.sleep(100);
+//      } catch (InterruptedException e) {
+//        e.printStackTrace();
+//      }
       ArrayList<ServerStreamTracer> tracers = new ArrayList<ServerStreamTracer>();
       for (ServerStreamTracer.Factory factory : interceptedDef.getStreamTracerFactories()) {
         tracers.add(factory.newServerStreamTracer(fullMethodName, headers));
