@@ -726,6 +726,10 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
         }
         statsTraceCtx.outboundMessage(outboundSeqNo);
         statsTraceCtx.outboundMessageSent(outboundSeqNo, -1, -1);
+        // This writes the inbound stats to the server's statstracecontext immediately, potentially (often, racy)
+        // before the ServerImpl has set the server streams statstracecontext as ready.
+        // Does this violate StatsTraceContext contract? In these scenarios it's also being invoked before
+        // #serverCallStarted. And definitely before we've had time to get tracefactories from the interceptors...
         serverStream.statsTraceCtx.inboundMessage(outboundSeqNo);
         serverStream.statsTraceCtx.inboundMessageRead(outboundSeqNo, -1, -1);
         outboundSeqNo++;

@@ -17,6 +17,7 @@
 package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.math.Stats;
@@ -34,6 +35,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -45,7 +47,10 @@ public final class StatsTraceContext {
 
   private StreamTracer[] tracers;
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  public volatile boolean readyToUse; // TODO: clarify semantics, make private
+  public volatile boolean readyToUse; // TODO: clarify semantics, make private. Rename to "allTracersReady" or something
+
+  @GuardedBy("this")
+  private List<Runnable> pendingEvents = new ArrayList<>();
 
 //  // These allocations might be problematic, since they may never be used. But just doubles the number of allocations...
 //  private StreamTracer[] interceptorTracers;
@@ -104,6 +109,13 @@ public final class StatsTraceContext {
       }
       this.tracers = replacementTracers;
     }
+    synchronized (this) {
+      // TODO: make faster, see DelayedStream
+      for (Runnable runnable : pendingEvents) {
+        runnable.run();
+      }
+      pendingEvents.clear();
+    }
     readyToUse = true;
   }
 
@@ -117,12 +129,12 @@ public final class StatsTraceContext {
     this(tracers, true);
   }
 
-  private StreamTracer[] getStreamTracers() {
-    if (!readyToUse) {
-      throw new RuntimeException("Not ready to use!");
-    }
-    return tracers;
-  }
+//  private StreamTracer[] getStreamTracers() {
+//    if (!readyToUse) {
+//      throw new RuntimeException("Not ready to use!");
+//    }
+//    return tracers;
+//  }
 
   /**
    * Returns a copy of the tracer list.
@@ -138,7 +150,8 @@ public final class StatsTraceContext {
    * <p>Transport-specific, thus should be called by transport implementations.
    */
   public void clientOutboundHeaders() {
-    for (StreamTracer tracer : getStreamTracers()) {
+    checkState(readyToUse, "Client should always be ready to use");
+    for (StreamTracer tracer : tracers) {
       ((ClientStreamTracer) tracer).outboundHeaders();
     }
   }
@@ -149,7 +162,8 @@ public final class StatsTraceContext {
    * <p>Called from abstract stream implementations.
    */
   public void clientInboundHeaders() {
-    for (StreamTracer tracer : getStreamTracers()) {
+    checkState(readyToUse, "Client should always be ready to use");
+    for (StreamTracer tracer : tracers) {
       ((ClientStreamTracer) tracer).inboundHeaders();
     }
   }
@@ -160,7 +174,8 @@ public final class StatsTraceContext {
    * <p>Called from abstract stream implementations.
    */
   public void clientInboundTrailers(Metadata trailers) {
-    for (StreamTracer tracer : getStreamTracers()) {
+    checkState(readyToUse, "Client should always be ready to use");
+    for (StreamTracer tracer : tracers) {
       ((ClientStreamTracer) tracer).inboundTrailers(trailers);
     }
   }
@@ -184,9 +199,20 @@ public final class StatsTraceContext {
    *
    * <p>Called from {@link io.grpc.internal.ServerImpl}.
    */
-  public void serverCallStarted(ServerCallInfo<?, ?> callInfo) {
-    for (StreamTracer tracer : getStreamTracers()) {
-      ((ServerStreamTracer) tracer).serverCallStarted(callInfo);
+  public void serverCallStarted(final ServerCallInfo<?, ?> callInfo) {
+    if (readyToUse) {
+      for (StreamTracer tracer : tracers) {
+        ((ServerStreamTracer) tracer).serverCallStarted(callInfo);
+      }
+    } else {
+      delayOrExecute(new Runnable() {
+        @Override
+        public void run() {
+          for (StreamTracer tracer : tracers) {
+            ((ServerStreamTracer) tracer).serverCallStarted(callInfo);
+          }
+        }
+      });
     }
   }
 
@@ -209,9 +235,20 @@ public final class StatsTraceContext {
    *
    * <p>Called from {@link io.grpc.internal.Framer}.
    */
-  public void outboundMessage(int seqNo) {
-    for (StreamTracer tracer : getStreamTracers()) {
-      tracer.outboundMessage(seqNo);
+  public void outboundMessage(final int seqNo) {
+    if (readyToUse) {
+      for (StreamTracer tracer : tracers) {
+        tracer.outboundMessage(seqNo);
+      }
+    } else {
+      delayOrExecute(new Runnable() {
+        @Override
+        public void run() {
+          for (StreamTracer tracer : tracers) {
+            tracer.outboundMessage(seqNo);
+          }
+        }
+      });
     }
   }
 
@@ -220,9 +257,20 @@ public final class StatsTraceContext {
    *
    * <p>Called from {@link io.grpc.internal.MessageDeframer}.
    */
-  public void inboundMessage(int seqNo) {
-    for (StreamTracer tracer : getStreamTracers()) {
-      tracer.inboundMessage(seqNo);
+  public void inboundMessage(final int seqNo) {
+    if (readyToUse) {
+      for (StreamTracer tracer : tracers) {
+        tracer.inboundMessage(seqNo);
+      }
+    } else {
+      delayOrExecute(new Runnable() {
+        @Override
+        public void run() {
+          for (StreamTracer tracer : tracers) {
+            tracer.inboundMessage(seqNo);
+          }
+        }
+      });
     }
   }
 
@@ -231,9 +279,20 @@ public final class StatsTraceContext {
    *
    * <p>Called from {@link io.grpc.internal.Framer}.
    */
-  public void outboundMessageSent(int seqNo, long optionalWireSize, long optionalUncompressedSize) {
-    for (StreamTracer tracer : getStreamTracers()) {
-      tracer.outboundMessageSent(seqNo, optionalWireSize, optionalUncompressedSize);
+  public void outboundMessageSent(final int seqNo, final long optionalWireSize, final long optionalUncompressedSize) {
+    if (readyToUse) {
+      for (StreamTracer tracer : tracers) {
+        tracer.outboundMessageSent(seqNo, optionalWireSize, optionalUncompressedSize);
+      }
+    } else {
+      delayOrExecute(new Runnable() {
+        @Override
+        public void run() {
+          for (StreamTracer tracer : tracers) {
+            tracer.outboundMessageSent(seqNo, optionalWireSize, optionalUncompressedSize);
+          }
+        }
+      });
     }
   }
 
@@ -242,9 +301,18 @@ public final class StatsTraceContext {
    *
    * <p>Called from {@link io.grpc.internal.MessageDeframer}.
    */
-  public void inboundMessageRead(int seqNo, long optionalWireSize, long optionalUncompressedSize) {
-    for (StreamTracer tracer : getStreamTracers()) {
-      tracer.inboundMessageRead(seqNo, optionalWireSize, optionalUncompressedSize);
+  public void inboundMessageRead(final int seqNo, final long optionalWireSize, final long optionalUncompressedSize) {
+    if (readyToUse) {
+      for (StreamTracer tracer : tracers) {
+        tracer.inboundMessageRead(seqNo, optionalWireSize, optionalUncompressedSize);      }
+    } else {
+      delayOrExecute(new Runnable() {
+        @Override
+        public void run() {
+          for (StreamTracer tracer : tracers) {
+            tracer.inboundMessageRead(seqNo, optionalWireSize, optionalUncompressedSize);          }
+        }
+      });
     }
   }
 
@@ -253,9 +321,20 @@ public final class StatsTraceContext {
    *
    * <p>Called from {@link io.grpc.internal.Framer}.
    */
-  public void outboundUncompressedSize(long bytes) {
-    for (StreamTracer tracer : getStreamTracers()) {
-      tracer.outboundUncompressedSize(bytes);
+  public void outboundUncompressedSize(final long bytes) {
+    if (readyToUse) {
+      for (StreamTracer tracer : tracers) {
+        tracer.outboundUncompressedSize(bytes);
+      }
+    } else {
+      delayOrExecute(new Runnable() {
+        @Override
+        public void run() {
+          for (StreamTracer tracer : tracers) {
+            tracer.outboundUncompressedSize(bytes);
+          }
+        }
+      });
     }
   }
 
@@ -264,9 +343,20 @@ public final class StatsTraceContext {
    *
    * <p>Called from {@link io.grpc.internal.Framer}.
    */
-  public void outboundWireSize(long bytes) {
-    for (StreamTracer tracer : getStreamTracers()) {
-      tracer.outboundWireSize(bytes);
+  public void outboundWireSize(final long bytes) {
+    if (readyToUse) {
+      for (StreamTracer tracer : tracers) {
+        tracer.outboundWireSize(bytes);
+      }
+    } else {
+      delayOrExecute(new Runnable() {
+        @Override
+        public void run() {
+          for (StreamTracer tracer : tracers) {
+            tracer.outboundWireSize(bytes);
+          }
+        }
+      });
     }
   }
 
@@ -275,9 +365,20 @@ public final class StatsTraceContext {
    *
    * <p>Called from {@link io.grpc.internal.MessageDeframer}.
    */
-  public void inboundUncompressedSize(long bytes) {
-    for (StreamTracer tracer : getStreamTracers()) {
-      tracer.inboundUncompressedSize(bytes);
+  public void inboundUncompressedSize(final long bytes) {
+    if (readyToUse) {
+      for (StreamTracer tracer : tracers) {
+        tracer.inboundUncompressedSize(bytes);
+      }
+    } else {
+      delayOrExecute(new Runnable() {
+        @Override
+        public void run() {
+          for (StreamTracer tracer : tracers) {
+            tracer.inboundUncompressedSize(bytes);
+          }
+        }
+      });
     }
   }
 
@@ -286,9 +387,30 @@ public final class StatsTraceContext {
    *
    * <p>Called from {@link io.grpc.internal.MessageDeframer}.
    */
-  public void inboundWireSize(long bytes) {
-    for (StreamTracer tracer : getStreamTracers()) {
-      tracer.inboundWireSize(bytes);
+  public void inboundWireSize(final long bytes) {
+    if (readyToUse) {
+      for (StreamTracer tracer : tracers) {
+        tracer.inboundWireSize(bytes);
+      }
+    } else {
+      delayOrExecute(new Runnable() {
+        @Override
+        public void run() {
+          for (StreamTracer tracer : tracers) {
+            tracer.inboundWireSize(bytes);
+          }
+        }
+      });
     }
+  }
+
+  private void delayOrExecute(Runnable runnable) {
+    synchronized (this) {
+      if (!readyToUse) {
+        pendingEvents.add(runnable);
+        return;
+      }
+    }
+    runnable.run();
   }
 }
