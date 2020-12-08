@@ -797,6 +797,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       this.cancelExecutor = cancelExecutor;
       this.stream = stream;
       this.baseContext = context;
+      this.listenerContext = context;
       this.tag = tag;
     }
 
