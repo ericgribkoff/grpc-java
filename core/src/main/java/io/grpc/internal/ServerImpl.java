@@ -578,7 +578,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
 //            }
 //            StatsTraceContext statsTraceCtx =
 //                    StatsTraceContext.newServerContext(method.getStreamTracerFactories(), methodName, headers);
-            listener = startCall(stream, methodName, method, headers, context, statsTraceCtx, tag);
+            listener = startCall(stream, methodName, method, headers, context, statsTraceCtx, tag, jumpListener);
           } catch (Throwable t) {
             stream.close(Status.fromThrowable(t), new Metadata());
             context.cancel(null);
@@ -633,7 +633,8 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     /** Never returns {@code null}. */
     private <ReqT, RespT> ServerStreamListener startCall(ServerStream stream, String fullMethodName,
         ServerMethodDefinition<ReqT, RespT> methodDef, Metadata headers,
-        Context.CancellableContext context, StatsTraceContext statsTraceCtx, Tag tag) {
+        Context.CancellableContext context, StatsTraceContext statsTraceCtx, Tag tag,
+                                       JumpToApplicationThreadServerStreamListener jumpListener) {
       // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
       // Update context here with methodDef.streamTracerFactories
       // Updates statsTraceCtx here - interceptor
@@ -664,6 +665,10 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       for (ServerStreamTracer.Factory factory : interceptedDef.getStreamTracerFactories()) {
         tracers.add(factory.newServerStreamTracer(fullMethodName, headers));
       }
+      for (ServerStreamTracer tracer : tracers) {
+        context = tracer.filterContext(context).withCancellation();
+      }
+      jumpListener.listenerContext = context;
       statsTraceCtx.addStreamTracers(tracers);
 //      statsTraceCtx.set(StatsTraceContext.newServerContext(interceptedDef.getStreamTracerFactories(), fullMethodName, headers));
 
@@ -779,7 +784,8 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
   static final class JumpToApplicationThreadServerStreamListener implements ServerStreamListener {
     private final Executor callExecutor;
     private final Executor cancelExecutor;
-    private final Context.CancellableContext context;
+    private final Context.CancellableContext baseContext;
+    private Context.CancellableContext listenerContext;
     private final ServerStream stream;
     private final Tag tag;
     // Only accessed from callExecutor.
@@ -790,7 +796,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       this.callExecutor = executor;
       this.cancelExecutor = cancelExecutor;
       this.stream = stream;
-      this.context = context;
+      this.baseContext = context;
       this.tag = tag;
     }
 
@@ -827,7 +833,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       final class MessagesAvailable extends ContextRunnable {
 
         MessagesAvailable() {
-          super(context);
+          super(listenerContext);
         }
 
         @Override
@@ -859,7 +865,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
 
       final class HalfClosed extends ContextRunnable {
         HalfClosed() {
-          super(context);
+          super(listenerContext);
         }
 
         @Override
@@ -900,13 +906,13 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       if (!status.isOk()) {
         // The callExecutor might be busy doing user work. To avoid waiting, use an executor that
         // is not serializing.
-        cancelExecutor.execute(new ContextCloser(context, status.getCause()));
+        cancelExecutor.execute(new ContextCloser(baseContext, listenerContext, status.getCause()));
       }
       final Link link = PerfMark.linkOut();
 
       final class Closed extends ContextRunnable {
         Closed() {
-          super(context);
+          super(listenerContext);
         }
 
         @Override
@@ -930,7 +936,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       final Link link = PerfMark.linkOut();
       final class OnReady extends ContextRunnable {
         OnReady() {
-          super(context);
+          super(listenerContext);
         }
 
         @Override
@@ -958,17 +964,23 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
 
   @VisibleForTesting
   static final class ContextCloser implements Runnable {
-    private final Context.CancellableContext context;
+    private final Context.CancellableContext baseContext;
+    private final Context.CancellableContext listenerContext;
     private final Throwable cause;
 
-    ContextCloser(Context.CancellableContext context, Throwable cause) {
-      this.context = context;
+    ContextCloser(Context.CancellableContext baseContext, Context.CancellableContext listenerContext, Throwable cause) {
+      this.baseContext = baseContext;
+      this.listenerContext = listenerContext;
       this.cause = cause;
     }
 
     @Override
     public void run() {
-      context.cancel(cause);
+      if (listenerContext != null) {
+        listenerContext.cancel(cause);
+      } else {
+        baseContext.cancel(cause);
+      }
     }
   }
 }

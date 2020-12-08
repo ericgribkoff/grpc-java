@@ -187,7 +187,7 @@ public final class StatsTraceContext {
    */
   public <ReqT, RespT> Context serverFilterContext(Context context) {
     Context ctx = checkNotNull(context, "context");
-    checkState(!readyToUse, "Already ready to use???");
+    checkState(!readyToUse, "Already ready to use???"); // TODO: remove
     for (StreamTracer tracer : tracers) { // TODO: Skipping check of readyToUse, ok?
       ctx = ((ServerStreamTracer) tracer).filterContext(ctx);
       checkNotNull(ctx, "%s returns null context", tracer);
@@ -226,6 +226,7 @@ public final class StatsTraceContext {
   public void streamClosed(Status status) {
     if (closed.compareAndSet(false, true)) {
       for (StreamTracer tracer : tracers) { // TODO: Skipping check of readyToUse, ok? - need error handling somehow...
+        // TODO: Just execute all messages in buffer in this case? Would need contract that
         tracer.streamClosed(status);
       }
     }
