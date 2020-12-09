@@ -513,6 +513,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
           stream.statsTraceContext(), "statsTraceCtx not present from stream");
 
       // Delay; augment later with stats trace context filter
+      // This gets used in jumpListener and StreamCreated, running in the WrappedExecutor
       final Context.CancellableContext context = createContext(headers, statsTraceCtx);
 
       final Link link = PerfMark.linkOut();
@@ -907,6 +908,10 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       if (!status.isOk()) {
         // The callExecutor might be busy doing user work. To avoid waiting, use an executor that
         // is not serializing.
+        // TODO - this not running on callExecutor means that context might not be set yet? No, because context is final
+        // Until my change...
+        // This means this is unsafe after my change, since this access to listenerContext is not happening on the
+        // callExecutor (by design). See https://github.com/grpc/grpc-java/pull/2963
         cancelExecutor.execute(new ContextCloser(baseContext, listenerContext, status.getCause()));
       }
       final Link link = PerfMark.linkOut();

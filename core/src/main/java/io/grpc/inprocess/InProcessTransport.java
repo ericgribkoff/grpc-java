@@ -735,9 +735,11 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
         outboundSeqNo++;
         StreamListener.MessageProducer producer = new SingleMessageProducer(message);
         if (serverRequested > 0) {
+          // Move call to serverStream.statsTraceCtx here
           serverRequested--;
           serverStreamListener.messagesAvailable(producer);
         } else {
+          // Or else here in the queue
           serverReceiveQueue.add(producer);
         }
       }
