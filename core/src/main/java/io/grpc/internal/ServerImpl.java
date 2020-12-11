@@ -657,11 +657,11 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
         }
       }
 //      // TODO: remove :-)
-//      try {
-//        Thread.sleep(100);
-//      } catch (InterruptedException e) {
-//        e.printStackTrace();
-//      }
+      try {
+        Thread.sleep(150);
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
       ArrayList<ServerStreamTracer> tracers = new ArrayList<ServerStreamTracer>();
       for (ServerStreamTracer.Factory factory : interceptedDef.getStreamTracerFactories()) {
         tracers.add(factory.newServerStreamTracer(fullMethodName, headers));
@@ -669,8 +669,9 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       for (ServerStreamTracer tracer : tracers) {
         context = tracer.filterContext(context).withCancellation();
       }
+      // TODO: racy
       jumpListener.listenerContext = context;
-      statsTraceCtx.addStreamTracers(tracers);
+      statsTraceCtx.setInterceptorStreamTracers(tracers);
 //      statsTraceCtx.set(StatsTraceContext.newServerContext(interceptedDef.getStreamTracerFactories(), fullMethodName, headers));
 
       statsTraceCtx.serverCallStarted(

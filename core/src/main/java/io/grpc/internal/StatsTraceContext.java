@@ -20,7 +20,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.math.Stats;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.ClientStreamTracer;
@@ -34,7 +33,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -45,16 +43,15 @@ import javax.annotation.concurrent.ThreadSafe;
 public final class StatsTraceContext {
   public static final StatsTraceContext NOOP = new StatsTraceContext(new StreamTracer[0]);
 
-  private StreamTracer[] tracers;
+  private final StreamTracer[] tracers;
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  public volatile boolean readyToUse; // TODO: clarify semantics, make private. Rename to "allTracersReady" or something
+  private volatile boolean useInterceptorTracers; // TODO: clarify semantics, make private. Rename to "allTracersReady" or something
+  private StreamTracer[] interceptorTracers;
+  private final boolean isServer;
 
-  @GuardedBy("this")
-  private List<Runnable> pendingEvents = new ArrayList<>();
-
-//  // These allocations might be problematic, since they may never be used. But just doubles the number of allocations...
-//  private StreamTracer[] interceptorTracers;
-//  private final AtomicBoolean interceptorTracersSet = new AtomicBoolean(false);
+  public interface ServerIsReadyListener {
+    void serverIsReady();
+  }
 
   /**
    * Factory method for the client-side.
@@ -92,49 +89,37 @@ public final class StatsTraceContext {
     for (int i = 0; i < tracers.length; i++) {
       tracers[i] = factories.get(i).newServerStreamTracer(fullMethodName, headers);
     }
-    return new StatsTraceContext(tracers, false);
+    return new StatsTraceContext(tracers, true);
   }
 
-  void addStreamTracers(List<? extends ServerStreamTracer> newTracers) {
-    if (readyToUse) {
-      throw new RuntimeException("Already ready to use, cannot add factories");
+  // TODO: don't put this here
+  public ServerIsReadyListener serverIsReadyListener;
+  private boolean interceptorTracersSet;
+
+  void setInterceptorStreamTracers(List<? extends ServerStreamTracer> newTracers) {
+    if (useInterceptorTracers) {
+      throw new RuntimeException("Already set interceptor stream tracers");
     }
     if (!newTracers.isEmpty()) {
-      StreamTracer[] replacementTracers = new StreamTracer[tracers.length + newTracers.size()];
-      for (int i = 0; i < tracers.length; i++) {
-        replacementTracers[i] = tracers[i];
+      interceptorTracers = new StreamTracer[newTracers.size()];
+      for (int i = 0; i < interceptorTracers.length; i++) {
+        interceptorTracers[i] = newTracers.get(i);
       }
-      for (int i = tracers.length; i < replacementTracers.length; i++) {
-        replacementTracers[i] = newTracers.get(i - tracers.length);
-      }
-      this.tracers = replacementTracers;
+      useInterceptorTracers = true;
     }
-    synchronized (this) {
-      // TODO: make faster, see DelayedStream
-      for (Runnable runnable : pendingEvents) {
-        runnable.run();
-      }
-      pendingEvents.clear();
-    }
-    readyToUse = true;
-  }
-
-  StatsTraceContext(StreamTracer[] tracers, boolean readyToUse) {
-    this.tracers = tracers;
-    this.readyToUse = readyToUse;
+    interceptorTracersSet = true;
   }
 
   @VisibleForTesting
   StatsTraceContext(StreamTracer[] tracers) {
-    this(tracers, true);
+    this(tracers, false);
   }
 
-//  private StreamTracer[] getStreamTracers() {
-//    if (!readyToUse) {
-//      throw new RuntimeException("Not ready to use!");
-//    }
-//    return tracers;
-//  }
+  @VisibleForTesting
+  StatsTraceContext(StreamTracer[] tracers, boolean isServer) {
+    this.tracers = tracers;
+    this.isServer = isServer;
+  }
 
   /**
    * Returns a copy of the tracer list.
@@ -150,7 +135,6 @@ public final class StatsTraceContext {
    * <p>Transport-specific, thus should be called by transport implementations.
    */
   public void clientOutboundHeaders() {
-    checkState(readyToUse, "Client should always be ready to use");
     for (StreamTracer tracer : tracers) {
       ((ClientStreamTracer) tracer).outboundHeaders();
     }
@@ -162,7 +146,6 @@ public final class StatsTraceContext {
    * <p>Called from abstract stream implementations.
    */
   public void clientInboundHeaders() {
-    checkState(readyToUse, "Client should always be ready to use");
     for (StreamTracer tracer : tracers) {
       ((ClientStreamTracer) tracer).inboundHeaders();
     }
@@ -174,7 +157,6 @@ public final class StatsTraceContext {
    * <p>Called from abstract stream implementations.
    */
   public void clientInboundTrailers(Metadata trailers) {
-    checkState(readyToUse, "Client should always be ready to use");
     for (StreamTracer tracer : tracers) {
       ((ClientStreamTracer) tracer).inboundTrailers(trailers);
     }
@@ -187,8 +169,8 @@ public final class StatsTraceContext {
    */
   public <ReqT, RespT> Context serverFilterContext(Context context) {
     Context ctx = checkNotNull(context, "context");
-    checkState(!readyToUse, "Already ready to use???"); // TODO: remove
-    for (StreamTracer tracer : tracers) { // TODO: Skipping check of readyToUse, ok?
+    checkState(!useInterceptorTracers, "Already ready to use???"); // TODO: remove
+    for (StreamTracer tracer : tracers) {
       ctx = ((ServerStreamTracer) tracer).filterContext(ctx);
       checkNotNull(ctx, "%s returns null context", tracer);
     }
@@ -196,25 +178,34 @@ public final class StatsTraceContext {
   }
 
   /**
-   * See {@link ServerStreamTracer#serverCallStarted}.  For server-side only.
+   * See {@link ServerStreamTracer#serverCallStarted}.  For server-side only. This method must
+   * be invoked before any other calls to StatsTraceContext, with the exception of streamClosed (inherently racy,
+   * since transport can close stream while call is getting created)
+   * and (possibly) serverFilterContext
    *
    * <p>Called from {@link io.grpc.internal.ServerImpl}.
    */
+  // Invoking this serves as signal that "interceptor stream tracers" are ready
+  // For non-InProcess transports, only streamClosed (and serverFilterContext) can be
+  // invoked before this happens (all messages etc will only come *after* call has started)
+  // For InProcess, we want to buffer the inboundMessage and inboundMessageRead calls for
+  // "correctness"
+  // Would not need 'useInterceptorTracers' check here or in any of the other methods *except*
+  // streamClosed if we add that the contract here is that this must be called before any
+  // server trace methods are invoked.
+  // Client can just initialize interceptorTracers = []
   public void serverCallStarted(final ServerCallInfo<?, ?> callInfo) {
-    if (readyToUse) {
       for (StreamTracer tracer : tracers) {
         ((ServerStreamTracer) tracer).serverCallStarted(callInfo);
       }
-    } else {
-      delayOrExecute(new Runnable() {
-        @Override
-        public void run() {
-          for (StreamTracer tracer : tracers) {
-            ((ServerStreamTracer) tracer).serverCallStarted(callInfo);
-          }
+      if (useInterceptorTracers) {
+        for (StreamTracer tracer : interceptorTracers) {
+          ((ServerStreamTracer) tracer).serverCallStarted(callInfo);
         }
-      });
-    }
+      }
+      if (serverIsReadyListener != null) {
+        serverIsReadyListener.serverIsReady();
+      }
   }
 
   /**
@@ -225,8 +216,12 @@ public final class StatsTraceContext {
    */
   public void streamClosed(Status status) {
     if (closed.compareAndSet(false, true)) {
-      for (StreamTracer tracer : tracers) { // TODO: Skipping check of readyToUse, ok? - need error handling somehow...
-        // TODO: Just execute all messages in buffer in this case? Would need contract that
+      for (StreamTracer tracer : tracers) {
+          tracer.streamClosed(status);
+        }
+    }
+    if (useInterceptorTracers) {
+      for (StreamTracer tracer : interceptorTracers) {
         tracer.streamClosed(status);
       }
     }
@@ -237,20 +232,14 @@ public final class StatsTraceContext {
    *
    * <p>Called from {@link io.grpc.internal.Framer}.
    */
-  public void outboundMessage(final int seqNo) {
-    if (readyToUse) {
-      for (StreamTracer tracer : tracers) {
+  public void outboundMessage(int seqNo) {
+    for (StreamTracer tracer : tracers) {
+      tracer.outboundMessage(seqNo);
+    }
+    if (useInterceptorTracers) {
+      for (StreamTracer tracer : interceptorTracers) {
         tracer.outboundMessage(seqNo);
       }
-    } else {
-      delayOrExecute(new Runnable() {
-        @Override
-        public void run() {
-          for (StreamTracer tracer : tracers) {
-            tracer.outboundMessage(seqNo);
-          }
-        }
-      });
     }
   }
 
@@ -259,20 +248,17 @@ public final class StatsTraceContext {
    *
    * <p>Called from {@link io.grpc.internal.MessageDeframer}.
    */
-  public void inboundMessage(final int seqNo) {
-    if (readyToUse) {
-      for (StreamTracer tracer : tracers) {
+  public void inboundMessage(int seqNo) {
+    for (StreamTracer tracer : tracers) {
         tracer.inboundMessage(seqNo);
       }
-    } else {
-      delayOrExecute(new Runnable() {
-        @Override
-        public void run() {
-          for (StreamTracer tracer : tracers) {
-            tracer.inboundMessage(seqNo);
-          }
-        }
-      });
+    if (!interceptorTracersSet && isServer) {
+      throw new RuntimeException("not ready!");
+    }
+    if (useInterceptorTracers) {
+      for (StreamTracer tracer : interceptorTracers) {
+        tracer.inboundMessage(seqNo);
+      }
     }
   }
 
@@ -281,20 +267,14 @@ public final class StatsTraceContext {
    *
    * <p>Called from {@link io.grpc.internal.Framer}.
    */
-  public void outboundMessageSent(final int seqNo, final long optionalWireSize, final long optionalUncompressedSize) {
-    if (readyToUse) {
+  public void outboundMessageSent(int seqNo, long optionalWireSize, long optionalUncompressedSize) {
       for (StreamTracer tracer : tracers) {
         tracer.outboundMessageSent(seqNo, optionalWireSize, optionalUncompressedSize);
       }
-    } else {
-      delayOrExecute(new Runnable() {
-        @Override
-        public void run() {
-          for (StreamTracer tracer : tracers) {
-            tracer.outboundMessageSent(seqNo, optionalWireSize, optionalUncompressedSize);
-          }
-        }
-      });
+    if (useInterceptorTracers) {
+      for (StreamTracer tracer : interceptorTracers) {
+        tracer.outboundMessageSent(seqNo, optionalWireSize, optionalUncompressedSize);
+      }
     }
   }
 
@@ -303,18 +283,14 @@ public final class StatsTraceContext {
    *
    * <p>Called from {@link io.grpc.internal.MessageDeframer}.
    */
-  public void inboundMessageRead(final int seqNo, final long optionalWireSize, final long optionalUncompressedSize) {
-    if (readyToUse) {
+  public void inboundMessageRead(int seqNo, long optionalWireSize, long optionalUncompressedSize) {
       for (StreamTracer tracer : tracers) {
-        tracer.inboundMessageRead(seqNo, optionalWireSize, optionalUncompressedSize);      }
-    } else {
-      delayOrExecute(new Runnable() {
-        @Override
-        public void run() {
-          for (StreamTracer tracer : tracers) {
-            tracer.inboundMessageRead(seqNo, optionalWireSize, optionalUncompressedSize);          }
-        }
-      });
+        tracer.inboundMessageRead(seqNo, optionalWireSize, optionalUncompressedSize);
+      }
+    if (useInterceptorTracers) {
+      for (StreamTracer tracer : interceptorTracers) {
+        tracer.inboundMessageRead(seqNo, optionalWireSize, optionalUncompressedSize);
+      }
     }
   }
 
@@ -323,20 +299,14 @@ public final class StatsTraceContext {
    *
    * <p>Called from {@link io.grpc.internal.Framer}.
    */
-  public void outboundUncompressedSize(final long bytes) {
-    if (readyToUse) {
+  public void outboundUncompressedSize(long bytes) {
       for (StreamTracer tracer : tracers) {
         tracer.outboundUncompressedSize(bytes);
       }
-    } else {
-      delayOrExecute(new Runnable() {
-        @Override
-        public void run() {
-          for (StreamTracer tracer : tracers) {
-            tracer.outboundUncompressedSize(bytes);
-          }
-        }
-      });
+    if (useInterceptorTracers) {
+      for (StreamTracer tracer : interceptorTracers) {
+        tracer.outboundUncompressedSize(bytes);
+      }
     }
   }
 
@@ -345,20 +315,14 @@ public final class StatsTraceContext {
    *
    * <p>Called from {@link io.grpc.internal.Framer}.
    */
-  public void outboundWireSize(final long bytes) {
-    if (readyToUse) {
+  public void outboundWireSize(long bytes) {
       for (StreamTracer tracer : tracers) {
         tracer.outboundWireSize(bytes);
       }
-    } else {
-      delayOrExecute(new Runnable() {
-        @Override
-        public void run() {
-          for (StreamTracer tracer : tracers) {
-            tracer.outboundWireSize(bytes);
-          }
-        }
-      });
+    if (useInterceptorTracers) {
+      for (StreamTracer tracer : interceptorTracers) {
+        tracer.outboundWireSize(bytes);
+      }
     }
   }
 
@@ -367,20 +331,14 @@ public final class StatsTraceContext {
    *
    * <p>Called from {@link io.grpc.internal.MessageDeframer}.
    */
-  public void inboundUncompressedSize(final long bytes) {
-    if (readyToUse) {
-      for (StreamTracer tracer : tracers) {
+  public void inboundUncompressedSize(long bytes) {
+    for (StreamTracer tracer : tracers) {
+      tracer.inboundUncompressedSize(bytes);
+    }
+    if (useInterceptorTracers) {
+      for (StreamTracer tracer : interceptorTracers) {
         tracer.inboundUncompressedSize(bytes);
       }
-    } else {
-      delayOrExecute(new Runnable() {
-        @Override
-        public void run() {
-          for (StreamTracer tracer : tracers) {
-            tracer.inboundUncompressedSize(bytes);
-          }
-        }
-      });
     }
   }
 
@@ -389,30 +347,14 @@ public final class StatsTraceContext {
    *
    * <p>Called from {@link io.grpc.internal.MessageDeframer}.
    */
-  public void inboundWireSize(final long bytes) {
-    if (readyToUse) {
+  public void inboundWireSize(long bytes) {
       for (StreamTracer tracer : tracers) {
         tracer.inboundWireSize(bytes);
       }
-    } else {
-      delayOrExecute(new Runnable() {
-        @Override
-        public void run() {
-          for (StreamTracer tracer : tracers) {
-            tracer.inboundWireSize(bytes);
-          }
-        }
-      });
-    }
-  }
-
-  private void delayOrExecute(Runnable runnable) {
-    synchronized (this) {
-      if (!readyToUse) {
-        pendingEvents.add(runnable);
-        return;
+    if (useInterceptorTracers) {
+      for (StreamTracer tracer : interceptorTracers) {
+        tracer.inboundWireSize(bytes);
       }
     }
-    runnable.run();
   }
 }

@@ -580,6 +580,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
         stream.writeMessage(method.streamRequest(message));
       }
     } catch (RuntimeException e) {
+      e.printStackTrace();
       stream.cancel(Status.CANCELLED.withCause(e).withDescription("Failed to stream message"));
       return;
     } catch (Error e) {

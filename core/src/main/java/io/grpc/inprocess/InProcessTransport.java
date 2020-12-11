@@ -22,6 +22,7 @@ import static java.lang.Math.max;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Optional;
+import com.google.common.math.Stats;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
@@ -417,10 +418,40 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       @GuardedBy("this")
       private int outboundSeqNo;
 
+
+
+      private final class StatsListener implements StatsTraceContext.ServerIsReadyListener {
+        private final ArrayList<Runnable> queuedStatsEvents = new ArrayList<Runnable>();
+        private volatile boolean isReady;
+
+        @Override
+        public void serverIsReady() {
+          synchronized (this) {
+            for (Runnable queuedEvent : queuedStatsEvents) {
+              queuedEvent.run();
+            }
+            isReady = true;
+          }
+        }
+
+        private void queueEvent(Runnable event) {
+          synchronized (this) {
+            if (isReady) {
+              event.run();
+            } else {
+              queuedStatsEvents.add(event);
+            }
+          }
+
+        }
+      }
+
+      private final StatsListener listener = new StatsListener();
+
       InProcessServerStream(MethodDescriptor<?, ?> method, Metadata headers) {
         statsTraceCtx = StatsTraceContext.newServerContext(
             serverStreamTracerFactories, method.getFullMethodName(), headers);
-//        statsTraceCtx.readyToUse = true;
+        statsTraceCtx.serverIsReadyListener = listener;
       }
 
       private synchronized void setListener(ClientStreamListener listener) {
@@ -730,8 +761,22 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
         // before the ServerImpl has set the server streams statstracecontext as ready.
         // Does this violate StatsTraceContext contract? In these scenarios it's also being invoked before
         // #serverCallStarted. And definitely before we've had time to get tracefactories from the interceptors...
-        serverStream.statsTraceCtx.inboundMessage(outboundSeqNo);
-        serverStream.statsTraceCtx.inboundMessageRead(outboundSeqNo, -1, -1);
+        // These need to be buffered, but currently no signal here that would allow them to be unbuffered..
+        // could add listener+callback to statsTraceCtx, but that's uglier (???) than just adding a buffered op
+        // to statsTraceCtx
+        final int outboundSeqNumCopy = outboundSeqNo;
+        serverStream.listener.queueEvent(new Runnable() {
+          @Override
+          public void run() {
+            serverStream.statsTraceCtx.inboundMessage(outboundSeqNumCopy);
+          }
+        });
+        serverStream.listener.queueEvent(new Runnable() {
+          @Override
+          public void run() {
+            serverStream.statsTraceCtx.inboundMessageRead(outboundSeqNumCopy, -1, -1);
+          }
+        });
         outboundSeqNo++;
         StreamListener.MessageProducer producer = new SingleMessageProducer(message);
         if (serverRequested > 0) {
@@ -784,6 +829,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
             }
           }
         }
+        // TODO: also needs to be queued - can be invoked prior to server-side call start in cancelAfterBegin
         serverStream.statsTraceCtx.streamClosed(serverTracerStatus);
         serverStreamListener.closed(serverListenerStatus);
         return true;
