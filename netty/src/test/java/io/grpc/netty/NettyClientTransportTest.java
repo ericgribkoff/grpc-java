@@ -925,6 +925,9 @@ public class NettyClientTransportTest {
         @Override
         public void streamCreated(ServerStream stream, String method, Metadata headers) {
           EchoServerStreamListener listener = new EchoServerStreamListener(stream, method, headers);
+          // TODO: hrm
+          List<? extends ServerStreamTracer> serverStreamTracers = new ArrayList<>();
+          stream.statsTraceContext().setInterceptorStreamTracers(serverStreamTracers);
           stream.setListener(listener);
           stream.writeHeaders(new Metadata());
           stream.request(1);
