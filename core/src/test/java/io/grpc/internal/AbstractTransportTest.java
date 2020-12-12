@@ -2154,7 +2154,9 @@ public abstract class AbstractTransportTest {
       // TODO: hrm
       List<? extends ServerStreamTracer> serverStreamTracers = new ArrayList<>();
       stream.statsTraceContext().setInterceptorStreamTracers(serverStreamTracers);
-      stream.statsTraceContext().serverIsReadyListener.serverIsReady();
+      if (stream.statsTraceContext().serverIsReadyListener != null) {
+        stream.statsTraceContext().serverIsReadyListener.serverIsReady();
+      }
     }
 
     @Override
