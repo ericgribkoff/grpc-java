@@ -96,7 +96,8 @@ public final class StatsTraceContext {
   public ServerIsReadyListener serverIsReadyListener;
   private boolean interceptorTracersSet;
 
-  void setInterceptorStreamTracers(List<? extends ServerStreamTracer> newTracers) {
+  // TODO: not public, incorporate into #serverCallStarted
+  public void setInterceptorStreamTracers(List<? extends ServerStreamTracer> newTracers) {
     if (useInterceptorTracers) {
       throw new RuntimeException("Already set interceptor stream tracers");
     }

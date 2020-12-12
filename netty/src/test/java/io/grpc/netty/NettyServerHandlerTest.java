@@ -83,6 +83,7 @@ import io.netty.handler.codec.http2.Http2Settings;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.util.AsciiString;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
@@ -1095,7 +1096,9 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     verify(transportListener).streamCreated(streamCaptor.capture(), methodCaptor.capture(),
         any(Metadata.class));
     stream = streamCaptor.getValue();
-    stream.statsTraceContext().readyToUse = true;
+    List<? extends ServerStreamTracer> serverStreamTracers = new ArrayList<>();
+    stream.statsTraceContext().setInterceptorStreamTracers(serverStreamTracers);
+//    stream.statsTraceContext().serverIsReadyListener.serverIsReady();
   }
 
   private ByteBuf emptyGrpcFrame(int streamId, boolean endStream) throws Exception {
