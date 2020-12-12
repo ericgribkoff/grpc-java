@@ -2150,7 +2150,6 @@ public abstract class AbstractTransportTest {
       ServerStreamListenerBase listener = new ServerStreamListenerBase();
       streams.add(new StreamCreation(stream, method, headers, listener));
       stream.setListener(listener);
-      stream.statsTraceContext().readyToUse = true;
     }
 
     @Override
