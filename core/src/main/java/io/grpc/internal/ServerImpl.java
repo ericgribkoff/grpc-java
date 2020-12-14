@@ -16,6 +16,7 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
@@ -562,23 +563,6 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
               context.cancel(null);
               return;
             }
-//            // Move this into #startCall
-//            for (final ServerInterceptor interceptor : interceptors) {
-//              if (interceptor instanceof ServerInterceptor2) {
-//                method = ((ServerInterceptor2) interceptor).interceptMethodDefinition(method);
-//              } else {
-//                // Converter
-//                ServerInterceptor2 converter = new ServerInterceptor2() {
-//                  @Override
-//                  public <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> interceptMethodDefinition(ServerMethodDefinition<ReqT, RespT> method) {
-//                    return method.withServerCallHandler(InternalServerInterceptors.interceptCallHandler(interceptor, method.getServerCallHandler()));
-//                  }
-//                };
-//                method = converter.interceptMethodDefinition(method);
-//              }
-//            }
-//            StatsTraceContext statsTraceCtx =
-//                    StatsTraceContext.newServerContext(method.getStreamTracerFactories(), methodName, headers);
             listener = startCall(stream, methodName, method, headers, context, statsTraceCtx, tag, jumpListener);
           } catch (Throwable t) {
             stream.close(Status.fromThrowable(t), new Metadata());
@@ -669,8 +653,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       for (ServerStreamTracer tracer : tracers) {
         context = tracer.filterContext(context).withCancellation();
       }
-      // TODO: racy
-      jumpListener.listenerContext = context;
+      jumpListener.setListenerContext(context);
       statsTraceCtx.setInterceptorStreamTracers(tracers);
 //      statsTraceCtx.set(StatsTraceContext.newServerContext(interceptedDef.getStreamTracerFactories(), fullMethodName, headers));
 
@@ -788,6 +771,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     private final Executor cancelExecutor;
     private final Context.CancellableContext baseContext;
     private Context.CancellableContext listenerContext;
+    private volatile boolean listenerContextSet;
     private final ServerStream stream;
     private final Tag tag;
     // Only accessed from callExecutor.
@@ -799,7 +783,6 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       this.cancelExecutor = cancelExecutor;
       this.stream = stream;
       this.baseContext = context;
-      this.listenerContext = context;
       this.tag = tag;
     }
 
@@ -817,6 +800,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     void setListener(ServerStreamListener listener) {
       Preconditions.checkNotNull(listener, "listener must not be null");
       Preconditions.checkState(this.listener == null, "Listener already set");
+      Preconditions.checkState(listenerContextSet, "listener context must be set");
       this.listener = listener;
     }
 
@@ -828,17 +812,26 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       stream.close(Status.UNKNOWN.withCause(t), new Metadata());
     }
 
+    private abstract class ListenerContextRunnable implements Runnable {
+      @Override
+      public void run() {
+        Context previous = listenerContext.attach();
+        try {
+          runInContext();
+        } finally {
+          listenerContext.detach(previous);
+        }
+      }
+
+      public abstract void runInContext();
+    }
+
     @Override
     public void messagesAvailable(final MessageProducer producer) {
       PerfMark.startTask("ServerStreamListener.messagesAvailable", tag);
       final Link link = PerfMark.linkOut();
 
-      final class MessagesAvailable extends ContextRunnable {
-
-        MessagesAvailable() {
-          super(listenerContext);
-        }
-
+      final class MessagesAvailable extends ListenerContextRunnable {
         @Override
         public void runInContext() {
           PerfMark.startTask("ServerCallListener(app).messagesAvailable", tag);
@@ -866,11 +859,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       PerfMark.startTask("ServerStreamListener.halfClosed", tag);
       final Link link = PerfMark.linkOut();
 
-      final class HalfClosed extends ContextRunnable {
-        HalfClosed() {
-          super(listenerContext);
-        }
-
+      final class HalfClosed extends ListenerContextRunnable {
         @Override
         public void runInContext() {
           PerfMark.startTask("ServerCallListener(app).halfClosed", tag);
@@ -917,11 +906,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       }
       final Link link = PerfMark.linkOut();
 
-      final class Closed extends ContextRunnable {
-        Closed() {
-          super(listenerContext);
-        }
-
+      final class Closed extends ListenerContextRunnable {
         @Override
         public void runInContext() {
           PerfMark.startTask("ServerCallListener(app).closed", tag);
@@ -941,11 +926,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     public void onReady() {
       PerfMark.startTask("ServerStreamListener.onReady", tag);
       final Link link = PerfMark.linkOut();
-      final class OnReady extends ContextRunnable {
-        OnReady() {
-          super(listenerContext);
-        }
-
+      final class OnReady extends ListenerContextRunnable {
         @Override
         public void runInContext() {
           PerfMark.startTask("ServerCallListener(app).onReady", tag);
@@ -966,6 +947,12 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       } finally {
         PerfMark.stopTask("ServerStreamListener.onReady", tag);
       }
+    }
+
+    public void setListenerContext(Context.CancellableContext listenerContext) {
+      checkState(!listenerContextSet, "listener context already set");
+      this.listenerContext = listenerContext;
+      listenerContextSet = true;
     }
   }
 
