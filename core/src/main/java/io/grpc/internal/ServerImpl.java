@@ -970,11 +970,11 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
 
     @Override
     public void run() {
-      if (listenerContext != null) {
+//      if (listenerContext != null) {
         listenerContext.cancel(cause);
-      } else {
-        baseContext.cancel(cause);
-      }
+//      } else {
+//        baseContext.cancel(cause);
+//      }
     }
   }
 }
