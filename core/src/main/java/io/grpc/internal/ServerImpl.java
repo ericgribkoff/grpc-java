@@ -563,8 +563,10 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
               return;
             }
             ServerMethodDefinition interceptedDef = getInterceptedMethodDef(method);
+            List<ServerStreamTracer> tracers =
+                getInterceptorTracers(interceptedDef, methodName, headers);
             listenerContext =
-                addInterceptorTracers(context, statsTraceCtx, interceptedDef, methodName, headers);
+                statsTraceCtx.setInterceptorStreamTracersAndFilterContext(tracers, context);
             listener =
                 startCall(
                     stream,
@@ -580,8 +582,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
             context.cancel(null);
             throw t;
           } finally {
-            jumpListener.setListenerContext(listenerContext);
-            jumpListener.setListener(listener);
+            jumpListener.setListener(listener, listenerContext);
           }
 
           // An extremely short deadline may expire before stream.setListener(jumpListener).
@@ -657,21 +658,13 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       return interceptedDef;
     }
 
-    private <ReqT, RespT> Context.CancellableContext addInterceptorTracers(
-        Context.CancellableContext context,
-        StatsTraceContext statsTraceCtx,
-        ServerMethodDefinition<ReqT, RespT> methodDef,
-        String fullMethodName,
-        Metadata headers) {
+    private <ReqT, RespT> List<ServerStreamTracer> getInterceptorTracers(
+        ServerMethodDefinition<ReqT, RespT> methodDef, String fullMethodName, Metadata headers) {
       ArrayList<ServerStreamTracer> tracers = new ArrayList<ServerStreamTracer>();
       for (ServerStreamTracer.Factory factory : methodDef.getStreamTracerFactories()) {
         tracers.add(factory.newServerStreamTracer(fullMethodName, headers));
       }
-      for (ServerStreamTracer tracer : tracers) {
-        context = tracer.filterContext(context).withCancellation();
-      }
-      statsTraceCtx.setInterceptorStreamTracers(tracers);
-      return context;
+      return tracers;
     }
 
     /** Never returns {@code null}. */
@@ -835,7 +828,6 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     private final Executor cancelExecutor;
     private Context.CancellableContext listenerContext;
     private volatile Context.CancellableContext cancelContext;
-    private volatile boolean listenerContextSet;
     private final ServerStream stream;
     private final Tag tag;
     // Only accessed from callExecutor.
@@ -861,11 +853,12 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     }
 
     @VisibleForTesting
-    void setListener(ServerStreamListener listener) {
+    void setListener(ServerStreamListener listener, Context.CancellableContext listenerContext) {
       Preconditions.checkNotNull(listener, "listener must not be null");
       Preconditions.checkState(this.listener == null, "Listener already set");
-      Preconditions.checkState(listenerContextSet, "listener context must be set");
+      Preconditions.checkState(this.listenerContext == null, "Listener context already set");
       this.listener = listener;
+      this.listenerContext = listenerContext;
     }
 
     /**
@@ -1011,13 +1004,6 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       } finally {
         PerfMark.stopTask("ServerStreamListener.onReady", tag);
       }
-    }
-
-    public void setListenerContext(Context.CancellableContext listenerContext) {
-      checkState(!listenerContextSet, "listener context already set");
-      this.listenerContext = listenerContext;
-      cancelContext = listenerContext;
-      listenerContextSet = true;
     }
   }
 

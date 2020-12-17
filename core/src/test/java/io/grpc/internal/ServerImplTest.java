@@ -1226,8 +1226,7 @@ public class ServerImplTest {
             Context.ROOT.withCancellation(),
             PerfMark.createTag());
     ServerStreamListener mockListener = mock(ServerStreamListener.class);
-    listener.setListenerContext(Context.ROOT.withCancellation());
-    listener.setListener(mockListener);
+    listener.setListener(mockListener, Context.ROOT.withCancellation());
 
     TestError expectedT = new TestError();
     doThrow(expectedT).when(mockListener)
@@ -1253,8 +1252,7 @@ public class ServerImplTest {
             Context.ROOT.withCancellation(),
             PerfMark.createTag());
     ServerStreamListener mockListener = mock(ServerStreamListener.class);
-    listener.setListenerContext(Context.ROOT.withCancellation());
-    listener.setListener(mockListener);
+    listener.setListener(mockListener, Context.ROOT.withCancellation());
 
     RuntimeException expectedT = new RuntimeException();
     doThrow(expectedT).when(mockListener)
@@ -1280,8 +1278,7 @@ public class ServerImplTest {
             Context.ROOT.withCancellation(),
             PerfMark.createTag());
     ServerStreamListener mockListener = mock(ServerStreamListener.class);
-    listener.setListenerContext(Context.ROOT.withCancellation());
-    listener.setListener(mockListener);
+    listener.setListener(mockListener, Context.ROOT.withCancellation());
 
     TestError expectedT = new TestError();
     doThrow(expectedT).when(mockListener).halfClosed();
@@ -1305,8 +1302,7 @@ public class ServerImplTest {
             Context.ROOT.withCancellation(),
             PerfMark.createTag());
     ServerStreamListener mockListener = mock(ServerStreamListener.class);
-    listener.setListenerContext(Context.ROOT.withCancellation());
-    listener.setListener(mockListener);
+    listener.setListener(mockListener, Context.ROOT.withCancellation());
 
     RuntimeException expectedT = new RuntimeException();
     doThrow(expectedT).when(mockListener).halfClosed();
@@ -1330,8 +1326,7 @@ public class ServerImplTest {
             Context.ROOT.withCancellation(),
             PerfMark.createTag());
     ServerStreamListener mockListener = mock(ServerStreamListener.class);
-    listener.setListenerContext(Context.ROOT.withCancellation());
-    listener.setListener(mockListener);
+    listener.setListener(mockListener, Context.ROOT.withCancellation());
 
     TestError expectedT = new TestError();
     doThrow(expectedT).when(mockListener).onReady();
@@ -1355,8 +1350,7 @@ public class ServerImplTest {
             Context.ROOT.withCancellation(),
             PerfMark.createTag());
     ServerStreamListener mockListener = mock(ServerStreamListener.class);
-    listener.setListenerContext(Context.ROOT.withCancellation());
-    listener.setListener(mockListener);
+    listener.setListener(mockListener, Context.ROOT.withCancellation());
 
     RuntimeException expectedT = new RuntimeException();
     doThrow(expectedT).when(mockListener).onReady();

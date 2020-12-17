@@ -35,19 +35,16 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.annotation.concurrent.ThreadSafe;
 
-/**
- * The stats and tracing information for a stream.
- */
-@ThreadSafe
+/** The stats and tracing information for a stream. */
+@ThreadSafe // Not anymore :/
 public final class StatsTraceContext {
   public static final StatsTraceContext NOOP = new StatsTraceContext(new StreamTracer[0]);
 
   private final StreamTracer[] tracers;
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  private volatile boolean
-      useInterceptorTracers; // TODO: clarify semantics, make private. Rename to "allTracersReady" or something
-  private StreamTracer[] interceptorTracers;
-  private final boolean isServer;
+  //  private volatile boolean
+  //      useInterceptorTracers; // TODO: clarify semantics, make private. Rename to "allTracersReady" or something
+  private StreamTracer[] interceptorTracers = new StreamTracer[0];
 
   public interface ServerIsReadyListener {
     void serverIsReady();
@@ -95,18 +92,19 @@ public final class StatsTraceContext {
   private boolean interceptorTracersSet;
 
   // TODO: not public, incorporate into #serverCallStarted
-  public void setInterceptorStreamTracers(List<? extends ServerStreamTracer> newTracers) {
-    if (useInterceptorTracers) {
-      throw new RuntimeException("Already set interceptor stream tracers");
-    }
+  public Context.CancellableContext setInterceptorStreamTracersAndFilterContext(
+      List<ServerStreamTracer> newTracers, Context.CancellableContext context) {
+    checkState(!interceptorTracersSet, "Interceptor tracers already set");
     if (!newTracers.isEmpty()) {
       interceptorTracers = new StreamTracer[newTracers.size()];
       for (int i = 0; i < interceptorTracers.length; i++) {
-        interceptorTracers[i] = newTracers.get(i);
+        ServerStreamTracer tracer = newTracers.get(i);
+        context = tracer.filterContext(context).withCancellation();
+        interceptorTracers[i] = tracer;
       }
-      useInterceptorTracers = true;
     }
     interceptorTracersSet = true;
+    return context;
   }
 
   @VisibleForTesting
@@ -117,7 +115,6 @@ public final class StatsTraceContext {
   @VisibleForTesting
   StatsTraceContext(StreamTracer[] tracers, boolean isServer) {
     this.tracers = tracers;
-    this.isServer = isServer;
   }
 
   /**
@@ -168,7 +165,6 @@ public final class StatsTraceContext {
    */
   public <ReqT, RespT> Context serverFilterContext(Context context) {
     Context ctx = checkNotNull(context, "context");
-    checkState(!useInterceptorTracers, "Already ready to use???"); // TODO: remove
     for (StreamTracer tracer : tracers) {
       ctx = ((ServerStreamTracer) tracer).filterContext(ctx);
       checkNotNull(ctx, "%s returns null context", tracer);
@@ -197,10 +193,8 @@ public final class StatsTraceContext {
     for (StreamTracer tracer : tracers) {
       ((ServerStreamTracer) tracer).serverCallStarted(callInfo);
     }
-    if (useInterceptorTracers) {
-      for (StreamTracer tracer : interceptorTracers) {
-        ((ServerStreamTracer) tracer).serverCallStarted(callInfo);
-      }
+    for (StreamTracer tracer : interceptorTracers) {
+      ((ServerStreamTracer) tracer).serverCallStarted(callInfo);
     }
     if (serverIsReadyListener != null) {
       serverIsReadyListener.serverIsReady();
@@ -219,10 +213,8 @@ public final class StatsTraceContext {
         tracer.streamClosed(status);
       }
     }
-    if (useInterceptorTracers) {
-      for (StreamTracer tracer : interceptorTracers) {
-        tracer.streamClosed(status);
-      }
+    for (StreamTracer tracer : interceptorTracers) {
+      tracer.streamClosed(status);
     }
   }
 
@@ -235,10 +227,8 @@ public final class StatsTraceContext {
     for (StreamTracer tracer : tracers) {
       tracer.outboundMessage(seqNo);
     }
-    if (useInterceptorTracers) {
-      for (StreamTracer tracer : interceptorTracers) {
-        tracer.outboundMessage(seqNo);
-      }
+    for (StreamTracer tracer : interceptorTracers) {
+      tracer.outboundMessage(seqNo);
     }
   }
 
@@ -251,13 +241,12 @@ public final class StatsTraceContext {
     for (StreamTracer tracer : tracers) {
       tracer.inboundMessage(seqNo);
     }
-    if (!interceptorTracersSet && isServer) {
-      throw new RuntimeException("not ready!");
-    }
-    if (useInterceptorTracers) {
-      for (StreamTracer tracer : interceptorTracers) {
-        tracer.inboundMessage(seqNo);
-      }
+    //    if (!interceptorTracersSet && isServer) {
+    //      // TODO - this was only for testing, remove?
+    //      throw new RuntimeException("not ready!");
+    //    }
+    for (StreamTracer tracer : interceptorTracers) {
+      tracer.inboundMessage(seqNo);
     }
   }
 
@@ -270,10 +259,8 @@ public final class StatsTraceContext {
     for (StreamTracer tracer : tracers) {
       tracer.outboundMessageSent(seqNo, optionalWireSize, optionalUncompressedSize);
     }
-    if (useInterceptorTracers) {
-      for (StreamTracer tracer : interceptorTracers) {
-        tracer.outboundMessageSent(seqNo, optionalWireSize, optionalUncompressedSize);
-      }
+    for (StreamTracer tracer : interceptorTracers) {
+      tracer.outboundMessageSent(seqNo, optionalWireSize, optionalUncompressedSize);
     }
   }
 
@@ -286,10 +273,8 @@ public final class StatsTraceContext {
     for (StreamTracer tracer : tracers) {
       tracer.inboundMessageRead(seqNo, optionalWireSize, optionalUncompressedSize);
     }
-    if (useInterceptorTracers) {
-      for (StreamTracer tracer : interceptorTracers) {
-        tracer.inboundMessageRead(seqNo, optionalWireSize, optionalUncompressedSize);
-      }
+    for (StreamTracer tracer : interceptorTracers) {
+      tracer.inboundMessageRead(seqNo, optionalWireSize, optionalUncompressedSize);
     }
   }
 
@@ -302,10 +287,8 @@ public final class StatsTraceContext {
     for (StreamTracer tracer : tracers) {
       tracer.outboundUncompressedSize(bytes);
     }
-    if (useInterceptorTracers) {
-      for (StreamTracer tracer : interceptorTracers) {
-        tracer.outboundUncompressedSize(bytes);
-      }
+    for (StreamTracer tracer : interceptorTracers) {
+      tracer.outboundUncompressedSize(bytes);
     }
   }
 
@@ -318,10 +301,8 @@ public final class StatsTraceContext {
     for (StreamTracer tracer : tracers) {
       tracer.outboundWireSize(bytes);
     }
-    if (useInterceptorTracers) {
-      for (StreamTracer tracer : interceptorTracers) {
-        tracer.outboundWireSize(bytes);
-      }
+    for (StreamTracer tracer : interceptorTracers) {
+      tracer.outboundWireSize(bytes);
     }
   }
 
@@ -334,10 +315,8 @@ public final class StatsTraceContext {
     for (StreamTracer tracer : tracers) {
       tracer.inboundUncompressedSize(bytes);
     }
-    if (useInterceptorTracers) {
-      for (StreamTracer tracer : interceptorTracers) {
-        tracer.inboundUncompressedSize(bytes);
-      }
+    for (StreamTracer tracer : interceptorTracers) {
+      tracer.inboundUncompressedSize(bytes);
     }
   }
 
@@ -350,10 +329,8 @@ public final class StatsTraceContext {
     for (StreamTracer tracer : tracers) {
       tracer.inboundWireSize(bytes);
     }
-    if (useInterceptorTracers) {
-      for (StreamTracer tracer : interceptorTracers) {
-        tracer.inboundWireSize(bytes);
-      }
+    for (StreamTracer tracer : interceptorTracers) {
+      tracer.inboundWireSize(bytes);
     }
   }
 }

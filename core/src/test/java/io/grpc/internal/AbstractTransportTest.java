@@ -66,7 +66,6 @@ import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -2151,9 +2150,9 @@ public abstract class AbstractTransportTest {
       ServerStreamListenerBase listener = new ServerStreamListenerBase();
       streams.add(new StreamCreation(stream, method, headers, listener));
       stream.setListener(listener);
-      // TODO: hrm
-      List<? extends ServerStreamTracer> serverStreamTracers = new ArrayList<>();
-      stream.statsTraceContext().setInterceptorStreamTracers(serverStreamTracers);
+      //      // TODO: hrm
+      //      List<? extends ServerStreamTracer> serverStreamTracers = new ArrayList<>();
+      //      stream.statsTraceContext().setInterceptorStreamTracersAndFilterContext(serverStreamTracers, Context.ROOT.withCancellation());
       if (stream.statsTraceContext().serverIsReadyListener != null) {
         stream.statsTraceContext().serverIsReadyListener.serverIsReady();
       }
