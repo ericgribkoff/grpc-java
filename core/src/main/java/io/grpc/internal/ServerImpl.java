@@ -923,10 +923,6 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       if (!status.isOk()) {
         // The callExecutor might be busy doing user work. To avoid waiting, use an executor that
         // is not serializing.
-        // TODO - this not running on callExecutor means that context might not be set yet? No, because context is final
-        // Until my change...
-        // This means this is unsafe after my change, since this access to listenerContext is not happening on the
-        // callExecutor (by design). See https://github.com/grpc/grpc-java/pull/2963
         cancelExecutor.execute(new ContextCloser(cancelContext, status.getCause()));
       }
       final Link link = PerfMark.linkOut();
