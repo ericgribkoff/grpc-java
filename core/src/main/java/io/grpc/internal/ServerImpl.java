@@ -677,53 +677,18 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
         StatsTraceContext statsTraceCtx,
         Tag tag,
         JumpToApplicationThreadServerStreamListener jumpListener) {
-      // Update context here with methodDef.streamTracerFactories
-      // Updates statsTraceCtx here - interceptor
-      // Move this into #startCall
-      //      ServerMethodDefinition<ReqT, RespT> interceptedDef = methodDef;
-      //      for (final ServerInterceptor interceptor : interceptors) {
-      //        // TODO: ServerInterceptor2 is not a ServerInterceptor (?) so don't need this overload check
-      //        if (interceptor instanceof ServerInterceptor2) {
-      //          interceptedDef = ((ServerInterceptor2) interceptor).interceptMethodDefinition(interceptedDef);
-      //        } else {
-      //          // Converter
-      //          ServerInterceptor2 converter = new ServerInterceptor2() {
-      //            @Override
-      //            public <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> interceptMethodDefinition(ServerMethodDefinition<ReqT, RespT> method) {
-      //              return method.withServerCallHandler(InternalServerInterceptors.interceptCallHandler(interceptor, method.getServerCallHandler()));
-      //            }
-      //          };
-      //          interceptedDef = converter.interceptMethodDefinition(interceptedDef);
-      //        }
-      //      }
       ////      // TODO: remove :-)
       //      try {
       //        Thread.sleep(150);
       //      } catch (InterruptedException e) {
       //        e.printStackTrace();
       //      }
-      //      ArrayList<ServerStreamTracer> tracers = new ArrayList<ServerStreamTracer>();
-      //      for (ServerStreamTracer.Factory factory : interceptedDef.getStreamTracerFactories()) {
-      //        tracers.add(factory.newServerStreamTracer(fullMethodName, headers));
-      //      }
-      //      for (ServerStreamTracer tracer : tracers) {
-      //        context = tracer.filterContext(context).withCancellation();
-      //      }
-      //      jumpListener.setListenerContext(context);
-      //      statsTraceCtx.setInterceptorStreamTracers(tracers);
-      //      statsTraceCtx.set(StatsTraceContext.newServerContext(interceptedDef.getStreamTracerFactories(), fullMethodName, headers));
-
       // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
       statsTraceCtx.serverCallStarted(
           new ServerCallInfoImpl<>(
               methodDef.getMethodDescriptor(), // notify with original method descriptor
               stream.getAttributes(),
               stream.getAuthority()));
-      //      ServerCallHandler<ReqT, RespT> handler = methodDef.getServerCallHandler();
-      ////      for (ServerInterceptor interceptor : interceptors) {
-      ////        handler = InternalServerInterceptors.interceptCallHandler(interceptor, handler);
-      ////      }
-      //      ServerMethodDefinition<ReqT, RespT> interceptedDef = methodDef.withServerCallHandler(handler);
       ServerMethodDefinition<?, ?> wMethodDef =
           binlog == null ? methodDef : binlog.wrapMethodDefinition(methodDef);
       return startWrappedCall(fullMethodName, wMethodDef, stream, headers, context, tag);
@@ -834,8 +799,12 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     // Only accessed from callExecutor.
     private ServerStreamListener listener;
 
-    public JumpToApplicationThreadServerStreamListener(Executor executor,
-        Executor cancelExecutor, ServerStream stream, Context.CancellableContext context, Tag tag) {
+    public JumpToApplicationThreadServerStreamListener(
+        Executor executor,
+        Executor cancelExecutor,
+        ServerStream stream,
+        Context.CancellableContext context,
+        Tag tag) {
       this.callExecutor = executor;
       this.cancelExecutor = cancelExecutor;
       this.stream = stream;

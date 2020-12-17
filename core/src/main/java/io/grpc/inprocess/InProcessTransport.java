@@ -753,13 +753,6 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
         }
         statsTraceCtx.outboundMessage(outboundSeqNo);
         statsTraceCtx.outboundMessageSent(outboundSeqNo, -1, -1);
-        // This writes the inbound stats to the server's statstracecontext immediately, potentially (often, racy)
-        // before the ServerImpl has set the server streams statstracecontext as ready.
-        // Does this violate StatsTraceContext contract? In these scenarios it's also being invoked before
-        // #serverCallStarted. And definitely before we've had time to get tracefactories from the interceptors...
-        // These need to be buffered, but currently no signal here that would allow them to be unbuffered..
-        // could add listener+callback to statsTraceCtx, but that's uglier (???) than just adding a buffered op
-        // to statsTraceCtx
         final int outboundSeqNumCopy = outboundSeqNo;
         serverStream.listener.queueEvent(
             new Runnable() {
@@ -827,7 +820,8 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
             }
           }
         }
-        // TODO: also needs to be queued - can be invoked prior to server-side call start in cancelAfterBegin
+        // TODO: also needs to be queued - can be invoked prior to
+        //  server-side call start in cancelAfterBegin
         serverStream.statsTraceCtx.streamClosed(serverTracerStatus);
         serverStreamListener.closed(serverListenerStatus);
         return true;

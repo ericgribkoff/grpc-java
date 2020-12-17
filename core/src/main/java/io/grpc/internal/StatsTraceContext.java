@@ -35,17 +35,15 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.annotation.concurrent.ThreadSafe;
 
-/**
- * The stats and tracing information for a stream.
- */
+/** The stats and tracing information for a stream. */
 @ThreadSafe // Hrm :/
 public final class StatsTraceContext {
   public static final StatsTraceContext NOOP = new StatsTraceContext(new StreamTracer[0]);
 
   private final StreamTracer[] tracers;
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  private volatile boolean
-      useInterceptorTracers; // TODO: clarify semantics, make private. Rename to "allTracersReady" or something
+  // TODO: clarify semantics, make private. Rename to "allTracersReady" or something
+  private volatile boolean useInterceptorTracers;
   private StreamTracer[] interceptorTracers;
   private final boolean isServer;
 
@@ -53,9 +51,7 @@ public final class StatsTraceContext {
     void serverIsReady();
   }
 
-  /**
-   * Factory method for the client-side.
-   */
+  /** Factory method for the client-side. */
   public static StatsTraceContext newClientContext(
       final CallOptions callOptions, final Attributes transportAttrs, Metadata headers) {
     List<ClientStreamTracer.Factory> factories = callOptions.getStreamTracerFactories();
@@ -96,9 +92,9 @@ public final class StatsTraceContext {
   public ServerIsReadyListener serverIsReadyListener;
   private boolean interceptorTracersSet;
 
-  // TODO: not public, incorporate into #serverCallStarted
+  /** TODO. */
   public Context.CancellableContext setInterceptorStreamTracersAndFilterContext(
-          List<ServerStreamTracer> newTracers, Context.CancellableContext context) {
+      List<ServerStreamTracer> newTracers, Context.CancellableContext context) {
     checkState(!interceptorTracersSet, "Interceptor tracers already set");
     if (!newTracers.isEmpty()) {
       interceptorTracers = new StreamTracer[newTracers.size()];
@@ -124,9 +120,7 @@ public final class StatsTraceContext {
     this.isServer = isServer;
   }
 
-  /**
-   * Returns a copy of the tracer list.
-   */
+  /** Returns a copy of the tracer list. */
   @VisibleForTesting
   public List<StreamTracer> getTracersForTest() {
     return new ArrayList<>(Arrays.asList(tracers));
