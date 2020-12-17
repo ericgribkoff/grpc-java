@@ -636,7 +636,6 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       // Move this into #startCall
       ServerMethodDefinition<ReqT, RespT> interceptedDef = methodDef;
       for (final ServerInterceptor interceptor : interceptors) {
-        // TODO: ServerInterceptor2 is not a ServerInterceptor (?) so don't need this overload check
         if (interceptor instanceof ServerInterceptor2) {
           interceptedDef =
               ((ServerInterceptor2) interceptor).interceptMethodDefinition(interceptedDef);
