@@ -1092,8 +1092,8 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     ArgumentCaptor<NettyServerStream> streamCaptor =
         ArgumentCaptor.forClass(NettyServerStream.class);
     ArgumentCaptor<String> methodCaptor = ArgumentCaptor.forClass(String.class);
-    verify(transportListener).streamCreated(streamCaptor.capture(), methodCaptor.capture(),
-        any(Metadata.class));
+    verify(transportListener)
+        .streamCreated(streamCaptor.capture(), methodCaptor.capture(), any(Metadata.class));
     stream = streamCaptor.getValue();
     //    List<? extends ServerStreamTracer> serverStreamTracers = new ArrayList<>();
     //    stream.statsTraceContext().setInterceptorStreamTracers(serverStreamTracers);

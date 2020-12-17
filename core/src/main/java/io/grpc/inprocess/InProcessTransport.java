@@ -417,8 +417,6 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       @GuardedBy("this")
       private int outboundSeqNo;
 
-
-
       private final class StatsListener implements StatsTraceContext.ServerIsReadyListener {
         private final ArrayList<Runnable> queuedStatsEvents = new ArrayList<Runnable>();
         private volatile boolean isReady;

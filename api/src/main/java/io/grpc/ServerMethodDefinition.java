@@ -29,8 +29,8 @@ public final class ServerMethodDefinition<ReqT, RespT> {
   private final ServerCallHandler<ReqT, RespT> handler;
   private final List<ServerStreamTracer.Factory> streamTracerFactories;
 
-  private ServerMethodDefinition(MethodDescriptor<ReqT, RespT> method,
-      ServerCallHandler<ReqT, RespT> handler) {
+  private ServerMethodDefinition(
+      MethodDescriptor<ReqT, RespT> method, ServerCallHandler<ReqT, RespT> handler) {
     this.method = method;
     this.handler = handler;
     this.streamTracerFactories = new ArrayList<>();

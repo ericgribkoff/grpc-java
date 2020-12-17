@@ -18,19 +18,14 @@ package io.grpc;
 
 import javax.annotation.concurrent.ThreadSafe;
 
-/** To fill in */
+/** TODO. */
 @ThreadSafe
 public interface ServerInterceptor2 {
-  //  /**
-  //   * To fill in
-  //   */
-  //  <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-  //          ServerCall<ReqT, RespT> call,
-  //          Metadata headers,
-  //          ServerCallHandler<ReqT, RespT> next);
-
-  // To replicate ServerInterceptor behavior, this should return a SMD with a new ServerCallHandler that wraps the
-  // ServerInterceptor(1).interceptCall inside of its startCall method, as done in InternalServerInterceptors.interceptCallHandler.
+  /**
+   * To replicate ServerInterceptor behavior, this should return a SMD with a new ServerCallHandler
+   * that wraps the // ServerInterceptor(1).interceptCall inside of its startCall method, as done in
+   * InternalServerInterceptors.interceptCallHandler.
+   */
   <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> interceptMethodDefinition(
       ServerMethodDefinition<ReqT, RespT> method);
 }

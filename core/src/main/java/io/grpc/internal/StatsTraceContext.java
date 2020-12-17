@@ -64,7 +64,9 @@ public final class StatsTraceContext {
     }
     ClientStreamTracer.StreamInfo info =
         ClientStreamTracer.StreamInfo.newBuilder()
-            .setTransportAttrs(transportAttrs).setCallOptions(callOptions).build();
+            .setTransportAttrs(transportAttrs)
+            .setCallOptions(callOptions)
+            .build();
     // This array will be iterated multiple times per RPC. Use primitive array instead of Collection
     // so that for-each doesn't create an Iterator every time.
     StreamTracer[] tracers = new StreamTracer[factories.size()];
@@ -131,7 +133,7 @@ public final class StatsTraceContext {
   }
 
   /**
-   * See {@link ClientStreamTracer#outboundHeaders}.  For client-side only.
+   * See {@link ClientStreamTracer#outboundHeaders}. For client-side only.
    *
    * <p>Transport-specific, thus should be called by transport implementations.
    */
@@ -142,7 +144,7 @@ public final class StatsTraceContext {
   }
 
   /**
-   * See {@link ClientStreamTracer#inboundHeaders}.  For client-side only.
+   * See {@link ClientStreamTracer#inboundHeaders}. For client-side only.
    *
    * <p>Called from abstract stream implementations.
    */
@@ -153,7 +155,7 @@ public final class StatsTraceContext {
   }
 
   /**
-   * See {@link ClientStreamTracer#inboundTrailers}.  For client-side only.
+   * See {@link ClientStreamTracer#inboundTrailers}. For client-side only.
    *
    * <p>Called from abstract stream implementations.
    */
@@ -164,7 +166,7 @@ public final class StatsTraceContext {
   }
 
   /**
-   * See {@link ServerStreamTracer#filterContext}.  For server-side only.
+   * See {@link ServerStreamTracer#filterContext}. For server-side only.
    *
    * <p>Called from {@link io.grpc.internal.ServerImpl}.
    */

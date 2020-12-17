@@ -1204,8 +1204,9 @@ public class ServerImplTest {
     // This call will be handled by callHandler from the internal registry
     transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
     assertEquals(1, executor.runDueTasks());
-    verify(callHandler).startCall(ArgumentMatchers.<ServerCall<String, Integer>>any(),
-        ArgumentMatchers.<Metadata>any());
+    verify(callHandler)
+        .startCall(
+            ArgumentMatchers.<ServerCall<String, Integer>>any(), ArgumentMatchers.<Metadata>any());
     // This call will be handled by the fallbackRegistry because it's not registred in the internal
     // registry.
     transportListener.streamCreated(stream, "Service1/Method2", requestHeaders);
@@ -1229,7 +1230,8 @@ public class ServerImplTest {
     listener.setListener(mockListener, Context.ROOT.withCancellation());
 
     TestError expectedT = new TestError();
-    doThrow(expectedT).when(mockListener)
+    doThrow(expectedT)
+        .when(mockListener)
         .messagesAvailable(any(StreamListener.MessageProducer.class));
     // Closing the InputStream is done by the delegated listener (generally ServerCallImpl)
     listener.messagesAvailable(mock(StreamListener.MessageProducer.class));
@@ -1255,7 +1257,8 @@ public class ServerImplTest {
     listener.setListener(mockListener, Context.ROOT.withCancellation());
 
     RuntimeException expectedT = new RuntimeException();
-    doThrow(expectedT).when(mockListener)
+    doThrow(expectedT)
+        .when(mockListener)
         .messagesAvailable(any(StreamListener.MessageProducer.class));
     // Closing the InputStream is done by the delegated listener (generally ServerCallImpl)
     listener.messagesAvailable(mock(StreamListener.MessageProducer.class));

@@ -72,8 +72,7 @@ public final class ServerImplBuilder extends ServerBuilder<ServerImplBuilder> {
   private static final long DEFAULT_HANDSHAKE_TIMEOUT_MILLIS = TimeUnit.SECONDS.toMillis(120);
 
   // mutable state
-  final InternalHandlerRegistry.Builder registryBuilder =
-      new InternalHandlerRegistry.Builder();
+  final InternalHandlerRegistry.Builder registryBuilder = new InternalHandlerRegistry.Builder();
   final List<ServerTransportFilter> transportFilters = new ArrayList<>();
   final List<ServerInterceptor> interceptors = new ArrayList<>();
   final List<ServerInterceptor2> interceptors2 = new ArrayList<>();
