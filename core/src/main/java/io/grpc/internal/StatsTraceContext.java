@@ -38,7 +38,7 @@ import javax.annotation.concurrent.ThreadSafe;
 /**
  * The stats and tracing information for a stream.
  */
-@ThreadSafe
+@ThreadSafe // Hrm :/
 public final class StatsTraceContext {
   public static final StatsTraceContext NOOP = new StatsTraceContext(new StreamTracer[0]);
 
@@ -95,18 +95,20 @@ public final class StatsTraceContext {
   private boolean interceptorTracersSet;
 
   // TODO: not public, incorporate into #serverCallStarted
-  public void setInterceptorStreamTracers(List<? extends ServerStreamTracer> newTracers) {
-    if (useInterceptorTracers) {
-      throw new RuntimeException("Already set interceptor stream tracers");
-    }
+  public Context.CancellableContext setInterceptorStreamTracersAndFilterContext(
+          List<ServerStreamTracer> newTracers, Context.CancellableContext context) {
+    checkState(!interceptorTracersSet, "Interceptor tracers already set");
     if (!newTracers.isEmpty()) {
       interceptorTracers = new StreamTracer[newTracers.size()];
       for (int i = 0; i < interceptorTracers.length; i++) {
-        interceptorTracers[i] = newTracers.get(i);
+        ServerStreamTracer tracer = newTracers.get(i);
+        context = tracer.filterContext(context).withCancellation();
+        interceptorTracers[i] = tracer;
       }
       useInterceptorTracers = true;
     }
     interceptorTracersSet = true;
+    return context;
   }
 
   @VisibleForTesting
