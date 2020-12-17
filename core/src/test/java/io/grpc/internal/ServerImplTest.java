@@ -1062,6 +1062,27 @@ public class ServerImplTest {
     assertTrue(callReference.get().isCancelled());
   }
 
+  //  public void blah_testStreamClose_clientCancelTriggersImmediateCancellationTODO() throws Exception {
+  //    AtomicBoolean contextCancelled = new AtomicBoolean(false);
+  //    AtomicReference<Context> context = new AtomicReference<>();
+  //    AtomicReference<ServerCall<String, Integer>> callReference = new AtomicReference<>();
+  //
+  //    ServerStreamListener streamListener = testStreamClose_setup(callReference,
+  //            context, contextCancelled, null);
+  //
+  //    // For close status being non OK:
+  //    // isCancelled is expected to be true immediately after calling closed(), without needing
+  //    // to wait for the main executor to run any tasks.
+  //    assertFalse(callReference.get().isCancelled());
+  //    assertFalse(context.get().isCancelled());
+  //    streamListener.closed(Status.CANCELLED);
+  //    assertEquals(1, executor.numPendingTasks(CONTEXT_CLOSER_TASK_FITLER));
+  //    assertEquals(2, executor.runDueTasks());
+  //    assertTrue(callReference.get().isCancelled());
+  //    assertTrue(context.get().isCancelled());
+  //    assertTrue(contextCancelled.get());
+  //  }
+
   @Test
   public void testStreamClose_clientCancelTriggersImmediateCancellation() throws Exception {
     AtomicBoolean contextCancelled = new AtomicBoolean(false);
@@ -1176,9 +1197,9 @@ public class ServerImplTest {
     Metadata requestHeaders = new Metadata();
     StatsTraceContext statsTraceCtx =
         StatsTraceContext.newServerContext(streamTracerFactories, "Waiter/serve", requestHeaders);
-    StatsTraceContext statsTraceCtx2 =
-            StatsTraceContext.newServerContext(streamTracerFactories, "Waiter/serve", requestHeaders);
-    when(stream.statsTraceContext()).thenReturn(statsTraceCtx, statsTraceCtx2);
+    //    StatsTraceContext statsTraceCtx2 =
+    //            StatsTraceContext.newServerContext(streamTracerFactories, "Waiter/serve", requestHeaders);
+    when(stream.statsTraceContext()).thenReturn(statsTraceCtx); //, statsTraceCtx2);
 
     // This call will be handled by callHandler from the internal registry
     transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);

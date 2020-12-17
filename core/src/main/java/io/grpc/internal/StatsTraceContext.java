@@ -33,7 +33,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -45,7 +44,8 @@ public final class StatsTraceContext {
 
   private final StreamTracer[] tracers;
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  private volatile boolean useInterceptorTracers; // TODO: clarify semantics, make private. Rename to "allTracersReady" or something
+  private volatile boolean
+      useInterceptorTracers; // TODO: clarify semantics, make private. Rename to "allTracersReady" or something
   private StreamTracer[] interceptorTracers;
   private final boolean isServer;
 
@@ -74,17 +74,15 @@ public final class StatsTraceContext {
     return new StatsTraceContext(tracers);
   }
 
-  /**
-   * Factory method for the server-side.
-   */
+  /** Factory method for the server-side. */
   // TODO: delayed
   public static StatsTraceContext newServerContext(
       List<? extends ServerStreamTracer.Factory> factories,
       String fullMethodName,
       Metadata headers) {
-//    if (factories.isEmpty()) {
-//      return NOOP;
-//    }
+    //    if (factories.isEmpty()) {
+    //      return NOOP;
+    //    }
     StreamTracer[] tracers = new StreamTracer[factories.size()];
     for (int i = 0; i < tracers.length; i++) {
       tracers[i] = factories.get(i).newServerStreamTracer(fullMethodName, headers);
@@ -179,10 +177,10 @@ public final class StatsTraceContext {
   }
 
   /**
-   * See {@link ServerStreamTracer#serverCallStarted}.  For server-side only. This method must
-   * be invoked before any other calls to StatsTraceContext, with the exception of streamClosed (inherently racy,
-   * since transport can close stream while call is getting created)
-   * and (possibly) serverFilterContext
+   * See {@link ServerStreamTracer#serverCallStarted}. For server-side only. This method must be
+   * invoked before any other calls to StatsTraceContext, with the exception of streamClosed
+   * (inherently racy, since transport can close stream while call is getting created) and
+   * (possibly) serverFilterContext
    *
    * <p>Called from {@link io.grpc.internal.ServerImpl}.
    */
@@ -196,17 +194,17 @@ public final class StatsTraceContext {
   // server trace methods are invoked.
   // Client can just initialize interceptorTracers = []
   public void serverCallStarted(final ServerCallInfo<?, ?> callInfo) {
-      for (StreamTracer tracer : tracers) {
+    for (StreamTracer tracer : tracers) {
+      ((ServerStreamTracer) tracer).serverCallStarted(callInfo);
+    }
+    if (useInterceptorTracers) {
+      for (StreamTracer tracer : interceptorTracers) {
         ((ServerStreamTracer) tracer).serverCallStarted(callInfo);
       }
-      if (useInterceptorTracers) {
-        for (StreamTracer tracer : interceptorTracers) {
-          ((ServerStreamTracer) tracer).serverCallStarted(callInfo);
-        }
-      }
-      if (serverIsReadyListener != null) {
-        serverIsReadyListener.serverIsReady();
-      }
+    }
+    if (serverIsReadyListener != null) {
+      serverIsReadyListener.serverIsReady();
+    }
   }
 
   /**
@@ -218,8 +216,8 @@ public final class StatsTraceContext {
   public void streamClosed(Status status) {
     if (closed.compareAndSet(false, true)) {
       for (StreamTracer tracer : tracers) {
-          tracer.streamClosed(status);
-        }
+        tracer.streamClosed(status);
+      }
     }
     if (useInterceptorTracers) {
       for (StreamTracer tracer : interceptorTracers) {
@@ -251,8 +249,8 @@ public final class StatsTraceContext {
    */
   public void inboundMessage(int seqNo) {
     for (StreamTracer tracer : tracers) {
-        tracer.inboundMessage(seqNo);
-      }
+      tracer.inboundMessage(seqNo);
+    }
     if (!interceptorTracersSet && isServer) {
       throw new RuntimeException("not ready!");
     }
@@ -269,9 +267,9 @@ public final class StatsTraceContext {
    * <p>Called from {@link io.grpc.internal.Framer}.
    */
   public void outboundMessageSent(int seqNo, long optionalWireSize, long optionalUncompressedSize) {
-      for (StreamTracer tracer : tracers) {
-        tracer.outboundMessageSent(seqNo, optionalWireSize, optionalUncompressedSize);
-      }
+    for (StreamTracer tracer : tracers) {
+      tracer.outboundMessageSent(seqNo, optionalWireSize, optionalUncompressedSize);
+    }
     if (useInterceptorTracers) {
       for (StreamTracer tracer : interceptorTracers) {
         tracer.outboundMessageSent(seqNo, optionalWireSize, optionalUncompressedSize);
@@ -285,9 +283,9 @@ public final class StatsTraceContext {
    * <p>Called from {@link io.grpc.internal.MessageDeframer}.
    */
   public void inboundMessageRead(int seqNo, long optionalWireSize, long optionalUncompressedSize) {
-      for (StreamTracer tracer : tracers) {
-        tracer.inboundMessageRead(seqNo, optionalWireSize, optionalUncompressedSize);
-      }
+    for (StreamTracer tracer : tracers) {
+      tracer.inboundMessageRead(seqNo, optionalWireSize, optionalUncompressedSize);
+    }
     if (useInterceptorTracers) {
       for (StreamTracer tracer : interceptorTracers) {
         tracer.inboundMessageRead(seqNo, optionalWireSize, optionalUncompressedSize);
@@ -301,9 +299,9 @@ public final class StatsTraceContext {
    * <p>Called from {@link io.grpc.internal.Framer}.
    */
   public void outboundUncompressedSize(long bytes) {
-      for (StreamTracer tracer : tracers) {
-        tracer.outboundUncompressedSize(bytes);
-      }
+    for (StreamTracer tracer : tracers) {
+      tracer.outboundUncompressedSize(bytes);
+    }
     if (useInterceptorTracers) {
       for (StreamTracer tracer : interceptorTracers) {
         tracer.outboundUncompressedSize(bytes);
@@ -317,9 +315,9 @@ public final class StatsTraceContext {
    * <p>Called from {@link io.grpc.internal.Framer}.
    */
   public void outboundWireSize(long bytes) {
-      for (StreamTracer tracer : tracers) {
-        tracer.outboundWireSize(bytes);
-      }
+    for (StreamTracer tracer : tracers) {
+      tracer.outboundWireSize(bytes);
+    }
     if (useInterceptorTracers) {
       for (StreamTracer tracer : interceptorTracers) {
         tracer.outboundWireSize(bytes);
@@ -349,9 +347,9 @@ public final class StatsTraceContext {
    * <p>Called from {@link io.grpc.internal.MessageDeframer}.
    */
   public void inboundWireSize(long bytes) {
-      for (StreamTracer tracer : tracers) {
-        tracer.inboundWireSize(bytes);
-      }
+    for (StreamTracer tracer : tracers) {
+      tracer.inboundWireSize(bytes);
+    }
     if (useInterceptorTracers) {
       for (StreamTracer tracer : interceptorTracers) {
         tracer.inboundWireSize(bytes);

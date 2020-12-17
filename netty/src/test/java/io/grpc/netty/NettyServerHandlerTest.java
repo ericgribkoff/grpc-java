@@ -1098,7 +1098,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     stream = streamCaptor.getValue();
     List<? extends ServerStreamTracer> serverStreamTracers = new ArrayList<>();
     stream.statsTraceContext().setInterceptorStreamTracers(serverStreamTracers);
-//    stream.statsTraceContext().serverIsReadyListener.serverIsReady();
+    //    stream.statsTraceContext().serverIsReadyListener.serverIsReady();
   }
 
   private ByteBuf emptyGrpcFrame(int streamId, boolean endStream) throws Exception {

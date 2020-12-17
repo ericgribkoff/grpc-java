@@ -16,7 +16,6 @@
 
 package io.grpc.internal;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
@@ -47,7 +46,6 @@ import io.grpc.InternalLogId;
 import io.grpc.InternalServerInterceptors;
 import io.grpc.Metadata;
 import io.grpc.ServerCall;
-import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptor2;
 import io.grpc.ServerMethodDefinition;
@@ -161,7 +159,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     this.interceptors =
         builder.interceptors.toArray(new ServerInterceptor[builder.interceptors.size()]);
     this.interceptors2 =
-            builder.interceptors2.toArray(new ServerInterceptor2[builder.interceptors2.size()]);
+        builder.interceptors2.toArray(new ServerInterceptor2[builder.interceptors2.size()]);
     this.handshakeTimeoutMillis = builder.handshakeTimeoutMillis;
     this.binlog = builder.binlog;
     this.channelz = builder.channelz;
@@ -545,6 +543,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
 
         private void runInternal() {
           ServerStreamListener listener = NOOP_LISTENER;
+          Context.CancellableContext listenerContext = context;
           try {
             ServerMethodDefinition<?, ?> method = registry.lookupMethod(methodName);
             if (method == null) {
@@ -563,12 +562,25 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
               context.cancel(null);
               return;
             }
-            listener = startCall(stream, methodName, method, headers, context, statsTraceCtx, tag, jumpListener);
+            ServerMethodDefinition interceptedDef = getInterceptedMethodDef(method);
+            listenerContext =
+                addInterceptorTracers(context, statsTraceCtx, interceptedDef, methodName, headers);
+            listener =
+                startCall(
+                    stream,
+                    methodName,
+                    interceptedDef,
+                    headers,
+                    listenerContext,
+                    statsTraceCtx,
+                    tag,
+                    jumpListener);
           } catch (Throwable t) {
             stream.close(Status.fromThrowable(t), new Metadata());
             context.cancel(null);
             throw t;
           } finally {
+            jumpListener.setListenerContext(listenerContext);
             jumpListener.setListener(listener);
           }
 
@@ -615,11 +627,8 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       return context;
     }
 
-    /** Never returns {@code null}. */
-    private <ReqT, RespT> ServerStreamListener startCall(ServerStream stream, String fullMethodName,
-        ServerMethodDefinition<ReqT, RespT> methodDef, Metadata headers,
-        Context.CancellableContext context, StatsTraceContext statsTraceCtx, Tag tag,
-                                       JumpToApplicationThreadServerStreamListener jumpListener) {
+    private <ReqT, RespT> ServerMethodDefinition getInterceptedMethodDef(
+        ServerMethodDefinition<ReqT, RespT> methodDef) {
       // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
       // Update context here with methodDef.streamTracerFactories
       // Updates statsTraceCtx here - interceptor
@@ -628,47 +637,102 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       for (final ServerInterceptor interceptor : interceptors) {
         // TODO: ServerInterceptor2 is not a ServerInterceptor (?) so don't need this overload check
         if (interceptor instanceof ServerInterceptor2) {
-          interceptedDef = ((ServerInterceptor2) interceptor).interceptMethodDefinition(interceptedDef);
+          interceptedDef =
+              ((ServerInterceptor2) interceptor).interceptMethodDefinition(interceptedDef);
         } else {
           // Converter
-          ServerInterceptor2 converter = new ServerInterceptor2() {
-            @Override
-            public <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> interceptMethodDefinition(ServerMethodDefinition<ReqT, RespT> method) {
-              return method.withServerCallHandler(InternalServerInterceptors.interceptCallHandler(interceptor, method.getServerCallHandler()));
-            }
-          };
+          ServerInterceptor2 converter =
+              new ServerInterceptor2() {
+                @Override
+                public <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> interceptMethodDefinition(
+                    ServerMethodDefinition<ReqT, RespT> method) {
+                  return method.withServerCallHandler(
+                      InternalServerInterceptors.interceptCallHandler(
+                          interceptor, method.getServerCallHandler()));
+                }
+              };
           interceptedDef = converter.interceptMethodDefinition(interceptedDef);
         }
       }
-//      // TODO: remove :-)
-      try {
-        Thread.sleep(150);
-      } catch (InterruptedException e) {
-        e.printStackTrace();
-      }
+      return interceptedDef;
+    }
+
+    private <ReqT, RespT> Context.CancellableContext addInterceptorTracers(
+        Context.CancellableContext context,
+        StatsTraceContext statsTraceCtx,
+        ServerMethodDefinition<ReqT, RespT> methodDef,
+        String fullMethodName,
+        Metadata headers) {
       ArrayList<ServerStreamTracer> tracers = new ArrayList<ServerStreamTracer>();
-      for (ServerStreamTracer.Factory factory : interceptedDef.getStreamTracerFactories()) {
+      for (ServerStreamTracer.Factory factory : methodDef.getStreamTracerFactories()) {
         tracers.add(factory.newServerStreamTracer(fullMethodName, headers));
       }
       for (ServerStreamTracer tracer : tracers) {
         context = tracer.filterContext(context).withCancellation();
       }
-      jumpListener.setListenerContext(context);
       statsTraceCtx.setInterceptorStreamTracers(tracers);
-//      statsTraceCtx.set(StatsTraceContext.newServerContext(interceptedDef.getStreamTracerFactories(), fullMethodName, headers));
+      return context;
+    }
 
+    /** Never returns {@code null}. */
+    private <ReqT, RespT> ServerStreamListener startCall(
+        ServerStream stream,
+        String fullMethodName,
+        ServerMethodDefinition<ReqT, RespT> methodDef,
+        Metadata headers,
+        Context.CancellableContext context,
+        StatsTraceContext statsTraceCtx,
+        Tag tag,
+        JumpToApplicationThreadServerStreamListener jumpListener) {
+      // Update context here with methodDef.streamTracerFactories
+      // Updates statsTraceCtx here - interceptor
+      // Move this into #startCall
+      //      ServerMethodDefinition<ReqT, RespT> interceptedDef = methodDef;
+      //      for (final ServerInterceptor interceptor : interceptors) {
+      //        // TODO: ServerInterceptor2 is not a ServerInterceptor (?) so don't need this overload check
+      //        if (interceptor instanceof ServerInterceptor2) {
+      //          interceptedDef = ((ServerInterceptor2) interceptor).interceptMethodDefinition(interceptedDef);
+      //        } else {
+      //          // Converter
+      //          ServerInterceptor2 converter = new ServerInterceptor2() {
+      //            @Override
+      //            public <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> interceptMethodDefinition(ServerMethodDefinition<ReqT, RespT> method) {
+      //              return method.withServerCallHandler(InternalServerInterceptors.interceptCallHandler(interceptor, method.getServerCallHandler()));
+      //            }
+      //          };
+      //          interceptedDef = converter.interceptMethodDefinition(interceptedDef);
+      //        }
+      //      }
+      ////      // TODO: remove :-)
+      //      try {
+      //        Thread.sleep(150);
+      //      } catch (InterruptedException e) {
+      //        e.printStackTrace();
+      //      }
+      //      ArrayList<ServerStreamTracer> tracers = new ArrayList<ServerStreamTracer>();
+      //      for (ServerStreamTracer.Factory factory : interceptedDef.getStreamTracerFactories()) {
+      //        tracers.add(factory.newServerStreamTracer(fullMethodName, headers));
+      //      }
+      //      for (ServerStreamTracer tracer : tracers) {
+      //        context = tracer.filterContext(context).withCancellation();
+      //      }
+      //      jumpListener.setListenerContext(context);
+      //      statsTraceCtx.setInterceptorStreamTracers(tracers);
+      //      statsTraceCtx.set(StatsTraceContext.newServerContext(interceptedDef.getStreamTracerFactories(), fullMethodName, headers));
+
+      // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
       statsTraceCtx.serverCallStarted(
           new ServerCallInfoImpl<>(
-              interceptedDef.getMethodDescriptor(), // notify with original method descriptor
+              methodDef.getMethodDescriptor(), // notify with original method descriptor
               stream.getAttributes(),
               stream.getAuthority()));
-//      ServerCallHandler<ReqT, RespT> handler = methodDef.getServerCallHandler();
-////      for (ServerInterceptor interceptor : interceptors) {
-////        handler = InternalServerInterceptors.interceptCallHandler(interceptor, handler);
-////      }
-//      ServerMethodDefinition<ReqT, RespT> interceptedDef = methodDef.withServerCallHandler(handler);
-      ServerMethodDefinition<?, ?> wMethodDef = binlog == null
-          ? interceptedDef : binlog.wrapMethodDefinition(interceptedDef);
+      //      ServerCallHandler<ReqT, RespT> handler = methodDef.getServerCallHandler();
+      ////      for (ServerInterceptor interceptor : interceptors) {
+      ////        handler = InternalServerInterceptors.interceptCallHandler(interceptor, handler);
+      ////      }
+      //      ServerMethodDefinition<ReqT, RespT> interceptedDef = methodDef.withServerCallHandler(handler);
+      ServerMethodDefinition<?, ?> wMethodDef =
+          binlog == null ? methodDef : binlog.wrapMethodDefinition(methodDef);
       return startWrappedCall(fullMethodName, wMethodDef, stream, headers, context, tag);
     }
 
@@ -769,8 +833,8 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
   static final class JumpToApplicationThreadServerStreamListener implements ServerStreamListener {
     private final Executor callExecutor;
     private final Executor cancelExecutor;
-    private final Context.CancellableContext baseContext;
     private Context.CancellableContext listenerContext;
+    private volatile Context.CancellableContext cancelContext;
     private volatile boolean listenerContextSet;
     private final ServerStream stream;
     private final Tag tag;
@@ -782,7 +846,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       this.callExecutor = executor;
       this.cancelExecutor = cancelExecutor;
       this.stream = stream;
-      this.baseContext = context;
+      this.cancelContext = context;
       this.tag = tag;
     }
 
@@ -902,7 +966,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
         // Until my change...
         // This means this is unsafe after my change, since this access to listenerContext is not happening on the
         // callExecutor (by design). See https://github.com/grpc/grpc-java/pull/2963
-        cancelExecutor.execute(new ContextCloser(baseContext, listenerContext, status.getCause()));
+        cancelExecutor.execute(new ContextCloser(cancelContext, status.getCause()));
       }
       final Link link = PerfMark.linkOut();
 
@@ -952,29 +1016,24 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     public void setListenerContext(Context.CancellableContext listenerContext) {
       checkState(!listenerContextSet, "listener context already set");
       this.listenerContext = listenerContext;
+      cancelContext = listenerContext;
       listenerContextSet = true;
     }
   }
 
   @VisibleForTesting
   static final class ContextCloser implements Runnable {
-    private final Context.CancellableContext baseContext;
-    private final Context.CancellableContext listenerContext;
+    private final Context.CancellableContext context;
     private final Throwable cause;
 
-    ContextCloser(Context.CancellableContext baseContext, Context.CancellableContext listenerContext, Throwable cause) {
-      this.baseContext = baseContext;
-      this.listenerContext = listenerContext;
+    ContextCloser(Context.CancellableContext context, Throwable cause) {
+      this.context = context;
       this.cause = cause;
     }
 
     @Override
     public void run() {
-//      if (listenerContext != null) {
-        listenerContext.cancel(cause);
-//      } else {
-//        baseContext.cancel(cause);
-//      }
+      context.cancel(cause);
     }
   }
 }
