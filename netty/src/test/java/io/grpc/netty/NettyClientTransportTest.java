@@ -41,6 +41,7 @@ import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.ChannelLogger;
+import io.grpc.Context;
 import io.grpc.Grpc;
 import io.grpc.InternalChannelz;
 import io.grpc.Metadata;
@@ -925,9 +926,11 @@ public class NettyClientTransportTest {
         @Override
         public void streamCreated(ServerStream stream, String method, Metadata headers) {
           EchoServerStreamListener listener = new EchoServerStreamListener(stream, method, headers);
-          //          // TODO: hrm
-          //          List<? extends ServerStreamTracer> serverStreamTracers = new ArrayList<>();
-          //          stream.statsTraceContext().setInterceptorStreamTracers(serverStreamTracers);
+          // TODO: hrm
+          stream
+              .statsTraceContext()
+              .setInterceptorStreamTracersAndFilterContext(
+                  Collections.<ServerStreamTracer>emptyList(), Context.ROOT.withCancellation());
           stream.setListener(listener);
           stream.writeHeaders(new Metadata());
           stream.request(1);
