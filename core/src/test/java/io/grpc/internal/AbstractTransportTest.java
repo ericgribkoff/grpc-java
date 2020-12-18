@@ -50,6 +50,7 @@ import io.grpc.CallOptions;
 import io.grpc.ChannelLogger;
 import io.grpc.ClientStreamTracer;
 import io.grpc.ClientStreamTracer.StreamInfo;
+import io.grpc.Context;
 import io.grpc.Grpc;
 import io.grpc.InternalChannelz.SocketStats;
 import io.grpc.InternalChannelz.TransportStats;
@@ -67,6 +68,7 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
@@ -2150,6 +2152,10 @@ public abstract class AbstractTransportTest {
       ServerStreamListenerBase listener = new ServerStreamListenerBase();
       streams.add(new StreamCreation(stream, method, headers, listener));
       stream.setListener(listener);
+      stream
+          .statsTraceContext()
+          .setInterceptorStreamTracersAndFilterContext(
+              Collections.<ServerStreamTracer>emptyList(), Context.ROOT.withCancellation());
       if (stream.statsTraceContext().serverIsReadyListener != null) {
         stream.statsTraceContext().serverIsReadyListener.serverIsReady();
       }

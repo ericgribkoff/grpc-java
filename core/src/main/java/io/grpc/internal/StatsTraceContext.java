@@ -90,7 +90,7 @@ public final class StatsTraceContext {
 
   // TODO: don't put this here
   public ServerIsReadyListener serverIsReadyListener;
-  private boolean interceptorTracersSet;
+  private volatile boolean interceptorTracersSet;
 
   /** TODO. */
   public Context.CancellableContext setInterceptorStreamTracersAndFilterContext(
