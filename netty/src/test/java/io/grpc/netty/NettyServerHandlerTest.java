@@ -54,6 +54,7 @@ import static org.mockito.Mockito.when;
 import com.google.common.io.ByteStreams;
 import com.google.common.truth.Truth;
 import io.grpc.Attributes;
+import io.grpc.Context;
 import io.grpc.InternalStatus;
 import io.grpc.Metadata;
 import io.grpc.ServerStreamTracer;
@@ -84,6 +85,7 @@ import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.util.AsciiString;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
@@ -1095,9 +1097,11 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     verify(transportListener)
         .streamCreated(streamCaptor.capture(), methodCaptor.capture(), any(Metadata.class));
     stream = streamCaptor.getValue();
-    //    List<? extends ServerStreamTracer> serverStreamTracers = new ArrayList<>();
-    //    stream.statsTraceContext().setInterceptorStreamTracers(serverStreamTracers);
-    //    stream.statsTraceContext().serverIsReadyListener.serverIsReady();
+    // TODO: hrm
+    stream
+        .statsTraceContext()
+        .setInterceptorStreamTracersAndFilterContext(
+            Collections.<ServerStreamTracer>emptyList(), Context.ROOT.withCancellation());
   }
 
   private ByteBuf emptyGrpcFrame(int streamId, boolean endStream) throws Exception {
