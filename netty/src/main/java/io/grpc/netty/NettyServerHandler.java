@@ -43,6 +43,7 @@ import io.grpc.internal.KeepAliveManager;
 import io.grpc.internal.LogExceptionRunnable;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.StatsTraceContextImpl;
 import io.grpc.internal.TransportTracer;
 import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2ServerHeadersDecoder;
 import io.netty.buffer.ByteBuf;
@@ -432,7 +433,7 @@ class NettyServerHandler extends AbstractNettyHandler {
 
       Metadata metadata = Utils.convertHeaders(headers);
       StatsTraceContext statsTraceCtx =
-          StatsTraceContext.newServerContext(streamTracerFactories, method, metadata);
+          StatsTraceContextImpl.newServerContext(streamTracerFactories, method, metadata);
       //      StatsTraceContext statsTraceCtx = new StatsTraceContext.Holder();
 
       NettyServerStream.TransportState state =

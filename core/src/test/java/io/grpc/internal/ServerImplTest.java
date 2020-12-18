@@ -462,7 +462,7 @@ public class ServerImplTest {
     transportListener.transportReady(Attributes.EMPTY);
     Metadata requestHeaders = new Metadata();
     StatsTraceContext statsTraceCtx =
-        StatsTraceContext.newServerContext(
+        StatsTraceContextImpl.newServerContext(
             streamTracerFactories, "Waiter/nonexist", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
     transportListener.streamCreated(stream, "Waiter/nonexist", requestHeaders);
@@ -490,7 +490,7 @@ public class ServerImplTest {
     Metadata requestHeaders = new Metadata();
     requestHeaders.put(MESSAGE_ENCODING_KEY, decompressorName);
     StatsTraceContext statsTraceCtx =
-        StatsTraceContext.newServerContext(
+        StatsTraceContextImpl.newServerContext(
             streamTracerFactories, "Waiter/nonexist", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
 
@@ -547,7 +547,8 @@ public class ServerImplTest {
     Metadata requestHeaders = new Metadata();
     requestHeaders.put(metadataKey, "value");
     StatsTraceContext statsTraceCtx =
-        StatsTraceContext.newServerContext(streamTracerFactories, "Waiter/serve", requestHeaders);
+        StatsTraceContextImpl.newServerContext(
+            streamTracerFactories, "Waiter/serve", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
 
     transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
@@ -754,7 +755,8 @@ public class ServerImplTest {
 
     Metadata requestHeaders = new Metadata();
     StatsTraceContext statsTraceCtx =
-        StatsTraceContext.newServerContext(streamTracerFactories, "Waiter/serve", requestHeaders);
+        StatsTraceContextImpl.newServerContext(
+            streamTracerFactories, "Waiter/serve", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
 
     transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
@@ -799,7 +801,8 @@ public class ServerImplTest {
 
     Metadata requestHeaders = new Metadata();
     StatsTraceContext statsTraceCtx =
-        StatsTraceContext.newServerContext(streamTracerFactories, "Waiter/serve", requestHeaders);
+        StatsTraceContextImpl.newServerContext(
+            streamTracerFactories, "Waiter/serve", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
 
     transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
@@ -962,7 +965,8 @@ public class ServerImplTest {
 
     Metadata requestHeaders = new Metadata();
     StatsTraceContext statsTraceCtx =
-        StatsTraceContext.newServerContext(streamTracerFactories, "Waitier/serve", requestHeaders);
+        StatsTraceContextImpl.newServerContext(
+            streamTracerFactories, "Waitier/serve", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
 
     transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
@@ -1031,7 +1035,8 @@ public class ServerImplTest {
       requestHeaders.put(TIMEOUT_KEY, timeoutNanos);
     }
     StatsTraceContext statsTraceCtx =
-        StatsTraceContext.newServerContext(streamTracerFactories, "Waitier/serve", requestHeaders);
+        StatsTraceContextImpl.newServerContext(
+            streamTracerFactories, "Waitier/serve", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
     transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
     verify(stream).setListener(streamListenerCaptor.capture());
@@ -1175,7 +1180,8 @@ public class ServerImplTest {
     transportListener.transportReady(Attributes.EMPTY);
     Metadata requestHeaders = new Metadata();
     StatsTraceContext statsTraceCtx =
-        StatsTraceContext.newServerContext(streamTracerFactories, "Waiter/serve", requestHeaders);
+        StatsTraceContextImpl.newServerContext(
+            streamTracerFactories, "Waiter/serve", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx); //, statsTraceCtx2);
 
     // This call will be handled by callHandler from the internal registry

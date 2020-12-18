@@ -55,6 +55,7 @@ import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.StatsTraceContextImpl;
 import io.grpc.internal.StreamListener;
 import java.io.InputStream;
 import java.util.ArrayDeque;
@@ -205,7 +206,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       final MethodDescriptor<?, ?> method, final Metadata headers, final CallOptions callOptions) {
     if (shutdownStatus != null) {
       return failedClientStream(
-          StatsTraceContext.newClientContext(callOptions, attributes, headers), shutdownStatus);
+          StatsTraceContextImpl.newClientContext(callOptions, attributes, headers), shutdownStatus);
     }
 
     headers.put(GrpcUtil.USER_AGENT_KEY, userAgent);
@@ -218,13 +219,13 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
         // However, that isn't handled specially today, so we'd leak HTTP-isms even though we're
         // in-process. We go ahead and make a Status, which may need to be updated if
         // statuscodes.md is updated.
-        Status status = Status.RESOURCE_EXHAUSTED.withDescription(
-            String.format(
-                "Request metadata larger than %d: %d",
-                serverMaxInboundMetadataSize,
-                metadataSize));
+        Status status =
+            Status.RESOURCE_EXHAUSTED.withDescription(
+                String.format(
+                    "Request metadata larger than %d: %d",
+                    serverMaxInboundMetadataSize, metadataSize));
         return failedClientStream(
-            StatsTraceContext.newClientContext(callOptions, attributes, headers), status);
+            StatsTraceContextImpl.newClientContext(callOptions, attributes, headers), status);
       }
     }
 
@@ -399,14 +400,16 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
     }
 
     private class InProcessServerStream implements ServerStream {
-      final StatsTraceContext statsTraceCtx;
+      final StatsTraceContextImpl statsTraceCtx;
+
       @GuardedBy("this")
       private ClientStreamListener clientStreamListener;
+
       @GuardedBy("this")
       private int clientRequested;
+
       @GuardedBy("this")
-      private ArrayDeque<StreamListener.MessageProducer> clientReceiveQueue =
-          new ArrayDeque<>();
+      private ArrayDeque<StreamListener.MessageProducer> clientReceiveQueue = new ArrayDeque<>();
       @GuardedBy("this")
       private Status clientNotifyStatus;
       @GuardedBy("this")
@@ -417,7 +420,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       @GuardedBy("this")
       private int outboundSeqNo;
 
-      private final class StatsListener implements StatsTraceContext.ServerIsReadyListener {
+      private final class StatsListener implements StatsTraceContextImpl.ServerIsReadyListener {
         private final ArrayList<Runnable> queuedStatsEvents = new ArrayList<Runnable>();
         private volatile boolean isReady;
 
@@ -445,8 +448,9 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       private final StatsListener listener = new StatsListener();
 
       InProcessServerStream(MethodDescriptor<?, ?> method, Metadata headers) {
-        statsTraceCtx = StatsTraceContext.newServerContext(
-            serverStreamTracerFactories, method.getFullMethodName(), headers);
+        statsTraceCtx =
+            StatsTraceContextImpl.newServerContext(
+                serverStreamTracerFactories, method.getFullMethodName(), headers);
         statsTraceCtx.serverIsReadyListener = listener;
       }
 
@@ -669,7 +673,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       }
 
       @Override
-      public StatsTraceContext statsTraceContext() {
+      public StatsTraceContextImpl statsTraceContext() {
         return statsTraceCtx;
       }
 
@@ -699,7 +703,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
 
       InProcessClientStream(CallOptions callOptions, Metadata headers) {
         this.callOptions = callOptions;
-        statsTraceCtx = StatsTraceContext.newClientContext(callOptions, attributes, headers);
+        statsTraceCtx = StatsTraceContextImpl.newClientContext(callOptions, attributes, headers);
       }
 
       private synchronized void setListener(ServerStreamListener listener) {

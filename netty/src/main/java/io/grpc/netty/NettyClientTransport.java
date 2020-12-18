@@ -41,6 +41,7 @@ import io.grpc.internal.Http2Ping;
 import io.grpc.internal.KeepAliveManager;
 import io.grpc.internal.KeepAliveManager.ClientKeepAlivePinger;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.StatsTraceContextImpl;
 import io.grpc.internal.TransportTracer;
 import io.grpc.netty.NettyChannelBuilder.LocalSocketPicker;
 import io.netty.bootstrap.Bootstrap;
@@ -189,7 +190,7 @@ class NettyClientTransport implements ConnectionClientTransport {
       return new FailingClientStream(statusExplainingWhyTheChannelIsNull);
     }
     StatsTraceContext statsTraceCtx =
-        StatsTraceContext.newClientContext(callOptions, getAttributes(), headers);
+        StatsTraceContextImpl.newClientContext(callOptions, getAttributes(), headers);
     return new NettyClientStream(
         new NettyClientStream.TransportState(
             handler,

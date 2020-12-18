@@ -57,6 +57,7 @@ import io.grpc.internal.KeepAliveManager.ClientKeepAlivePinger;
 import io.grpc.internal.SerializingExecutor;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.StatsTraceContextImpl;
 import io.grpc.internal.TransportTracer;
 import io.grpc.okhttp.ExceptionHandlingFrameWriter.TransportExceptionHandler;
 import io.grpc.okhttp.internal.ConnectionSpec;
@@ -392,7 +393,7 @@ class OkHttpClientTransport implements ConnectionClientTransport, TransportExcep
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
     StatsTraceContext statsTraceCtx =
-        StatsTraceContext.newClientContext(callOptions, attributes, headers);
+        StatsTraceContextImpl.newClientContext(callOptions, attributes, headers);
     // FIXME: it is likely wrong to pass the transportTracer here as it'll exit the lock's scope
     synchronized (lock) { // to make @GuardedBy linter happy
       return new OkHttpClientStream(

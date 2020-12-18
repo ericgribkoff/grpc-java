@@ -349,7 +349,7 @@ public class Http2ClientStreamTransportStateTest {
 
   private static class BaseTransportState extends Http2ClientStreamTransportState {
     public BaseTransportState(TransportTracer transportTracer) {
-      super(DEFAULT_MAX_MESSAGE_SIZE, StatsTraceContext.NOOP, transportTracer);
+      super(DEFAULT_MAX_MESSAGE_SIZE, StatsTraceContextImpl.NOOP, transportTracer);
     }
 
     @Override

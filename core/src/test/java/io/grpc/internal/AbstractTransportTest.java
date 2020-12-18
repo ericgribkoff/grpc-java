@@ -2152,12 +2152,13 @@ public abstract class AbstractTransportTest {
       ServerStreamListenerBase listener = new ServerStreamListenerBase();
       streams.add(new StreamCreation(stream, method, headers, listener));
       stream.setListener(listener);
+      // TODO: hrm
       stream
           .statsTraceContext()
           .setInterceptorStreamTracersAndFilterContext(
               Collections.<ServerStreamTracer>emptyList(), Context.ROOT.withCancellation());
-      if (stream.statsTraceContext().serverIsReadyListener != null) {
-        stream.statsTraceContext().serverIsReadyListener.serverIsReady();
+      if (((StatsTraceContextImpl) stream.statsTraceContext()).serverIsReadyListener != null) {
+        ((StatsTraceContextImpl) stream.statsTraceContext()).serverIsReadyListener.serverIsReady();
       }
     }
 

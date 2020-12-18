@@ -32,7 +32,7 @@ import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import io.grpc.InternalChannelz.TransportStats;
 import io.grpc.internal.FakeClock;
 import io.grpc.internal.MessageFramer;
-import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.StatsTraceContextImpl;
 import io.grpc.internal.TransportTracer;
 import io.grpc.internal.WritableBuffer;
 import io.netty.buffer.ByteBuf;
@@ -262,7 +262,7 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
           }
         },
         new NettyWritableBufferAllocator(ByteBufAllocator.DEFAULT),
-        StatsTraceContext.NOOP);
+        StatsTraceContextImpl.NOOP);
     framer.writePayload(new ByteArrayInputStream(content));
     framer.flush();
     ChannelHandlerContext ctx = newMockContext();
