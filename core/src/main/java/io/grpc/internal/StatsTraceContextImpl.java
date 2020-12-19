@@ -133,6 +133,11 @@ public class StatsTraceContextImpl implements StatsTraceContext {
     public void inboundWireSize(long bytes) {
       delegate.inboundWireSize(bytes);
     }
+
+    @Override
+    public void setServerIsReadyListener(ServerIsReadyListener listener) {
+      delegate.setServerIsReadyListener(listener);
+    }
   }
 
   private final StreamTracer[] tracers;
@@ -179,8 +184,8 @@ public class StatsTraceContextImpl implements StatsTraceContext {
     return new StatsTraceContextImpl(tracers, true);
   }
 
-  // TODO: don't put this here
-  public ServerIsReadyListener serverIsReadyListener;
+  // TODO: volatile?
+  private ServerIsReadyListener serverIsReadyListener;
   private volatile boolean interceptorTracersSet;
 
   /** TODO. */
@@ -198,6 +203,9 @@ public class StatsTraceContextImpl implements StatsTraceContext {
       useInterceptorTracers = true;
     }
     interceptorTracersSet = true;
+    if (serverIsReadyListener != null) {
+      serverIsReadyListener.serverIsReady();
+    }
     return context;
   }
 
@@ -297,9 +305,6 @@ public class StatsTraceContextImpl implements StatsTraceContext {
       for (StreamTracer tracer : interceptorTracers) {
         ((ServerStreamTracer) tracer).serverCallStarted(callInfo);
       }
-    }
-    if (serverIsReadyListener != null) {
-      serverIsReadyListener.serverIsReady();
     }
   }
 
@@ -460,5 +465,10 @@ public class StatsTraceContextImpl implements StatsTraceContext {
         tracer.inboundWireSize(bytes);
       }
     }
+  }
+
+  @Override
+  public void setServerIsReadyListener(ServerIsReadyListener listener) {
+    this.serverIsReadyListener = listener;
   }
 }

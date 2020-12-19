@@ -2157,9 +2157,6 @@ public abstract class AbstractTransportTest {
           .statsTraceContext()
           .setInterceptorStreamTracersAndFilterContext(
               Collections.<ServerStreamTracer>emptyList(), Context.ROOT.withCancellation());
-      if (((StatsTraceContextImpl) stream.statsTraceContext()).serverIsReadyListener != null) {
-        ((StatsTraceContextImpl) stream.statsTraceContext()).serverIsReadyListener.serverIsReady();
-      }
     }
 
     @Override

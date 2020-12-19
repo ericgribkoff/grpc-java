@@ -400,7 +400,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
     }
 
     private class InProcessServerStream implements ServerStream {
-      final StatsTraceContextImpl statsTraceCtx;
+      final StatsTraceContext statsTraceCtx;
 
       @GuardedBy("this")
       private ClientStreamListener clientStreamListener;
@@ -420,7 +420,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       @GuardedBy("this")
       private int outboundSeqNo;
 
-      private final class StatsListener implements StatsTraceContextImpl.ServerIsReadyListener {
+      private final class StatsListener implements StatsTraceContext.ServerIsReadyListener {
         private final ArrayList<Runnable> queuedStatsEvents = new ArrayList<Runnable>();
         private volatile boolean isReady;
 
@@ -451,7 +451,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
         statsTraceCtx =
             StatsTraceContextImpl.newServerContext(
                 serverStreamTracerFactories, method.getFullMethodName(), headers);
-        statsTraceCtx.serverIsReadyListener = listener;
+        statsTraceCtx.setServerIsReadyListener(listener);
       }
 
       private synchronized void setListener(ClientStreamListener listener) {
@@ -673,7 +673,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       }
 
       @Override
-      public StatsTraceContextImpl statsTraceContext() {
+      public StatsTraceContext statsTraceContext() {
         return statsTraceCtx;
       }
 

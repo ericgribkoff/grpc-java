@@ -22,6 +22,7 @@ import io.grpc.Metadata;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import io.grpc.StreamTracer;
+
 import java.util.List;
 
 /** The stats and tracing information for a stream. */
@@ -68,6 +69,8 @@ public interface StatsTraceContext {
   void inboundUncompressedSize(long bytes);
 
   void inboundWireSize(long bytes);
+
+  void setServerIsReadyListener(ServerIsReadyListener listener);
 
   public interface ServerIsReadyListener {
     void serverIsReady();
