@@ -69,7 +69,7 @@ public class MessageFramerTest {
   public void setUp() {
     // MessageDeframerTest tests with a client-side StatsTraceContext, so here we test with a
     // server-side StatsTraceContext.
-    statsTraceCtx = new StatsTraceContextImpl(new StreamTracer[] {tracer});
+    statsTraceCtx = new StatsTraceContext(new StreamTracer[] {tracer});
     framer = new MessageFramer(sink, allocator, statsTraceCtx);
   }
 

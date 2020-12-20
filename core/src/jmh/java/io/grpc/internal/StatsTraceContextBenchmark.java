@@ -31,7 +31,7 @@ import org.openjdk.jmh.annotations.OutputTimeUnit;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.State;
 
-/** Benchmark for {@link StatsTraceContextImpl}. */
+/** Benchmark for {@link StatsTraceContext}. */
 @State(Scope.Benchmark)
 public class StatsTraceContextBenchmark {
 
@@ -46,7 +46,7 @@ public class StatsTraceContextBenchmark {
   @BenchmarkMode(Mode.SampleTime)
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   public StatsTraceContext newClientContext() {
-    return StatsTraceContextImpl.newClientContext(
+    return StatsTraceContext.newClientContext(
         CallOptions.DEFAULT, Attributes.EMPTY, emptyMetadata);
   }
 
@@ -55,7 +55,7 @@ public class StatsTraceContextBenchmark {
   @BenchmarkMode(Mode.SampleTime)
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   public StatsTraceContext newServerContext_empty() {
-    return StatsTraceContextImpl.newServerContext(
+    return StatsTraceContext.newServerContext(
         serverStreamTracerFactories, methodName, emptyMetadata);
   }
 }

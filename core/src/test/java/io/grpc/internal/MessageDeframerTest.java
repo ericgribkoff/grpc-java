@@ -93,7 +93,7 @@ public class MessageDeframerTest {
     private Listener listener = mock(Listener.class);
     private TestBaseStreamTracer tracer = new TestBaseStreamTracer();
     private StatsTraceContext statsTraceCtx =
-        new StatsTraceContextImpl(new StreamTracer[] {tracer});
+        new StatsTraceContext(new StreamTracer[] {tracer});
     private TransportTracer transportTracer =
         new TransportTracer.Factory(fakeClock.getTimeProvider()).create();
 
@@ -344,7 +344,7 @@ public class MessageDeframerTest {
 
     private TestBaseStreamTracer tracer = new TestBaseStreamTracer();
     private StatsTraceContext statsTraceCtx =
-        new StatsTraceContextImpl(new StreamTracer[] {tracer});
+        new StatsTraceContext(new StreamTracer[] {tracer});
 
     @Test
     public void sizeEnforcingInputStream_readByteBelowLimit() throws IOException {

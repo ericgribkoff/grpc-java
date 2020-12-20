@@ -55,7 +55,6 @@ import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.StatsTraceContext;
-import io.grpc.internal.StatsTraceContextImpl;
 import io.grpc.internal.StreamListener;
 import java.io.InputStream;
 import java.util.ArrayDeque;
@@ -206,7 +205,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       final MethodDescriptor<?, ?> method, final Metadata headers, final CallOptions callOptions) {
     if (shutdownStatus != null) {
       return failedClientStream(
-          StatsTraceContextImpl.newClientContext(callOptions, attributes, headers), shutdownStatus);
+          StatsTraceContext.newClientContext(callOptions, attributes, headers), shutdownStatus);
     }
 
     headers.put(GrpcUtil.USER_AGENT_KEY, userAgent);
@@ -225,7 +224,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
                     "Request metadata larger than %d: %d",
                     serverMaxInboundMetadataSize, metadataSize));
         return failedClientStream(
-            StatsTraceContextImpl.newClientContext(callOptions, attributes, headers), status);
+            StatsTraceContext.newClientContext(callOptions, attributes, headers), status);
       }
     }
 
@@ -449,7 +448,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
 
       InProcessServerStream(MethodDescriptor<?, ?> method, Metadata headers) {
         statsTraceCtx =
-            StatsTraceContextImpl.newServerContext(
+            StatsTraceContext.newServerContext(
                 serverStreamTracerFactories, method.getFullMethodName(), headers);
         statsTraceCtx.setServerIsReadyListener(listener);
       }
@@ -703,7 +702,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
 
       InProcessClientStream(CallOptions callOptions, Metadata headers) {
         this.callOptions = callOptions;
-        statsTraceCtx = StatsTraceContextImpl.newClientContext(callOptions, attributes, headers);
+        statsTraceCtx = StatsTraceContext.newClientContext(callOptions, attributes, headers);
       }
 
       private synchronized void setListener(ServerStreamListener listener) {

@@ -80,7 +80,7 @@ public class AbstractClientStreamTest {
   @Rule
   public final ExpectedException thrown = ExpectedException.none();
 
-  private final StatsTraceContext statsTraceCtx = StatsTraceContextImpl.NOOP;
+  private final StatsTraceContext statsTraceCtx = StatsTraceContext.NOOP;
   private final TransportTracer transportTracer = new TransportTracer();
   private static final SocketAddress SERVER_ADDR =
       new SocketAddress() {
@@ -409,7 +409,7 @@ public class AbstractClientStreamTest {
   public void getRequest() {
     AbstractClientStream.Sink sink = mock(AbstractClientStream.Sink.class);
     final TestClientStreamTracer tracer = new TestClientStreamTracer();
-    StatsTraceContext statsTraceCtx = new StatsTraceContextImpl(new StreamTracer[] {tracer});
+    StatsTraceContext statsTraceCtx = new StatsTraceContext(new StreamTracer[] {tracer});
     AbstractClientStream stream =
         new BaseAbstractClientStream(
             allocator,
@@ -442,7 +442,7 @@ public class AbstractClientStreamTest {
   public void writeMessage_closesStream() throws IOException {
     AbstractClientStream.Sink sink = mock(AbstractClientStream.Sink.class);
     final TestClientStreamTracer tracer = new TestClientStreamTracer();
-    StatsTraceContext statsTraceCtx = new StatsTraceContextImpl(new StreamTracer[] {tracer});
+    StatsTraceContext statsTraceCtx = new StatsTraceContext(new StreamTracer[] {tracer});
     AbstractClientStream stream =
         new BaseAbstractClientStream(
             allocator,

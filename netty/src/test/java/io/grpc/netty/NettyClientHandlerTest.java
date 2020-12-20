@@ -63,7 +63,7 @@ import io.grpc.internal.ClientTransport.PingCallback;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.KeepAliveManager;
 import io.grpc.internal.ManagedClientTransport;
-import io.grpc.internal.StatsTraceContextImpl;
+import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.StreamListener;
 import io.grpc.internal.TransportTracer;
 import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2ClientHeadersDecoder;
@@ -921,7 +921,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
           handler,
           eventLoop,
           maxMessageSize,
-          StatsTraceContextImpl.NOOP,
+          StatsTraceContext.NOOP,
           transportTracer,
           "methodName");
     }

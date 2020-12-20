@@ -462,7 +462,7 @@ public class ServerImplTest {
     transportListener.transportReady(Attributes.EMPTY);
     Metadata requestHeaders = new Metadata();
     StatsTraceContext statsTraceCtx =
-        StatsTraceContextImpl.newServerContext(
+        StatsTraceContext.newServerContext(
             streamTracerFactories, "Waiter/nonexist", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
     transportListener.streamCreated(stream, "Waiter/nonexist", requestHeaders);
@@ -490,7 +490,7 @@ public class ServerImplTest {
     Metadata requestHeaders = new Metadata();
     requestHeaders.put(MESSAGE_ENCODING_KEY, decompressorName);
     StatsTraceContext statsTraceCtx =
-        StatsTraceContextImpl.newServerContext(
+        StatsTraceContext.newServerContext(
             streamTracerFactories, "Waiter/nonexist", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
 
@@ -547,7 +547,7 @@ public class ServerImplTest {
     Metadata requestHeaders = new Metadata();
     requestHeaders.put(metadataKey, "value");
     StatsTraceContext statsTraceCtx =
-        StatsTraceContextImpl.newServerContext(
+        StatsTraceContext.newServerContext(
             streamTracerFactories, "Waiter/serve", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
 
@@ -755,7 +755,7 @@ public class ServerImplTest {
 
     Metadata requestHeaders = new Metadata();
     StatsTraceContext statsTraceCtx =
-        StatsTraceContextImpl.newServerContext(
+        StatsTraceContext.newServerContext(
             streamTracerFactories, "Waiter/serve", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
 
@@ -801,7 +801,7 @@ public class ServerImplTest {
 
     Metadata requestHeaders = new Metadata();
     StatsTraceContext statsTraceCtx =
-        StatsTraceContextImpl.newServerContext(
+        StatsTraceContext.newServerContext(
             streamTracerFactories, "Waiter/serve", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
 
@@ -965,7 +965,7 @@ public class ServerImplTest {
 
     Metadata requestHeaders = new Metadata();
     StatsTraceContext statsTraceCtx =
-        StatsTraceContextImpl.newServerContext(
+        StatsTraceContext.newServerContext(
             streamTracerFactories, "Waitier/serve", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
 
@@ -1035,7 +1035,7 @@ public class ServerImplTest {
       requestHeaders.put(TIMEOUT_KEY, timeoutNanos);
     }
     StatsTraceContext statsTraceCtx =
-        StatsTraceContextImpl.newServerContext(
+        StatsTraceContext.newServerContext(
             streamTracerFactories, "Waitier/serve", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
     transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
@@ -1180,7 +1180,7 @@ public class ServerImplTest {
     transportListener.transportReady(Attributes.EMPTY);
     Metadata requestHeaders = new Metadata();
     StatsTraceContext statsTraceCtx =
-        StatsTraceContextImpl.newServerContext(
+        StatsTraceContext.newServerContext(
             streamTracerFactories, "Waiter/serve", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx); //, statsTraceCtx2);
 

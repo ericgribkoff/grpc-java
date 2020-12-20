@@ -35,7 +35,7 @@ import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.NoopClientStreamListener;
-import io.grpc.internal.StatsTraceContextImpl;
+import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.TransportTracer;
 import io.grpc.okhttp.internal.framed.ErrorCode;
 import io.grpc.okhttp.internal.framed.FrameWriter;
@@ -98,7 +98,7 @@ public class OkHttpClientStreamTest {
             INITIAL_WINDOW_SIZE,
             "localhost",
             "userAgent",
-            StatsTraceContextImpl.NOOP,
+            StatsTraceContext.NOOP,
             transportTracer,
             CallOptions.DEFAULT,
             false);
@@ -173,7 +173,7 @@ public class OkHttpClientStreamTest {
             INITIAL_WINDOW_SIZE,
             "localhost",
             "good-application",
-            StatsTraceContextImpl.NOOP,
+            StatsTraceContext.NOOP,
             transportTracer,
             CallOptions.DEFAULT,
             false);
@@ -203,7 +203,7 @@ public class OkHttpClientStreamTest {
             INITIAL_WINDOW_SIZE,
             "localhost",
             "good-application",
-            StatsTraceContextImpl.NOOP,
+            StatsTraceContext.NOOP,
             transportTracer,
             CallOptions.DEFAULT,
             false);
@@ -241,7 +241,7 @@ public class OkHttpClientStreamTest {
             INITIAL_WINDOW_SIZE,
             "localhost",
             "good-application",
-            StatsTraceContextImpl.NOOP,
+            StatsTraceContext.NOOP,
             transportTracer,
             CallOptions.DEFAULT,
             false);
@@ -285,7 +285,7 @@ public class OkHttpClientStreamTest {
             INITIAL_WINDOW_SIZE,
             "localhost",
             "good-application",
-            StatsTraceContextImpl.NOOP,
+            StatsTraceContext.NOOP,
             transportTracer,
             CallOptions.DEFAULT,
             true);

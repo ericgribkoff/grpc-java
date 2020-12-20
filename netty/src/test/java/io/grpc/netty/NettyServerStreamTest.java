@@ -39,7 +39,6 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.StatsTraceContext;
-import io.grpc.internal.StatsTraceContextImpl;
 import io.grpc.internal.StreamListener;
 import io.grpc.internal.TransportTracer;
 import io.netty.buffer.EmptyByteBuf;
@@ -284,7 +283,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
   @Override
   protected NettyServerStream createStream() {
     when(handler.getWriteQueue()).thenReturn(writeQueue);
-    StatsTraceContext statsTraceCtx = StatsTraceContextImpl.NOOP;
+    StatsTraceContext statsTraceCtx = StatsTraceContext.NOOP;
     TransportTracer transportTracer = new TransportTracer();
     NettyServerStream.TransportState state =
         new NettyServerStream.TransportState(
