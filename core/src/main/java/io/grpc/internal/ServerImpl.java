@@ -795,7 +795,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     private ServerStreamListener listener;
 
     public JumpToApplicationThreadServerStreamListener(Executor executor,
-       Executor cancelExecutor, ServerStream stream, Context.CancellableContext context, Tag tag) {
+          Executor cancelExecutor, ServerStream stream, Context.CancellableContext context, Tag tag) {
       this.callExecutor = executor;
       this.cancelExecutor = cancelExecutor;
       this.stream = stream;
