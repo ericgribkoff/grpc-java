@@ -874,6 +874,7 @@ public abstract class AbstractTransportTest {
       assertThat(clientStreamTracer1.getOutboundWireSize()).isEqualTo(0L);
       assertThat(clientStreamTracer1.getOutboundUncompressedSize()).isEqualTo(0L);
     }
+    serverStream.statsTraceContext().serverCallStarted(serverStreamTracer1.getServerCallInfo());
     assertThat(serverStreamTracer1.nextInboundEvent()).isEqualTo("inboundMessage(0)");
     assertNull("no additional message expected", serverStreamListener.messageQueue.poll());
 
@@ -2152,11 +2153,6 @@ public abstract class AbstractTransportTest {
       ServerStreamListenerBase listener = new ServerStreamListenerBase();
       streams.add(new StreamCreation(stream, method, headers, listener));
       stream.setListener(listener);
-      // TODO: hrm
-      stream
-          .statsTraceContext()
-          .setInterceptorStreamTracersAndFilterContext(
-              Collections.<ServerStreamTracer>emptyList(), Context.ROOT.withCancellation());
     }
 
     @Override

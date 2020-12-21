@@ -103,9 +103,6 @@ public class StatsTraceContext {
       }
       interceptorTracers = tracerArr;
     }
-    if (serverIsReadyListener != null) {
-      serverIsReadyListener.serverIsReady();
-    }
     return context;
   }
 
@@ -186,6 +183,9 @@ public class StatsTraceContext {
     }
     for (StreamTracer tracer : interceptorTracers) {
       ((ServerStreamTracer) tracer).serverCallStarted(callInfo);
+    }
+    if (serverIsReadyListener != null) {
+      serverIsReadyListener.serverIsReady();
     }
   }
 

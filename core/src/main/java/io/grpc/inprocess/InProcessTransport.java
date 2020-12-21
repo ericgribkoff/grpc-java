@@ -426,8 +426,8 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
           synchronized (this) {
             for (Runnable queuedEvent : queuedStatsEvents) {
               queuedEvent.run();
-              // TODO: drain/delete
             }
+            queuedStatsEvents.clear();
             isReady = true;
           }
         }
@@ -821,8 +821,6 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
             }
           }
         }
-        // TODO: also needs to be queued - can be invoked prior to
-        //  server-side call start in cancelAfterBegin
         serverStream.statsTraceCtx.streamClosed(serverTracerStatus);
         serverStreamListener.closed(serverListenerStatus);
         return true;
