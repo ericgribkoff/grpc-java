@@ -34,7 +34,9 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.annotation.concurrent.ThreadSafe;
 
-/** The stats and tracing information for a stream. */
+/**
+ * The stats and tracing information for a stream.
+ */
 @ThreadSafe
 public class StatsTraceContext {
   /** Allows callers to buffer stats and tracing event reporting until the call has begun. */
@@ -49,7 +51,9 @@ public class StatsTraceContext {
   private volatile StreamTracer[] interceptorTracers = new StreamTracer[0];
   private final ServerCallStartedListener serverIsReadyListener;
 
-  /** Factory method for the client-side. */
+  /**
+   * Factory method for the client-side.
+   */
   public static StatsTraceContext newClientContext(
       final CallOptions callOptions, final Attributes transportAttrs, Metadata headers) {
     List<ClientStreamTracer.Factory> factories = callOptions.getStreamTracerFactories();
@@ -68,7 +72,9 @@ public class StatsTraceContext {
     return new StatsTraceContext(tracers);
   }
 
-  /** Factory method for the server-side. */
+  /**
+   * Factory method for the server-side.
+   */
   public static StatsTraceContext newServerContext(
       List<? extends ServerStreamTracer.Factory> factories,
       String fullMethodName,
@@ -125,7 +131,9 @@ public class StatsTraceContext {
     this.serverIsReadyListener = listener;
   }
 
-  /** Returns a copy of the tracer list. */
+  /**
+   * Returns a copy of the tracer list.
+   */
   @VisibleForTesting
   public List<StreamTracer> getTracersForTest() {
     return new ArrayList<>(Arrays.asList(tracers));

@@ -18,7 +18,12 @@ package io.grpc;
 
 import javax.annotation.concurrent.ThreadSafe;
 
-/** TODO. */
+/**
+ * Interface for intercepting server calls by modifying the {@link ServerMethodDefinition} during
+ * call dispatch. This provides a superset of the functionality offered by {@link
+ * ServerInterceptor}.
+ */
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/????")
 @ThreadSafe
 public interface ServerInterceptor2 {
   /**

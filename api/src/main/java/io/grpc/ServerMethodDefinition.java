@@ -29,8 +29,8 @@ public final class ServerMethodDefinition<ReqT, RespT> {
   private final ServerCallHandler<ReqT, RespT> handler;
   private final List<ServerStreamTracer.Factory> streamTracerFactories;
 
-  private ServerMethodDefinition(
-      MethodDescriptor<ReqT, RespT> method, ServerCallHandler<ReqT, RespT> handler) {
+  private ServerMethodDefinition(MethodDescriptor<ReqT, RespT> method,
+       ServerCallHandler<ReqT, RespT> handler) {
     this.method = method;
     this.handler = handler;
     this.streamTracerFactories = new ArrayList<>();
@@ -70,11 +70,12 @@ public final class ServerMethodDefinition<ReqT, RespT> {
     return new ServerMethodDefinition<>(method, handler);
   }
 
-  // To do - maintain immutability
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/????")
   public void addStreamTracer(ServerStreamTracer.Factory factory) {
     streamTracerFactories.add(factory);
   }
 
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/????")
   public List<? extends ServerStreamTracer.Factory> getStreamTracerFactories() {
     return streamTracerFactories;
   }

@@ -547,8 +547,7 @@ public class ServerImplTest {
     Metadata requestHeaders = new Metadata();
     requestHeaders.put(metadataKey, "value");
     StatsTraceContext statsTraceCtx =
-        StatsTraceContext.newServerContext(
-            streamTracerFactories, "Waiter/serve", requestHeaders);
+        StatsTraceContext.newServerContext(streamTracerFactories, "Waiter/serve", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
 
     transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
@@ -755,8 +754,7 @@ public class ServerImplTest {
 
     Metadata requestHeaders = new Metadata();
     StatsTraceContext statsTraceCtx =
-        StatsTraceContext.newServerContext(
-            streamTracerFactories, "Waiter/serve", requestHeaders);
+        StatsTraceContext.newServerContext(streamTracerFactories, "Waiter/serve", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
 
     transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
@@ -801,8 +799,7 @@ public class ServerImplTest {
 
     Metadata requestHeaders = new Metadata();
     StatsTraceContext statsTraceCtx =
-        StatsTraceContext.newServerContext(
-            streamTracerFactories, "Waiter/serve", requestHeaders);
+        StatsTraceContext.newServerContext(streamTracerFactories, "Waiter/serve", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
 
     transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
@@ -965,8 +962,7 @@ public class ServerImplTest {
 
     Metadata requestHeaders = new Metadata();
     StatsTraceContext statsTraceCtx =
-        StatsTraceContext.newServerContext(
-            streamTracerFactories, "Waitier/serve", requestHeaders);
+        StatsTraceContext.newServerContext(streamTracerFactories, "Waitier/serve", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
 
     transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
@@ -1035,13 +1031,13 @@ public class ServerImplTest {
       requestHeaders.put(TIMEOUT_KEY, timeoutNanos);
     }
     StatsTraceContext statsTraceCtx =
-        StatsTraceContext.newServerContext(
-            streamTracerFactories, "Waitier/serve", requestHeaders);
+        StatsTraceContext.newServerContext(streamTracerFactories, "Waitier/serve", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
     transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
     verify(stream).setListener(streamListenerCaptor.capture());
     ServerStreamListener streamListener = streamListenerCaptor.getValue();
     assertNotNull(streamListener);
+
     streamListener.onReady();
     assertEquals(1, executor.runDueTasks());
     return streamListener;
@@ -1180,16 +1176,14 @@ public class ServerImplTest {
     transportListener.transportReady(Attributes.EMPTY);
     Metadata requestHeaders = new Metadata();
     StatsTraceContext statsTraceCtx =
-        StatsTraceContext.newServerContext(
-            streamTracerFactories, "Waiter/serve", requestHeaders);
-    when(stream.statsTraceContext()).thenReturn(statsTraceCtx); //, statsTraceCtx2);
+        StatsTraceContext.newServerContext(streamTracerFactories, "Waiter/serve", requestHeaders);
+    when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
 
     // This call will be handled by callHandler from the internal registry
     transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
     assertEquals(1, executor.runDueTasks());
-    verify(callHandler)
-        .startCall(
-            ArgumentMatchers.<ServerCall<String, Integer>>any(), ArgumentMatchers.<Metadata>any());
+    verify(callHandler).startCall(ArgumentMatchers.<ServerCall<String, Integer>>any(),
+        ArgumentMatchers.<Metadata>any());
     // This call will be handled by the fallbackRegistry because it's not registred in the internal
     // registry.
     transportListener.streamCreated(stream, "Service1/Method2", requestHeaders);
@@ -1213,8 +1207,7 @@ public class ServerImplTest {
     listener.setListener(mockListener, Context.ROOT.withCancellation());
 
     TestError expectedT = new TestError();
-    doThrow(expectedT)
-        .when(mockListener)
+    doThrow(expectedT).when(mockListener)
         .messagesAvailable(any(StreamListener.MessageProducer.class));
     // Closing the InputStream is done by the delegated listener (generally ServerCallImpl)
     listener.messagesAvailable(mock(StreamListener.MessageProducer.class));
@@ -1240,8 +1233,7 @@ public class ServerImplTest {
     listener.setListener(mockListener, Context.ROOT.withCancellation());
 
     RuntimeException expectedT = new RuntimeException();
-    doThrow(expectedT)
-        .when(mockListener)
+    doThrow(expectedT).when(mockListener)
         .messagesAvailable(any(StreamListener.MessageProducer.class));
     // Closing the InputStream is done by the delegated listener (generally ServerCallImpl)
     listener.messagesAvailable(mock(StreamListener.MessageProducer.class));
