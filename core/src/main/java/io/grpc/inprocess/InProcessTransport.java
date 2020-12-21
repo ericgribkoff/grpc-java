@@ -417,7 +417,8 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       @GuardedBy("this")
       private int outboundSeqNo;
 
-      private final class ServerCallStartedListener implements StatsTraceContext.ServerCallStartedListener {
+      private final class CallStartedListener
+          implements StatsTraceContext.ServerCallStartedListener {
         private final ArrayList<Runnable> queuedStatsEvents = new ArrayList<Runnable>();
         private boolean isReady;
 
@@ -443,15 +444,19 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
         }
       }
 
-      private final ServerCallStartedListener serverCallStartedListener = new ServerCallStartedListener();
+      private final CallStartedListener serverCallStartedListener = new CallStartedListener();
 
       InProcessServerStream(MethodDescriptor<?, ?> method, Metadata headers) {
         statsTraceCtx =
             StatsTraceContext.newServerContext(
-                serverStreamTracerFactories, method.getFullMethodName(), headers, serverCallStartedListener);
+                serverStreamTracerFactories,
+                method.getFullMethodName(),
+                headers,
+                serverCallStartedListener);
       }
 
-      private synchronized void setListener(ClientStreamListener statsTraceCtxServerCallStartedListener) {
+      private synchronized void setListener(
+          ClientStreamListener statsTraceCtxServerCallStartedListener) {
         clientStreamListener = statsTraceCtxServerCallStartedListener;
       }
 

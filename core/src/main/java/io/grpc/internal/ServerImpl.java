@@ -153,7 +153,8 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     this.rootContext = Preconditions.checkNotNull(rootContext, "rootContext").fork();
     this.decompressorRegistry = builder.decompressorRegistry;
     this.compressorRegistry = builder.compressorRegistry;
-    this.transportFilters = Collections.unmodifiableList(new ArrayList<>(builder.transportFilters));
+    this.transportFilters = Collections.unmodifiableList(
+        new ArrayList<>(builder.transportFilters));
     this.interceptors =
         builder.interceptors.toArray(new ServerInterceptor[builder.interceptors.size()]);
     this.interceptors2 =
@@ -507,7 +508,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       }
 
       final StatsTraceContext statsTraceCtx = Preconditions.checkNotNull(
-              stream.statsTraceContext(), "statsTraceCtx not present from stream");
+          stream.statsTraceContext(), "statsTraceCtx not present from stream");
 
       final Context.CancellableContext context = createContext(headers, statsTraceCtx);
 
@@ -545,7 +546,6 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
             if (method == null) {
               method = fallbackRegistry.lookupMethod(methodName, stream.getAuthority());
             }
-
             if (method == null) {
               Status status = Status.UNIMPLEMENTED.withDescription(
                   "Method not found: " + methodName);
@@ -653,14 +653,9 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     }
 
     /** Never returns {@code null}. */
-    private <ReqT, RespT> ServerStreamListener startCall(
-        ServerStream stream,
-        String fullMethodName,
-        ServerMethodDefinition<ReqT, RespT> methodDef,
-        Metadata headers,
-        Context.CancellableContext context,
-        StatsTraceContext statsTraceCtx,
-        Tag tag) {
+    private <ReqT, RespT> ServerStreamListener startCall(ServerStream stream, String fullMethodName,
+        ServerMethodDefinition<ReqT, RespT> methodDef, Metadata headers,
+        Context.CancellableContext context, StatsTraceContext statsTraceCtx, Tag tag) {
       // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
       statsTraceCtx.serverCallStarted(
           new ServerCallInfoImpl<>(
