@@ -37,9 +37,9 @@ import javax.annotation.concurrent.ThreadSafe;
 /** The stats and tracing information for a stream. */
 @ThreadSafe
 public class StatsTraceContext {
-  // TODO: rename
-  public interface ServerIsReadyListener {
-    void serverIsReady();
+  /** Allows callers to buffer stats and tracing event reporting until the call has begun. */
+  public interface ServerCallStartedListener {
+    void serverCallStarted();
   }
 
   public static final StatsTraceContext NOOP = new StatsTraceContext(new StreamTracer[0]);
@@ -47,7 +47,7 @@ public class StatsTraceContext {
   private final StreamTracer[] tracers;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private volatile StreamTracer[] interceptorTracers = new StreamTracer[0];
-  private final ServerIsReadyListener serverIsReadyListener;
+  private final ServerCallStartedListener serverIsReadyListener;
 
   /** Factory method for the client-side. */
   public static StatsTraceContext newClientContext(
@@ -76,12 +76,12 @@ public class StatsTraceContext {
     return newServerContext(factories, fullMethodName, headers, null);
   }
 
-  /** Factory method for the server-side that accepts a listener. */
+  /** Factory method for the server-side that accepts a {@link ServerCallStartedListener}. */
   public static StatsTraceContext newServerContext(
       List<? extends ServerStreamTracer.Factory> factories,
       String fullMethodName,
       Metadata headers,
-      ServerIsReadyListener listener) {
+      ServerCallStartedListener listener) {
     StreamTracer[] tracers = new StreamTracer[factories.size()];
     for (int i = 0; i < tracers.length; i++) {
       tracers[i] = factories.get(i).newServerStreamTracer(fullMethodName, headers);
@@ -89,13 +89,24 @@ public class StatsTraceContext {
     return new StatsTraceContext(tracers, listener);
   }
 
-  /** TODO. */
-  public Context.CancellableContext setInterceptorStreamTracersAndFilterContext(
-      List<ServerStreamTracer> newTracers, Context.CancellableContext context) {
-    if (!newTracers.isEmpty()) {
-      StreamTracer[] tracerArr = new StreamTracer[newTracers.size()];
+  /**
+   * Add stream tracers from server interceptors. These are not available until after the call has
+   * begun, so if a call terminates early these tracers may never be invoked. Expected usage is
+   * that only {@link #serverFilterContext}, and potentially {@link #streamClosed}, will be called
+   * prior to this method, but it is up to the caller to enforce this ordering.
+   *
+   * <p>The newly added tracers will have their {@link ServerStreamTracer#filterContext} methods
+   * applied to the returned {@code Context}.
+   */
+  public Context.CancellableContext setServerInterceptorTracersAndFilterContext(
+      List<? extends ServerStreamTracer.Factory> factories,
+      String fullMethodName,
+      Metadata headers,
+      Context.CancellableContext context) {
+    if (!factories.isEmpty()) {
+      StreamTracer[] tracerArr = new StreamTracer[factories.size()];
       for (int i = 0; i < tracerArr.length; i++) {
-        ServerStreamTracer tracer = newTracers.get(i);
+        ServerStreamTracer tracer = factories.get(i).newServerStreamTracer(fullMethodName, headers);
         context = tracer.filterContext(context).withCancellation();
         tracerArr[i] = tracer;
       }
@@ -109,7 +120,7 @@ public class StatsTraceContext {
     this(tracers, null);
   }
 
-  StatsTraceContext(StreamTracer[] tracers, ServerIsReadyListener listener) {
+  StatsTraceContext(StreamTracer[] tracers, ServerCallStartedListener listener) {
     this.tracers = tracers;
     this.serverIsReadyListener = listener;
   }
@@ -180,7 +191,7 @@ public class StatsTraceContext {
       ((ServerStreamTracer) tracer).serverCallStarted(callInfo);
     }
     if (serverIsReadyListener != null) {
-      serverIsReadyListener.serverIsReady();
+      serverIsReadyListener.serverCallStarted();
     }
   }
 
@@ -224,9 +235,6 @@ public class StatsTraceContext {
     for (StreamTracer tracer : tracers) {
       tracer.inboundMessage(seqNo);
     }
-    //    if (!interceptorTracersSet && isServer) {
-    //      throw new RuntimeException("not ready!");
-    //    }
     for (StreamTracer tracer : interceptorTracers) {
       tracer.inboundMessage(seqNo);
     }

@@ -417,12 +417,12 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       @GuardedBy("this")
       private int outboundSeqNo;
 
-      private final class StatsListener implements StatsTraceContext.ServerIsReadyListener {
+      private final class StatsListener implements StatsTraceContext.ServerCallStartedListener {
         private final ArrayList<Runnable> queuedStatsEvents = new ArrayList<Runnable>();
-        private volatile boolean isReady;
+        private boolean isReady;
 
         @Override
-        public void serverIsReady() {
+        public void serverCallStarted() {
           synchronized (this) {
             for (Runnable queuedEvent : queuedStatsEvents) {
               queuedEvent.run();

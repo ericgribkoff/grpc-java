@@ -50,7 +50,6 @@ import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptor2;
 import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
-import io.grpc.ServerStreamTracer;
 import io.grpc.ServerTransportFilter;
 import io.grpc.Status;
 import io.perfmark.Link;
@@ -560,10 +559,12 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
               return;
             }
             ServerMethodDefinition interceptedDef = getInterceptedMethodDef(method);
-            List<ServerStreamTracer> tracers =
-                getInterceptorTracers(interceptedDef, methodName, headers);
             listenerContext =
-                statsTraceCtx.setInterceptorStreamTracersAndFilterContext(tracers, context);
+                statsTraceCtx.setServerInterceptorTracersAndFilterContext(
+                    interceptedDef.getStreamTracerFactories(),
+                    methodName,
+                    headers,
+                    context);
             listener =
                 startCall(
                     stream,
@@ -572,8 +573,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
                     headers,
                     listenerContext,
                     statsTraceCtx,
-                    tag,
-                    jumpListener);
+                    tag);
           } catch (Throwable t) {
             stream.close(Status.fromThrowable(t), new Metadata());
             context.cancel(null);
@@ -628,16 +628,14 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     private <ReqT, RespT> ServerMethodDefinition getInterceptedMethodDef(
         ServerMethodDefinition<ReqT, RespT> methodDef) {
       // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
-      // Update context here with methodDef.streamTracerFactories
-      // Updates statsTraceCtx here - interceptor
-      // Move this into #startCall
       ServerMethodDefinition<ReqT, RespT> interceptedDef = methodDef;
       for (final ServerInterceptor interceptor : interceptors) {
         if (interceptor instanceof ServerInterceptor2) {
+          // TODO: use interceptors2
           interceptedDef =
               ((ServerInterceptor2) interceptor).interceptMethodDefinition(interceptedDef);
         } else {
-          // Converter
+          // TODO: inefficient
           ServerInterceptor2 converter =
               new ServerInterceptor2() {
                 @Override
@@ -654,15 +652,6 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       return interceptedDef;
     }
 
-    private <ReqT, RespT> List<ServerStreamTracer> getInterceptorTracers(
-        ServerMethodDefinition<ReqT, RespT> methodDef, String fullMethodName, Metadata headers) {
-      ArrayList<ServerStreamTracer> tracers = new ArrayList<ServerStreamTracer>();
-      for (ServerStreamTracer.Factory factory : methodDef.getStreamTracerFactories()) {
-        tracers.add(factory.newServerStreamTracer(fullMethodName, headers));
-      }
-      return tracers;
-    }
-
     /** Never returns {@code null}. */
     private <ReqT, RespT> ServerStreamListener startCall(
         ServerStream stream,
@@ -671,14 +660,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
         Metadata headers,
         Context.CancellableContext context,
         StatsTraceContext statsTraceCtx,
-        Tag tag,
-        JumpToApplicationThreadServerStreamListener jumpListener) {
-      ////      // TODO: remove :-)
-      //      try {
-      //        Thread.sleep(150);
-      //      } catch (InterruptedException e) {
-      //        e.printStackTrace();
-      //      }
+        Tag tag) {
       // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
       statsTraceCtx.serverCallStarted(
           new ServerCallInfoImpl<>(
