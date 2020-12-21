@@ -80,7 +80,7 @@ public class AbstractClientStreamTest {
   @Rule
   public final ExpectedException thrown = ExpectedException.none();
 
-  private final StatsTraceContext statsTraceCtx = StatsTraceContext.NOOP;
+  private final StatsTraceContext statsTraceCtx = StatsTraceContext.CLIENT_NOOP;
   private final TransportTracer transportTracer = new TransportTracer();
   private static final SocketAddress SERVER_ADDR =
       new SocketAddress() {

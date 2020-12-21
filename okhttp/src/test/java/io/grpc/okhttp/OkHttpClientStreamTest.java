@@ -98,7 +98,7 @@ public class OkHttpClientStreamTest {
             INITIAL_WINDOW_SIZE,
             "localhost",
             "userAgent",
-            StatsTraceContext.NOOP,
+            StatsTraceContext.CLIENT_NOOP,
             transportTracer,
             CallOptions.DEFAULT,
             false);
@@ -173,7 +173,7 @@ public class OkHttpClientStreamTest {
             INITIAL_WINDOW_SIZE,
             "localhost",
             "good-application",
-            StatsTraceContext.NOOP,
+            StatsTraceContext.CLIENT_NOOP,
             transportTracer,
             CallOptions.DEFAULT,
             false);
@@ -203,7 +203,7 @@ public class OkHttpClientStreamTest {
             INITIAL_WINDOW_SIZE,
             "localhost",
             "good-application",
-            StatsTraceContext.NOOP,
+            StatsTraceContext.CLIENT_NOOP,
             transportTracer,
             CallOptions.DEFAULT,
             false);
@@ -241,7 +241,7 @@ public class OkHttpClientStreamTest {
             INITIAL_WINDOW_SIZE,
             "localhost",
             "good-application",
-            StatsTraceContext.NOOP,
+            StatsTraceContext.CLIENT_NOOP,
             transportTracer,
             CallOptions.DEFAULT,
             false);
@@ -285,7 +285,7 @@ public class OkHttpClientStreamTest {
             INITIAL_WINDOW_SIZE,
             "localhost",
             "good-application",
-            StatsTraceContext.NOOP,
+            StatsTraceContext.CLIENT_NOOP,
             transportTracer,
             CallOptions.DEFAULT,
             true);

@@ -283,7 +283,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
   @Override
   protected NettyServerStream createStream() {
     when(handler.getWriteQueue()).thenReturn(writeQueue);
-    StatsTraceContext statsTraceCtx = StatsTraceContext.NOOP;
+    StatsTraceContext statsTraceCtx = StatsTraceContext.CLIENT_NOOP;
     TransportTracer transportTracer = new TransportTracer();
     NettyServerStream.TransportState state =
         new NettyServerStream.TransportState(

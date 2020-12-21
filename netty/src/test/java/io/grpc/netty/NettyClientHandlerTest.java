@@ -921,7 +921,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
           handler,
           eventLoop,
           maxMessageSize,
-          StatsTraceContext.NOOP,
+          StatsTraceContext.CLIENT_NOOP,
           transportTracer,
           "methodName");
     }

@@ -363,7 +363,7 @@ public class AbstractServerStreamTest {
         WritableBufferAllocator bufferAllocator,
         Sink sink,
         AbstractServerStream.TransportState state) {
-      super(bufferAllocator, StatsTraceContext.NOOP);
+      super(bufferAllocator, StatsTraceContext.CLIENT_NOOP);
       this.sink = sink;
       this.state = state;
     }
@@ -380,7 +380,7 @@ public class AbstractServerStreamTest {
 
     static class TransportState extends AbstractServerStream.TransportState {
       protected TransportState(int maxMessageSize, TransportTracer transportTracer) {
-        super(maxMessageSize, StatsTraceContext.NOOP, transportTracer);
+        super(maxMessageSize, StatsTraceContext.CLIENT_NOOP, transportTracer);
       }
 
       @Override
