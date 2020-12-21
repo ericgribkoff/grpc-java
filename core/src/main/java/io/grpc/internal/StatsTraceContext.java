@@ -38,7 +38,7 @@ import javax.annotation.concurrent.ThreadSafe;
  * The stats and tracing information for a stream.
  */
 @ThreadSafe
-public class StatsTraceContext {
+public final class StatsTraceContext {
   /** Allows callers to buffer stats and tracing event reporting until the call has begun. */
   public interface ServerCallStartedListener {
     void serverCallStarted();
