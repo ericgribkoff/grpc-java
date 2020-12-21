@@ -448,8 +448,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       InProcessServerStream(MethodDescriptor<?, ?> method, Metadata headers) {
         statsTraceCtx =
             StatsTraceContext.newServerContext(
-                serverStreamTracerFactories, method.getFullMethodName(), headers);
-        statsTraceCtx.setServerIsReadyListener(listener);
+                serverStreamTracerFactories, method.getFullMethodName(), headers, listener);
       }
 
       private synchronized void setListener(ClientStreamListener listener) {
