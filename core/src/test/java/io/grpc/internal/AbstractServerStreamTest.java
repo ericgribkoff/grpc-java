@@ -359,9 +359,7 @@ public class AbstractServerStreamTest {
     private final Sink sink;
     private final AbstractServerStream.TransportState state;
 
-    protected AbstractServerStreamBase(
-        WritableBufferAllocator bufferAllocator,
-        Sink sink,
+    protected AbstractServerStreamBase(WritableBufferAllocator bufferAllocator, Sink sink,
         AbstractServerStream.TransportState state) {
       super(bufferAllocator, StatsTraceContext.CLIENT_NOOP);
       this.sink = sink;

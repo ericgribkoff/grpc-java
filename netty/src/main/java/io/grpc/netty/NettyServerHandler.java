@@ -433,17 +433,15 @@ class NettyServerHandler extends AbstractNettyHandler {
       Metadata metadata = Utils.convertHeaders(headers);
       StatsTraceContext statsTraceCtx =
           StatsTraceContext.newServerContext(streamTracerFactories, method, metadata);
-      //      StatsTraceContext statsTraceCtx = new StatsTraceContext.Holder();
 
-      NettyServerStream.TransportState state =
-          new NettyServerStream.TransportState(
-              this,
-              ctx.channel().eventLoop(),
-              http2Stream,
-              maxMessageSize,
-              statsTraceCtx,
-              transportTracer,
-              method);
+      NettyServerStream.TransportState state = new NettyServerStream.TransportState(
+          this,
+          ctx.channel().eventLoop(),
+          http2Stream,
+          maxMessageSize,
+          statsTraceCtx,
+          transportTracer,
+          method);
 
       PerfMark.startTask("NettyServerHandler.onHeadersRead", state.tag());
       try {

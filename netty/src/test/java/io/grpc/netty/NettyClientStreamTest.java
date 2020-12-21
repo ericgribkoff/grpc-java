@@ -411,19 +411,17 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
   public void setHttp2StreamShouldNotifyReady() {
     listener = mock(ClientStreamListener.class);
 
-    stream =
-        new NettyClientStream(
-            new TransportStateImpl(handler, DEFAULT_MAX_MESSAGE_SIZE),
-            methodDescriptor,
-            new Metadata(),
-            channel,
-            AsciiString.of("localhost"),
-            AsciiString.of("http"),
-            AsciiString.of("agent"),
-            StatsTraceContext.CLIENT_NOOP,
-            transportTracer,
-            CallOptions.DEFAULT,
-            false);
+    stream = new NettyClientStream(new TransportStateImpl(handler, DEFAULT_MAX_MESSAGE_SIZE),
+        methodDescriptor,
+        new Metadata(),
+        channel,
+        AsciiString.of("localhost"),
+        AsciiString.of("http"),
+        AsciiString.of("agent"),
+        StatsTraceContext.CLIENT_NOOP,
+        transportTracer,
+        CallOptions.DEFAULT,
+        false);
     stream.start(listener);
     stream().transportState().setId(STREAM_ID);
     verify(listener, never()).onReady();
@@ -439,22 +437,22 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     metadata.put(GrpcUtil.USER_AGENT_KEY, "bad agent");
     listener = mock(ClientStreamListener.class);
     Mockito.reset(writeQueue);
-    ChannelPromise completedPromise = new DefaultChannelPromise(channel).setSuccess();
+    ChannelPromise completedPromise = new DefaultChannelPromise(channel)
+        .setSuccess();
     when(writeQueue.enqueue(any(QueuedCommand.class), anyBoolean())).thenReturn(completedPromise);
 
-    stream =
-        new NettyClientStream(
-            new TransportStateImpl(handler, DEFAULT_MAX_MESSAGE_SIZE),
-            methodDescriptor,
-            new Metadata(),
-            channel,
-            AsciiString.of("localhost"),
-            AsciiString.of("http"),
-            AsciiString.of("good agent"),
-            StatsTraceContext.CLIENT_NOOP,
-            transportTracer,
-            CallOptions.DEFAULT,
-            false);
+    stream = new NettyClientStream(
+        new TransportStateImpl(handler, DEFAULT_MAX_MESSAGE_SIZE),
+        methodDescriptor,
+        new Metadata(),
+        channel,
+        AsciiString.of("localhost"),
+        AsciiString.of("http"),
+        AsciiString.of("good agent"),
+        StatsTraceContext.CLIENT_NOOP,
+        transportTracer,
+        CallOptions.DEFAULT,
+        false);
     stream.start(listener);
 
     ArgumentCaptor<CreateStreamCommand> cmdCap = ArgumentCaptor.forClass(CreateStreamCommand.class);
@@ -466,28 +464,26 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
   @Test
   public void getRequestSentThroughHeader() {
     // Creating a GET method
-    MethodDescriptor<?, ?> descriptor =
-        MethodDescriptor.<Void, Void>newBuilder()
-            .setType(MethodDescriptor.MethodType.UNARY)
-            .setFullMethodName("testService/test")
-            .setRequestMarshaller(marshaller)
-            .setResponseMarshaller(marshaller)
-            .setIdempotent(true)
-            .setSafe(true)
-            .build();
-    NettyClientStream stream =
-        new NettyClientStream(
-            new TransportStateImpl(handler, DEFAULT_MAX_MESSAGE_SIZE),
-            descriptor,
-            new Metadata(),
-            channel,
-            AsciiString.of("localhost"),
-            AsciiString.of("http"),
-            AsciiString.of("agent"),
-            StatsTraceContext.CLIENT_NOOP,
-            transportTracer,
-            CallOptions.DEFAULT,
-            true);
+    MethodDescriptor<?, ?> descriptor = MethodDescriptor.<Void, Void>newBuilder()
+        .setType(MethodDescriptor.MethodType.UNARY)
+        .setFullMethodName("testService/test")
+        .setRequestMarshaller(marshaller)
+        .setResponseMarshaller(marshaller)
+        .setIdempotent(true)
+        .setSafe(true)
+        .build();
+    NettyClientStream stream = new NettyClientStream(
+        new TransportStateImpl(handler, DEFAULT_MAX_MESSAGE_SIZE),
+        descriptor,
+        new Metadata(),
+        channel,
+        AsciiString.of("localhost"),
+        AsciiString.of("http"),
+        AsciiString.of("agent"),
+        StatsTraceContext.CLIENT_NOOP,
+        transportTracer,
+        CallOptions.DEFAULT,
+        true);
     stream.start(listener);
     stream.transportState().setId(STREAM_ID);
     stream.transportState().setHttp2Stream(http2Stream);
@@ -510,19 +506,18 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
   @Override
   protected NettyClientStream createStream() {
     when(handler.getWriteQueue()).thenReturn(writeQueue);
-    NettyClientStream stream =
-        new NettyClientStream(
-            new TransportStateImpl(handler, DEFAULT_MAX_MESSAGE_SIZE),
-            methodDescriptor,
-            new Metadata(),
-            channel,
-            AsciiString.of("localhost"),
-            AsciiString.of("http"),
-            AsciiString.of("agent"),
-            StatsTraceContext.CLIENT_NOOP,
-            transportTracer,
-            CallOptions.DEFAULT,
-            false);
+    NettyClientStream stream = new NettyClientStream(
+        new TransportStateImpl(handler, DEFAULT_MAX_MESSAGE_SIZE),
+        methodDescriptor,
+        new Metadata(),
+        channel,
+        AsciiString.of("localhost"),
+        AsciiString.of("http"),
+        AsciiString.of("agent"),
+        StatsTraceContext.CLIENT_NOOP,
+        transportTracer,
+        CallOptions.DEFAULT,
+        false);
     stream.start(listener);
     stream.transportState().setHttp2Stream(http2Stream);
     reset(listener);

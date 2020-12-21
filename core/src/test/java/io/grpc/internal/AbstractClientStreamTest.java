@@ -75,20 +75,17 @@ import org.mockito.stubbing.Answer;
 public class AbstractClientStreamTest {
 
   @Rule public final MockitoRule mocks = MockitoJUnit.rule();
-
   @SuppressWarnings("deprecation") // https://github.com/grpc/grpc-java/issues/7467
-  @Rule
-  public final ExpectedException thrown = ExpectedException.none();
+  @Rule public final ExpectedException thrown = ExpectedException.none();
 
   private final StatsTraceContext statsTraceCtx = StatsTraceContext.CLIENT_NOOP;
   private final TransportTracer transportTracer = new TransportTracer();
-  private static final SocketAddress SERVER_ADDR =
-      new SocketAddress() {
-        @Override
-        public String toString() {
-          return "fake_server_addr";
-        }
-      };
+  private static final SocketAddress SERVER_ADDR = new SocketAddress() {
+      @Override
+      public String toString() {
+        return "fake_server_addr";
+      }
+    };
 
   @Mock private ClientStreamListener mockListener;
 
@@ -409,15 +406,14 @@ public class AbstractClientStreamTest {
   public void getRequest() {
     AbstractClientStream.Sink sink = mock(AbstractClientStream.Sink.class);
     final TestClientStreamTracer tracer = new TestClientStreamTracer();
-    StatsTraceContext statsTraceCtx = new StatsTraceContext(new StreamTracer[] {tracer});
-    AbstractClientStream stream =
-        new BaseAbstractClientStream(
-            allocator,
-            new BaseTransportState(statsTraceCtx, transportTracer),
-            sink,
-            statsTraceCtx,
-            transportTracer,
-            true);
+    StatsTraceContext statsTraceCtx = new StatsTraceContext(new StreamTracer[]{tracer});
+    AbstractClientStream stream = new BaseAbstractClientStream(
+        allocator,
+        new BaseTransportState(statsTraceCtx, transportTracer),
+        sink,
+        statsTraceCtx,
+        transportTracer,
+        true);
     stream.start(mockListener);
     stream.writeMessage(new ByteArrayInputStream(new byte[1]));
     // writeHeaders will be delayed since we're sending a GET request.
@@ -443,14 +439,13 @@ public class AbstractClientStreamTest {
     AbstractClientStream.Sink sink = mock(AbstractClientStream.Sink.class);
     final TestClientStreamTracer tracer = new TestClientStreamTracer();
     StatsTraceContext statsTraceCtx = new StatsTraceContext(new StreamTracer[] {tracer});
-    AbstractClientStream stream =
-        new BaseAbstractClientStream(
-            allocator,
-            new BaseTransportState(statsTraceCtx, transportTracer),
-            sink,
-            statsTraceCtx,
-            transportTracer,
-            true);
+    AbstractClientStream stream = new BaseAbstractClientStream(
+        allocator,
+        new BaseTransportState(statsTraceCtx, transportTracer),
+        sink,
+        statsTraceCtx,
+        transportTracer,
+        true);
     stream.start(mockListener);
     InputStream input = mock(InputStream.class, delegatesTo(new ByteArrayInputStream(new byte[1])));
     stream.writeMessage(input);

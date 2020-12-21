@@ -82,12 +82,18 @@ public interface ServerStream extends Stream {
   @Nullable
   String getAuthority();
 
-  /** Sets the server stream listener. */
+  /**
+   * Sets the server stream listener.
+   */
   void setListener(ServerStreamListener serverStreamListener);
 
-  /** The context for recording stats and traces for this stream. */
+  /**
+   * The context for recording stats and traces for this stream.
+   */
   StatsTraceContext statsTraceContext();
 
-  /** The HTTP/2 stream id, or {@code -1} if not supported. */
+  /**
+   * The HTTP/2 stream id, or {@code -1} if not supported.
+   */
   int streamId();
 }
