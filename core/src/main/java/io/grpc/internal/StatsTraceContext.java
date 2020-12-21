@@ -47,11 +47,7 @@ public class StatsTraceContext {
   private final StreamTracer[] tracers;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private volatile StreamTracer[] interceptorTracers = new StreamTracer[0];
-  private ServerIsReadyListener serverIsReadyListener;
-
-  public void setServerIsReadyListener(ServerIsReadyListener listener) {
-    this.serverIsReadyListener = listener;
-  }
+  private final ServerIsReadyListener serverIsReadyListener;
 
   /** Factory method for the client-side. */
   public static StatsTraceContext newClientContext(
@@ -79,11 +75,20 @@ public class StatsTraceContext {
       List<? extends ServerStreamTracer.Factory> factories,
       String fullMethodName,
       Metadata headers) {
+    return newServerContext(factories, fullMethodName, headers, null);
+  }
+
+  /** Factory method for the server-side that accepts a listener. */
+  public static StatsTraceContext newServerContext(
+      List<? extends ServerStreamTracer.Factory> factories,
+      String fullMethodName,
+      Metadata headers,
+      ServerIsReadyListener listener) {
     StreamTracer[] tracers = new StreamTracer[factories.size()];
     for (int i = 0; i < tracers.length; i++) {
       tracers[i] = factories.get(i).newServerStreamTracer(fullMethodName, headers);
     }
-    return new StatsTraceContext(tracers);
+    return new StatsTraceContext(tracers, listener);
   }
 
   /** TODO. */
@@ -106,7 +111,12 @@ public class StatsTraceContext {
 
   @VisibleForTesting
   StatsTraceContext(StreamTracer[] tracers) {
+    this(tracers, null);
+  }
+
+  StatsTraceContext(StreamTracer[] tracers, ServerIsReadyListener listener) {
     this.tracers = tracers;
+    this.serverIsReadyListener = listener;
   }
 
   /** Returns a copy of the tracer list. */

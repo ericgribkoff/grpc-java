@@ -218,11 +218,11 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
         // However, that isn't handled specially today, so we'd leak HTTP-isms even though we're
         // in-process. We go ahead and make a Status, which may need to be updated if
         // statuscodes.md is updated.
-        Status status =
-            Status.RESOURCE_EXHAUSTED.withDescription(
-                String.format(
-                    "Request metadata larger than %d: %d",
-                    serverMaxInboundMetadataSize, metadataSize));
+        Status status = Status.RESOURCE_EXHAUSTED.withDescription(
+            String.format(
+                "Request metadata larger than %d: %d",
+                serverMaxInboundMetadataSize,
+                metadataSize));
         return failedClientStream(
             StatsTraceContext.newClientContext(callOptions, attributes, headers), status);
       }
@@ -400,15 +400,13 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
 
     private class InProcessServerStream implements ServerStream {
       final StatsTraceContext statsTraceCtx;
-
       @GuardedBy("this")
       private ClientStreamListener clientStreamListener;
-
       @GuardedBy("this")
       private int clientRequested;
-
       @GuardedBy("this")
-      private ArrayDeque<StreamListener.MessageProducer> clientReceiveQueue = new ArrayDeque<>();
+      private ArrayDeque<StreamListener.MessageProducer> clientReceiveQueue =
+          new ArrayDeque<>();
       @GuardedBy("this")
       private Status clientNotifyStatus;
       @GuardedBy("this")
@@ -428,6 +426,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
           synchronized (this) {
             for (Runnable queuedEvent : queuedStatsEvents) {
               queuedEvent.run();
+              // TODO: drain/delete
             }
             isReady = true;
           }
