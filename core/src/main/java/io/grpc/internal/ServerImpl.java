@@ -507,12 +507,9 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
         stream.setDecompressor(decompressor);
       }
 
-      final StatsTraceContext statsTraceCtx =
-          Preconditions.checkNotNull(
+      final StatsTraceContext statsTraceCtx = Preconditions.checkNotNull(
               stream.statsTraceContext(), "statsTraceCtx not present from stream");
 
-      // Delay; augment later with stats trace context filter
-      // This gets used in jumpListener and StreamCreated, running in the WrappedExecutor
       final Context.CancellableContext context = createContext(headers, statsTraceCtx);
 
       final Link link = PerfMark.linkOut();
@@ -551,8 +548,8 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
             }
 
             if (method == null) {
-              Status status =
-                  Status.UNIMPLEMENTED.withDescription("Method not found: " + methodName);
+              Status status = Status.UNIMPLEMENTED.withDescription(
+                  "Method not found: " + methodName);
               // TODO(zhangkun83): this error may be recorded by the tracer, and if it's kept in
               // memory as a map whose key is the method name, this would allow a misbehaving
               // client to blow up the server in-memory stats storage by sending large number of
@@ -701,16 +698,15 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
         Context.CancellableContext context,
         Tag tag) {
 
-      ServerCallImpl<WReqT, WRespT> call =
-          new ServerCallImpl<>(
-              stream,
-              methodDef.getMethodDescriptor(),
-              headers,
-              context,
-              decompressorRegistry,
-              compressorRegistry,
-              serverCallTracer,
-              tag);
+      ServerCallImpl<WReqT, WRespT> call = new ServerCallImpl<>(
+          stream,
+          methodDef.getMethodDescriptor(),
+          headers,
+          context,
+          decompressorRegistry,
+          compressorRegistry,
+          serverCallTracer,
+          tag);
 
       ServerCall.Listener<WReqT> listener =
           methodDef.getServerCallHandler().startCall(call, headers);
@@ -733,7 +729,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     for (InternalServer ts : transportServers) {
       // TODO(carl-mastrangelo): remove the list and just add directly.
       InternalInstrumented<SocketStats> stats = ts.getListenSocketStats();
-      if (stats != null) {
+      if (stats != null ) {
         builder.addListenSockets(Collections.singletonList(stats));
       }
     }
@@ -798,12 +794,8 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     // Only accessed from callExecutor.
     private ServerStreamListener listener;
 
-    public JumpToApplicationThreadServerStreamListener(
-        Executor executor,
-        Executor cancelExecutor,
-        ServerStream stream,
-        Context.CancellableContext context,
-        Tag tag) {
+    public JumpToApplicationThreadServerStreamListener(Executor executor,
+       Executor cancelExecutor, ServerStream stream, Context.CancellableContext context, Tag tag) {
       this.callExecutor = executor;
       this.cancelExecutor = cancelExecutor;
       this.stream = stream;
@@ -811,7 +803,9 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       this.tag = tag;
     }
 
-    /** This call MUST be serialized on callExecutor to avoid races. */
+    /**
+     * This call MUST be serialized on callExecutor to avoid races.
+     */
     private ServerStreamListener getListener() {
       if (listener == null) {
         throw new IllegalStateException("listener unset");
