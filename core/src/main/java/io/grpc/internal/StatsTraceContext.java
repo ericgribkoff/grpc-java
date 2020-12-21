@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javax.annotation.concurrent.ThreadSafe;
 
 /** The stats and tracing information for a stream. */
-@ThreadSafe // Hrm :/
+@ThreadSafe
 public class StatsTraceContext {
   // TODO: rename
   public interface ServerIsReadyListener {
@@ -47,9 +47,11 @@ public class StatsTraceContext {
   private final StreamTracer[] tracers;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private volatile StreamTracer[] interceptorTracers = new StreamTracer[0];
-
-  // TODO: volatile?
   private ServerIsReadyListener serverIsReadyListener;
+
+  public void setServerIsReadyListener(ServerIsReadyListener listener) {
+    this.serverIsReadyListener = listener;
+  }
 
   /** Factory method for the client-side. */
   public static StatsTraceContext newClientContext(
@@ -168,15 +170,6 @@ public class StatsTraceContext {
    *
    * <p>Called from {@link io.grpc.internal.ServerImpl}.
    */
-  // Invoking this serves as signal that "interceptor stream tracers" are ready
-  // For non-InProcess transports, only streamClosed (and serverFilterContext) can be
-  // invoked before this happens (all messages etc will only come *after* call has started)
-  // For InProcess, we want to buffer the inboundMessage and inboundMessageRead calls for
-  // "correctness"
-  // Would not need 'useInterceptorTracers' check here or in any of the other methods *except*
-  // streamClosed if we add that the contract here is that this must be called before any
-  // server trace methods are invoked.
-  // Client can just initialize interceptorTracers = []
   public void serverCallStarted(final ServerCallInfo<?, ?> callInfo) {
     for (StreamTracer tracer : tracers) {
       ((ServerStreamTracer) tracer).serverCallStarted(callInfo);
@@ -316,9 +309,5 @@ public class StatsTraceContext {
     for (StreamTracer tracer : interceptorTracers) {
       tracer.inboundWireSize(bytes);
     }
-  }
-
-  public void setServerIsReadyListener(ServerIsReadyListener listener) {
-    this.serverIsReadyListener = listener;
   }
 }
