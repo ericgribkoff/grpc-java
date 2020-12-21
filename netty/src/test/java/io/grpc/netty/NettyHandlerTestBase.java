@@ -262,7 +262,7 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
           }
         },
         new NettyWritableBufferAllocator(ByteBufAllocator.DEFAULT),
-        StatsTraceContext.CLIENT_NOOP);
+        StatsTraceContext.NOOP);
     framer.writePayload(new ByteArrayInputStream(content));
     framer.flush();
     ChannelHandlerContext ctx = newMockContext();

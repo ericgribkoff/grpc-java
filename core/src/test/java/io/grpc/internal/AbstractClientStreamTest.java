@@ -78,7 +78,7 @@ public class AbstractClientStreamTest {
   @SuppressWarnings("deprecation") // https://github.com/grpc/grpc-java/issues/7467
   @Rule public final ExpectedException thrown = ExpectedException.none();
 
-  private final StatsTraceContext statsTraceCtx = StatsTraceContext.CLIENT_NOOP;
+  private final StatsTraceContext statsTraceCtx = StatsTraceContext.NOOP;
   private final TransportTracer transportTracer = new TransportTracer();
   private static final SocketAddress SERVER_ADDR = new SocketAddress() {
       @Override

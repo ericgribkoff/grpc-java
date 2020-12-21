@@ -418,7 +418,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
         AsciiString.of("localhost"),
         AsciiString.of("http"),
         AsciiString.of("agent"),
-        StatsTraceContext.CLIENT_NOOP,
+        StatsTraceContext.NOOP,
         transportTracer,
         CallOptions.DEFAULT,
         false);
@@ -449,7 +449,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
         AsciiString.of("localhost"),
         AsciiString.of("http"),
         AsciiString.of("good agent"),
-        StatsTraceContext.CLIENT_NOOP,
+        StatsTraceContext.NOOP,
         transportTracer,
         CallOptions.DEFAULT,
         false);
@@ -480,7 +480,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
         AsciiString.of("localhost"),
         AsciiString.of("http"),
         AsciiString.of("agent"),
-        StatsTraceContext.CLIENT_NOOP,
+        StatsTraceContext.NOOP,
         transportTracer,
         CallOptions.DEFAULT,
         true);
@@ -514,7 +514,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
         AsciiString.of("localhost"),
         AsciiString.of("http"),
         AsciiString.of("agent"),
-        StatsTraceContext.CLIENT_NOOP,
+        StatsTraceContext.NOOP,
         transportTracer,
         CallOptions.DEFAULT,
         false);
@@ -558,7 +558,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
           handler,
           channel.eventLoop(),
           maxMessageSize,
-          StatsTraceContext.CLIENT_NOOP,
+          StatsTraceContext.NOOP,
           transportTracer,
           "methodName");
     }

@@ -42,7 +42,7 @@ public class StatsTraceContext {
     void serverIsReady();
   }
 
-  public static final StatsTraceContext CLIENT_NOOP = new StatsTraceContext(new StreamTracer[0]);
+  public static final StatsTraceContext NOOP = new StatsTraceContext(new StreamTracer[0]);
 
   private final StreamTracer[] tracers;
   private final AtomicBoolean closed = new AtomicBoolean(false);
@@ -54,7 +54,7 @@ public class StatsTraceContext {
       final CallOptions callOptions, final Attributes transportAttrs, Metadata headers) {
     List<ClientStreamTracer.Factory> factories = callOptions.getStreamTracerFactories();
     if (factories.isEmpty()) {
-      return CLIENT_NOOP;
+      return NOOP;
     }
     ClientStreamTracer.StreamInfo info =
         ClientStreamTracer.StreamInfo.newBuilder()
