@@ -46,6 +46,7 @@ import io.grpc.InternalLogId;
 import io.grpc.InternalServerInterceptors;
 import io.grpc.Metadata;
 import io.grpc.ServerCall;
+import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptor2;
 import io.grpc.ServerMethodDefinition;
@@ -416,22 +417,6 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     }
   }
 
-  private static final class ServerInterceptorConverter implements ServerInterceptor2 {
-    private final ServerInterceptor wrappedInterceptor;
-
-    ServerInterceptorConverter(ServerInterceptor interceptor) {
-      wrappedInterceptor = interceptor;
-    }
-
-    @Override
-    public <ReqT, RespT> ServerMethodDefinition<ReqT, RespT>
-        interceptMethodDefinition(ServerMethodDefinition<ReqT, RespT> method) {
-      return method.withServerCallHandler(
-              InternalServerInterceptors.interceptCallHandler(
-                      wrappedInterceptor, method.getServerCallHandler()));
-    }
-  }
-
   private final class ServerTransportListenerImpl implements ServerTransportListener {
     private final ServerTransport transport;
     private Future<?> handshakeTimeoutFuture;
@@ -644,12 +629,11 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     private <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> getInterceptedMethodDef(
         ServerMethodDefinition<ReqT, RespT> methodDef) {
       // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
-      ServerMethodDefinition<ReqT, RespT> interceptedDef = methodDef;
+      ServerCallHandler<ReqT, RespT> handler = methodDef.getServerCallHandler();
       for (final ServerInterceptor interceptor : interceptors) {
-        // TODO: use ServerInterceptor directly, and verify ordering
-        interceptedDef =
-            new ServerInterceptorConverter(interceptor).interceptMethodDefinition(interceptedDef);
+        handler = InternalServerInterceptors.interceptCallHandler(interceptor, handler);
       }
+      ServerMethodDefinition<ReqT, RespT> interceptedDef = methodDef.withServerCallHandler(handler);
       for (ServerInterceptor2 interceptor : interceptors2) {
         interceptedDef = interceptor.interceptMethodDefinition(interceptedDef);
       }

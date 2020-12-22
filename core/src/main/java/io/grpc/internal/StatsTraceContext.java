@@ -49,7 +49,7 @@ public final class StatsTraceContext {
   private final StreamTracer[] tracers;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private volatile StreamTracer[] interceptorTracers = new StreamTracer[0];
-  private final ServerCallStartedListener serverIsReadyListener;
+  private final ServerCallStartedListener serverCallStartedListener;
 
   /**
    * Factory method for the client-side.
@@ -128,7 +128,7 @@ public final class StatsTraceContext {
 
   StatsTraceContext(StreamTracer[] tracers, ServerCallStartedListener listener) {
     this.tracers = tracers;
-    this.serverIsReadyListener = listener;
+    this.serverCallStartedListener = listener;
   }
 
   /**
@@ -198,8 +198,8 @@ public final class StatsTraceContext {
     for (StreamTracer tracer : interceptorTracers) {
       ((ServerStreamTracer) tracer).serverCallStarted(callInfo);
     }
-    if (serverIsReadyListener != null) {
-      serverIsReadyListener.serverCallStarted();
+    if (serverCallStartedListener != null) {
+      serverCallStartedListener.serverCallStarted();
     }
   }
 
