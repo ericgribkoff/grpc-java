@@ -71,8 +71,10 @@ public final class ServerMethodDefinition<ReqT, RespT> {
   }
 
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/????")
-  public void addStreamTracer(ServerStreamTracer.Factory factory) {
+  public ServerMethodDefinition<ReqT, RespT>
+      addStreamTracerFactory(ServerStreamTracer.Factory factory) {
     streamTracerFactories.add(factory);
+    return this;
   }
 
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/????")

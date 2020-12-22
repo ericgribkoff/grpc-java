@@ -641,15 +641,20 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     private <ReqT, RespT> ServerStreamListener startCall(ServerStream stream, String fullMethodName,
         ServerMethodDefinition<ReqT, RespT> methodDef, Metadata headers,
         Context.CancellableContext context, StatsTraceContext statsTraceCtx, Tag tag) {
-      // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
-      statsTraceCtx.serverCallStarted(
-          new ServerCallInfoImpl<>(
-              methodDef.getMethodDescriptor(), // notify with original method descriptor
-              stream.getAttributes(),
-              stream.getAuthority()));
-      ServerMethodDefinition<?, ?> wMethodDef =
-          binlog == null ? methodDef : binlog.wrapMethodDefinition(methodDef);
-      return startWrappedCall(fullMethodName, wMethodDef, stream, headers, context, tag);
+      Context previous = context.attach();
+      try {
+        // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
+        statsTraceCtx.serverCallStarted(
+                new ServerCallInfoImpl<>(
+                        methodDef.getMethodDescriptor(), // notify with original method descriptor
+                        stream.getAttributes(),
+                        stream.getAuthority()));
+        ServerMethodDefinition<?, ?> wMethodDef =
+                binlog == null ? methodDef : binlog.wrapMethodDefinition(methodDef);
+        return startWrappedCall(fullMethodName, wMethodDef, stream, headers, context, tag);
+      } finally {
+        context.detach(previous);
+      }
     }
 
     private <WReqT, WRespT> ServerStreamListener startWrappedCall(
