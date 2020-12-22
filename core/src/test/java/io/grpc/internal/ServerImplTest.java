@@ -720,12 +720,14 @@ public class ServerImplTest {
     ServerInterceptor2 serverInterceptor2 = new ServerInterceptor2() {
       @Override
       public <ReqT, RespT> ServerMethodDefinition<ReqT, RespT>
-      interceptMethodDefinition(final ServerMethodDefinition<ReqT, RespT> method) {
+          interceptMethodDefinition(final ServerMethodDefinition<ReqT, RespT> method) {
         final ServerCallHandler<ReqT, RespT> handler = method.getServerCallHandler();
         return method.withServerCallHandler(new ServerCallHandler<ReqT, RespT>() {
           @Override
-          public ServerCall.Listener<ReqT> startCall(ServerCall<ReqT, RespT> call, Metadata headers) {
-            Context ctx = Context.current().withValue(serverInterceptor2Key, "serverInterceptor2Key");
+          public ServerCall.Listener<ReqT>
+              startCall(ServerCall<ReqT, RespT> call, Metadata headers) {
+            Context ctx =
+                Context.current().withValue(serverInterceptor2Key, "serverInterceptor2Key");
             Context origCtx = ctx.attach();
             try {
               capturedContexts.add(ctx);
