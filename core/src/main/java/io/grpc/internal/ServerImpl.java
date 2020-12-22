@@ -416,6 +416,22 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     }
   }
 
+  private static final class ServerInterceptorConverter implements ServerInterceptor2 {
+    private final ServerInterceptor wrappedInterceptor;
+
+    ServerInterceptorConverter(ServerInterceptor interceptor) {
+      wrappedInterceptor = interceptor;
+    }
+
+    @Override
+    public <ReqT, RespT> ServerMethodDefinition<ReqT, RespT>
+        interceptMethodDefinition(ServerMethodDefinition<ReqT, RespT> method) {
+      return method.withServerCallHandler(
+              InternalServerInterceptors.interceptCallHandler(
+                      wrappedInterceptor, method.getServerCallHandler()));
+    }
+  }
+
   private final class ServerTransportListenerImpl implements ServerTransportListener {
     private final ServerTransport transport;
     private Future<?> handshakeTimeoutFuture;
@@ -558,7 +574,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
               context.cancel(null);
               return;
             }
-            ServerMethodDefinition interceptedDef = getInterceptedMethodDef(method);
+            ServerMethodDefinition<?, ?> interceptedDef = getInterceptedMethodDef(method);
             listenerContext =
                 statsTraceCtx.setServerInterceptorTracersAndFilterContext(
                     interceptedDef.getStreamTracerFactories(),
@@ -625,29 +641,17 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       return context;
     }
 
-    private <ReqT, RespT> ServerMethodDefinition getInterceptedMethodDef(
+    private <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> getInterceptedMethodDef(
         ServerMethodDefinition<ReqT, RespT> methodDef) {
       // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
       ServerMethodDefinition<ReqT, RespT> interceptedDef = methodDef;
       for (final ServerInterceptor interceptor : interceptors) {
-        if (interceptor instanceof ServerInterceptor2) {
-          // TODO: use interceptors2
-          interceptedDef =
-              ((ServerInterceptor2) interceptor).interceptMethodDefinition(interceptedDef);
-        } else {
-          // TODO: inefficient
-          ServerInterceptor2 converter =
-              new ServerInterceptor2() {
-                @Override
-                public <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> interceptMethodDefinition(
-                    ServerMethodDefinition<ReqT, RespT> method) {
-                  return method.withServerCallHandler(
-                      InternalServerInterceptors.interceptCallHandler(
-                          interceptor, method.getServerCallHandler()));
-                }
-              };
-          interceptedDef = converter.interceptMethodDefinition(interceptedDef);
-        }
+        // TODO: use ServerInterceptor directly, and verify ordering
+        interceptedDef =
+            new ServerInterceptorConverter(interceptor).interceptMethodDefinition(interceptedDef);
+      }
+      for (ServerInterceptor2 interceptor : interceptors2) {
+        interceptedDef = interceptor.interceptMethodDefinition(interceptedDef);
       }
       return interceptedDef;
     }
@@ -797,6 +801,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
       Preconditions.checkState(this.listenerContext == null, "Listener context already set");
       this.listener = listener;
       this.listenerContext = listenerContext;
+      this.cancelContext = listenerContext;
     }
 
     /**
