@@ -46,7 +46,6 @@ import io.grpc.InternalLogId;
 import io.grpc.InternalServerInterceptors;
 import io.grpc.Metadata;
 import io.grpc.ServerCall;
-import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptor2;
 import io.grpc.ServerMethodDefinition;
@@ -629,7 +628,8 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
     private <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> getInterceptedMethodDef(
         ServerMethodDefinition<ReqT, RespT> methodDef) {
       for (ServerInterceptor interceptor : interceptors) {
-        methodDef = new ServerInterceptorConverter(interceptor).interceptMethodDefinition(methodDef);
+        methodDef =
+            new ServerInterceptorConverter(interceptor).interceptMethodDefinition(methodDef);
       }
       for (ServerInterceptor2 interceptor : interceptors2) {
         methodDef = interceptor.interceptMethodDefinition(methodDef);
@@ -690,7 +690,7 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
 
     @Override
     public <ReqT, RespT> ServerMethodDefinition<ReqT, RespT>
-    interceptMethodDefinition(ServerMethodDefinition<ReqT, RespT> method) {
+        interceptMethodDefinition(ServerMethodDefinition<ReqT, RespT> method) {
       return method.withServerCallHandler(
               InternalServerInterceptors.interceptCallHandler(
                       wrappedInterceptor, method.getServerCallHandler()));
