@@ -692,24 +692,7 @@ public class ServerImplTest {
     assertEquals(2, readyCallbackCalled.get());
     assertEquals(2, terminationCallbackCalled.get());
   }
-
-
-  private static final class ServerInterceptorConverter implements ServerInterceptor2 {
-    private final ServerInterceptor wrappedInterceptor;
-
-    ServerInterceptorConverter(ServerInterceptor interceptor) {
-      wrappedInterceptor = interceptor;
-    }
-
-    @Override
-    public <ReqT, RespT> ServerMethodDefinition<ReqT, RespT>
-        interceptMethodDefinition(ServerMethodDefinition<ReqT, RespT> method) {
-      return method.withServerCallHandler(
-              InternalServerInterceptors.interceptCallHandler(
-                      wrappedInterceptor, method.getServerCallHandler()));
-    }
-  }
-
+  
   @Test
   public void interceptors() throws Exception {
     final LinkedList<Context> capturedContexts = new LinkedList<>();
