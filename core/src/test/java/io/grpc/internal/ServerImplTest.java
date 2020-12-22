@@ -68,6 +68,7 @@ import io.grpc.ServerCall;
 import io.grpc.ServerCall.Listener;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
+import io.grpc.ServerInterceptor2;
 import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.ServerStreamTracer;
@@ -692,12 +693,50 @@ public class ServerImplTest {
     assertEquals(2, terminationCallbackCalled.get());
   }
 
+
+  private static final class ServerInterceptorConverter implements ServerInterceptor2 {
+    private final ServerInterceptor wrappedInterceptor;
+
+    ServerInterceptorConverter(ServerInterceptor interceptor) {
+      wrappedInterceptor = interceptor;
+    }
+
+    @Override
+    public <ReqT, RespT> ServerMethodDefinition<ReqT, RespT>
+        interceptMethodDefinition(ServerMethodDefinition<ReqT, RespT> method) {
+      return method.withServerCallHandler(
+              InternalServerInterceptors.interceptCallHandler(
+                      wrappedInterceptor, method.getServerCallHandler()));
+    }
+  }
+
   @Test
   public void interceptors() throws Exception {
     final LinkedList<Context> capturedContexts = new LinkedList<>();
     final Context.Key<String> key1 = Context.key("key1");
     final Context.Key<String> key2 = Context.key("key2");
     final Context.Key<String> key3 = Context.key("key3");
+    final Context.Key<String> serverInterceptor2Key = Context.key("serverInterceptor2Key");
+    ServerInterceptor2 serverInterceptor2 = new ServerInterceptor2() {
+      @Override
+      public <ReqT, RespT> ServerMethodDefinition<ReqT, RespT>
+      interceptMethodDefinition(final ServerMethodDefinition<ReqT, RespT> method) {
+        final ServerCallHandler<ReqT, RespT> handler = method.getServerCallHandler();
+        return method.withServerCallHandler(new ServerCallHandler<ReqT, RespT>() {
+          @Override
+          public ServerCall.Listener<ReqT> startCall(ServerCall<ReqT, RespT> call, Metadata headers) {
+            Context ctx = Context.current().withValue(serverInterceptor2Key, "serverInterceptor2Key");
+            Context origCtx = ctx.attach();
+            try {
+              capturedContexts.add(ctx);
+              return handler.startCall(call, headers);
+            } finally {
+              ctx.detach(origCtx);
+            }
+          }
+        });
+      }
+    };
     ServerInterceptor interceptor1 = new ServerInterceptor() {
         @Override
         public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
@@ -743,6 +782,7 @@ public class ServerImplTest {
     mutableFallbackRegistry.addService(
         ServerServiceDefinition.builder(new ServiceDescriptor("Waiter", METHOD))
             .addMethod(METHOD, callHandler).build());
+    builder.intercept(serverInterceptor2);
     builder.intercept(interceptor2);
     builder.intercept(interceptor1);
     createServer();
@@ -761,19 +801,28 @@ public class ServerImplTest {
     assertEquals(1, executor.runDueTasks());
 
     Context ctx1 = capturedContexts.poll();
-    assertEquals("value1", key1.get(ctx1));
+    assertEquals("serverInterceptor2Key", serverInterceptor2Key.get(ctx1));
+    assertNull(key1.get(ctx1));
     assertNull(key2.get(ctx1));
     assertNull(key3.get(ctx1));
 
     Context ctx2 = capturedContexts.poll();
+    assertEquals("serverInterceptor2Key", serverInterceptor2Key.get(ctx2));
     assertEquals("value1", key1.get(ctx2));
-    assertEquals("value2", key2.get(ctx2));
+    assertNull(key2.get(ctx2));
     assertNull(key3.get(ctx2));
 
     Context ctx3 = capturedContexts.poll();
+    assertEquals("serverInterceptor2Key", serverInterceptor2Key.get(ctx3));
     assertEquals("value1", key1.get(ctx3));
     assertEquals("value2", key2.get(ctx3));
-    assertEquals("value3", key3.get(ctx3));
+    assertNull(key3.get(ctx3));
+
+    Context ctx4 = capturedContexts.poll();
+    assertEquals("serverInterceptor2Key", serverInterceptor2Key.get(ctx4));
+    assertEquals("value1", key1.get(ctx4));
+    assertEquals("value2", key2.get(ctx4));
+    assertEquals("value3", key3.get(ctx4));
 
     assertTrue(capturedContexts.isEmpty());
   }

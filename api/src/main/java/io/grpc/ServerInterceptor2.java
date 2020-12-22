@@ -19,17 +19,17 @@ package io.grpc;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
- * Interface for intercepting server calls by modifying the {@link ServerMethodDefinition} during
- * call dispatch. This provides a superset of the functionality offered by {@link
- * ServerInterceptor}.
+ * Interface for intercepting server calls by modifying the {@link ServerMethodDefinition} after
+ * method lookup and before call dispatch. This provides a superset of the functionality offered by
+ * {@link ServerInterceptor}.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/????")
 @ThreadSafe
 public interface ServerInterceptor2 {
   /**
-   * To replicate ServerInterceptor behavior, this should return a SMD with a new ServerCallHandler
-   * that wraps the // ServerInterceptor(1).interceptCall inside of its startCall method, as done in
-   * InternalServerInterceptors.interceptCallHandler.
+   * Intercept and modify the {@link ServerMethodDefinition}.
+   *
+   * <p>The returned ServerMethodDefinition cannot be null and implementations must not throw.
    */
   <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> interceptMethodDefinition(
       ServerMethodDefinition<ReqT, RespT> method);

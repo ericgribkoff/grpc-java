@@ -628,16 +628,13 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
 
     private <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> getInterceptedMethodDef(
         ServerMethodDefinition<ReqT, RespT> methodDef) {
-      // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
-      ServerCallHandler<ReqT, RespT> handler = methodDef.getServerCallHandler();
-      for (final ServerInterceptor interceptor : interceptors) {
-        handler = InternalServerInterceptors.interceptCallHandler(interceptor, handler);
+      for (ServerInterceptor interceptor : interceptors) {
+        methodDef = new ServerInterceptorConverter(interceptor).interceptMethodDefinition(methodDef);
       }
-      ServerMethodDefinition<ReqT, RespT> interceptedDef = methodDef.withServerCallHandler(handler);
       for (ServerInterceptor2 interceptor : interceptors2) {
-        interceptedDef = interceptor.interceptMethodDefinition(interceptedDef);
+        methodDef = interceptor.interceptMethodDefinition(methodDef);
       }
-      return interceptedDef;
+      return methodDef;
     }
 
     /** Never returns {@code null}. */
@@ -680,6 +677,23 @@ public final class ServerImpl extends io.grpc.Server implements InternalInstrume
             "startCall() returned a null listener for method " + fullMethodName);
       }
       return call.newServerStreamListener(listener);
+    }
+  }
+
+  /** Wrapper to convert ServerInterceptor to ServerInterceptor2. */
+  private static final class ServerInterceptorConverter implements ServerInterceptor2 {
+    private final ServerInterceptor wrappedInterceptor;
+
+    ServerInterceptorConverter(ServerInterceptor interceptor) {
+      wrappedInterceptor = interceptor;
+    }
+
+    @Override
+    public <ReqT, RespT> ServerMethodDefinition<ReqT, RespT>
+    interceptMethodDefinition(ServerMethodDefinition<ReqT, RespT> method) {
+      return method.withServerCallHandler(
+              InternalServerInterceptors.interceptCallHandler(
+                      wrappedInterceptor, method.getServerCallHandler()));
     }
   }
 

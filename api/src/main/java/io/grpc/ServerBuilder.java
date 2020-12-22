@@ -104,6 +104,17 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
     throw new UnsupportedOperationException();
   }
 
+  /**
+   * Adds a {@link ServerInterceptor2} that is run for all services on the server.  Interceptors
+   * added through this method always run before per-service interceptors added through {@link
+   * ServerInterceptors} and any interceptors added through {@link #intercept(ServerInterceptor)}.
+   * Interceptors run in the reverse order in which they are added, just as with consecutive calls
+   * to {@code ServerInterceptors.intercept()}.
+   *
+   * @param interceptor the all-service interceptor
+   * @return this
+   * @since 1.35.0
+   */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/????")
   public T intercept(ServerInterceptor2 interceptor) {
     throw new UnsupportedOperationException();
