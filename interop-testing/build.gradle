@@ -29,6 +29,7 @@ dependencies {
             project(path: ':grpc-xds', configuration: 'shadow'),
             libraries.junit,
             libraries.truth
+    implementation 'io.opencensus:opencensus-exporter-metrics-util:0.28.0'
     censusGrpcMetricDependency 'implementation'
     googleOauth2Dependency 'implementation'
     compileOnly libraries.javax_annotation

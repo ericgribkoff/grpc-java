@@ -53,6 +53,7 @@ import io.grpc.testing.integration.Messages.SimpleRequest;
 import io.grpc.testing.integration.Messages.SimpleResponse;
 import io.grpc.xds.XdsChannelCredentials;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -67,9 +68,105 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
+import io.opencensus.common.Duration;
+import io.opencensus.common.Timestamp;
+import io.opencensus.contrib.grpc.metrics.RpcViews;
+import io.opencensus.exporter.metrics.util.IntervalMetricReader;
+import io.opencensus.exporter.metrics.util.MetricExporter;
+import io.opencensus.exporter.metrics.util.MetricReader;
+import io.opencensus.metrics.LabelKey;
+import io.opencensus.metrics.LabelValue;
+import io.opencensus.metrics.Metrics;
+import io.opencensus.metrics.export.Metric;
+import io.opencensus.metrics.export.MetricDescriptor;
+import io.opencensus.metrics.export.Point;
+import io.opencensus.metrics.export.TimeSeries;
+import io.opencensus.trace.SpanContext;
+import io.opencensus.trace.Tracing;
+import io.opencensus.trace.config.TraceConfig;
+import io.opencensus.trace.export.SpanData;
+import io.opencensus.trace.export.SpanExporter;
+import io.opencensus.trace.samplers.Samplers;
+
 
 /** Client for xDS interop tests. */
 public final class XdsTestClient {
+  public static class CustomTraceExporter extends SpanExporter.Handler {
+    @Override
+    public void export(Collection<SpanData> spanDataList) {
+      for (SpanData sd : spanDataList) {
+        SpanContext sc = sd.getContext();
+        System.out.println(String.format(
+                "Name: %s\nTraceID: %s\nSpanID: %s\nParentSpanID: %s\nStartTime: %d\nEndTime: %d\nAnnotations: %s\n\n",
+                sd.getName(), sc.getTraceId(), sc.getSpanId(), sd.getParentSpanId(),
+                sd.getStartTimestamp().getSeconds(), sd.getEndTimestamp().getSeconds(), sd.getAnnotations()));
+      }
+    }
+
+    public static void createAndRegister() {
+      // Please remember to register your exporter
+      // so that it can receive exportered spanData.
+      Tracing.getExportComponent().getSpanExporter().registerHandler(CustomTraceExporter.class.getName(), new CustomTraceExporter());
+    }
+  }
+
+  public static class CustomMetricsExporter extends MetricExporter {
+    private static final String EXAMPLE_STATS_EXPORTER = "ExampleStatsExporter";
+    private final IntervalMetricReader intervalMetricReader;
+
+    private CustomMetricsExporter() {
+      IntervalMetricReader.Options.Builder options = IntervalMetricReader.Options.builder();
+      MetricReader reader =
+              MetricReader.create(
+                      MetricReader.Options.builder()
+                              .setMetricProducerManager(Metrics.getExportComponent().getMetricProducerManager())
+                              .setSpanName(EXAMPLE_STATS_EXPORTER)
+                              .build());
+      intervalMetricReader = IntervalMetricReader.create(this, reader, options.setExportInterval(Duration.create(1, 0)).build());
+    }
+    /** Creates and registers the ExampleStatsExporter. */
+    public static CustomMetricsExporter createAndRegister() {
+      return new CustomMetricsExporter();
+    }
+
+    @Override
+    public void export(Collection<Metric> metrics) {
+      logger.info("Exporting  metrics");
+      for (Metric metric : metrics) {
+        MetricDescriptor md = metric.getMetricDescriptor();
+        MetricDescriptor.Type type = md.getType();
+        logger.info("Name: " + md.getName() + ", type: " + type);
+//        List<LabelKey> keys = md.getLabelKeys();
+//        StringBuilder keysSb = new StringBuilder("Keys: ");
+//        for (LabelKey k : keys) {
+//          keysSb.append(k.getKey() + " ");
+//        }
+//        logger.info("Keys: " + keysSb);
+//        StringBuilder sb = new StringBuilder();
+//        sb.append("Seconds\tNanos\tValue\n");
+//        List<TimeSeries> tss = metric.getTimeSeriesList();
+//        for (TimeSeries ts : tss) {
+//          Timestamp start = ts.getStartTimestamp();
+//          logger.info("Start " + start + "\n");
+//          List<LabelValue> lvs = ts.getLabelValues();
+//          StringBuilder lvSb = new StringBuilder("Keys: ");
+//          for (LabelValue v : lvs) {
+//            lvSb.append(v.getValue() + " ");
+//          }
+//          logger.info("Label values: " + lvSb + "\n");
+//          for (Point p : ts.getPoints()) {
+//            Timestamp t = p.getTimestamp();
+//            long s = t.getSeconds();
+//            long nanos = t.getNanos();
+//            String line = s + "\t" + nanos + "\t" + p.getValue();
+//            sb.append(line);
+//          }
+//          logger.info("Timeseries to export:\n" + sb);
+//        }
+      }
+    }
+  }
+
   private static Logger logger = Logger.getLogger(XdsTestClient.class.getName());
 
   private final Set<XdsStatsWatcher> watchers = new HashSet<>();
@@ -96,6 +193,14 @@ public final class XdsTestClient {
    * The main application allowing this client to be launched from the command line.
    */
   public static void main(String[] args) {
+//    CustomTraceExporter.createAndRegister();
+    // For demo purposes, we'll always sample
+//    TraceConfig traceConfig = Tracing.getTraceConfig();
+//    traceConfig.updateActiveTraceParams(
+//            traceConfig.getActiveTraceParams().toBuilder().setSampler(Samplers.alwaysSample()).build());
+    CustomMetricsExporter.createAndRegister();
+    RpcViews.registerAllViews();
+
     final XdsTestClient client = new XdsTestClient();
     client.parseArgs(args);
     Runtime.getRuntime()

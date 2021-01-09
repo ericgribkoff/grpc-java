@@ -41,6 +41,25 @@ import java.net.UnknownHostException;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import io.opencensus.common.Duration;
+import io.opencensus.common.Timestamp;
+import io.opencensus.contrib.grpc.metrics.RpcViews;
+import io.opencensus.exporter.metrics.util.IntervalMetricReader;
+import io.opencensus.exporter.metrics.util.MetricExporter;
+import io.opencensus.exporter.metrics.util.MetricReader;
+import io.opencensus.metrics.LabelKey;
+import io.opencensus.metrics.LabelValue;
+import io.opencensus.metrics.Metrics;
+import io.opencensus.metrics.export.Metric;
+import io.opencensus.metrics.export.MetricDescriptor;
+import io.opencensus.metrics.export.Point;
+import io.opencensus.metrics.export.TimeSeries;
+import io.opencensus.trace.SpanContext;
+import io.opencensus.trace.Tracing;
+import io.opencensus.trace.config.TraceConfig;
+import io.opencensus.trace.export.SpanData;
+import io.opencensus.trace.export.SpanExporter;
+import io.opencensus.trace.samplers.Samplers;
 
 /** Interop test server that implements the xDS testing service. */
 public final class XdsTestServer {
@@ -68,6 +87,12 @@ public final class XdsTestServer {
    * The main application allowing this client to be launched from the command line.
    */
   public static void main(String[] args) throws Exception {
+    XdsTestClient.CustomTraceExporter.createAndRegister();
+    TraceConfig traceConfig = Tracing.getTraceConfig();
+    traceConfig.updateActiveTraceParams(
+            traceConfig.getActiveTraceParams().toBuilder().setSampler(Samplers.alwaysSample()).build());
+//    XdsTestClient.CustomMetricsExporter.createAndRegister();
+    RpcViews.registerAllViews();
     final XdsTestServer server = new XdsTestServer();
     server.parseArgs(args);
     Runtime.getRuntime()
