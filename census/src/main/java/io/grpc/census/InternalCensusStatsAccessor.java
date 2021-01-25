@@ -16,14 +16,9 @@
 
 package io.grpc.census;
 
-import com.google.common.base.Stopwatch;
-import com.google.common.base.Supplier;
 import io.grpc.ClientInterceptor;
 import io.grpc.Internal;
 import io.grpc.ServerStreamTracer;
-import io.opencensus.stats.StatsRecorder;
-import io.opencensus.tags.Tagger;
-import io.opencensus.tags.propagation.TagContextBinarySerializer;
 
 /**
  * Accessor for getting {@link ClientInterceptor} or {@link ServerStreamTracer.Factory} with
@@ -31,14 +26,6 @@ import io.opencensus.tags.propagation.TagContextBinarySerializer;
  */
 @Internal
 public final class InternalCensusStatsAccessor {
-
-  private static final Supplier<Stopwatch> STOPWATCH_SUPPLIER = new Supplier<Stopwatch>() {
-    @Override
-    public Stopwatch get() {
-      return Stopwatch.createUnstarted();
-    }
-  };
-
   // Prevent instantiation.
   private InternalCensusStatsAccessor() {
   }
@@ -50,33 +37,8 @@ public final class InternalCensusStatsAccessor {
       boolean recordStartedRpcs,
       boolean recordFinishedRpcs,
       boolean recordRealTimeMetrics) {
-    CensusStatsModule censusStats =
-        new CensusStatsModule(
-            STOPWATCH_SUPPLIER,
-            true, /* propagateTags */
-            recordStartedRpcs,
-            recordFinishedRpcs,
-            recordRealTimeMetrics);
-    return censusStats.getClientInterceptor();
-  }
-
-  /**
-   * Returns a {@link ClientInterceptor} with custom stats implementation.
-   */
-  public static ClientInterceptor getClientInterceptor(
-      Tagger tagger,
-      TagContextBinarySerializer tagCtxSerializer,
-      StatsRecorder statsRecorder,
-      Supplier<Stopwatch> stopwatchSupplier,
-      boolean propagateTags,
-      boolean recordStartedRpcs,
-      boolean recordFinishedRpcs,
-      boolean recordRealTimeMetrics) {
-    CensusStatsModule censusStats =
-        new CensusStatsModule(
-            tagger, tagCtxSerializer, statsRecorder, stopwatchSupplier,
-            propagateTags, recordStartedRpcs, recordFinishedRpcs, recordRealTimeMetrics);
-    return censusStats.getClientInterceptor();
+    return io.grpc.census.explicit.InternalCensusStatsAccessor.getClientInterceptor(
+        recordStartedRpcs, recordFinishedRpcs, recordRealTimeMetrics);
   }
 
   /**
@@ -86,32 +48,7 @@ public final class InternalCensusStatsAccessor {
       boolean recordStartedRpcs,
       boolean recordFinishedRpcs,
       boolean recordRealTimeMetrics) {
-    CensusStatsModule censusStats =
-        new CensusStatsModule(
-            STOPWATCH_SUPPLIER,
-            true, /* propagateTags */
-            recordStartedRpcs,
-            recordFinishedRpcs,
-            recordRealTimeMetrics);
-    return censusStats.getServerTracerFactory();
-  }
-
-  /**
-   * Returns a {@link ServerStreamTracer.Factory} with custom stats implementation.
-   */
-  public static ServerStreamTracer.Factory getServerStreamTracerFactory(
-      Tagger tagger,
-      TagContextBinarySerializer tagCtxSerializer,
-      StatsRecorder statsRecorder,
-      Supplier<Stopwatch> stopwatchSupplier,
-      boolean propagateTags,
-      boolean recordStartedRpcs,
-      boolean recordFinishedRpcs,
-      boolean recordRealTimeMetrics) {
-    CensusStatsModule censusStats =
-        new CensusStatsModule(
-            tagger, tagCtxSerializer, statsRecorder, stopwatchSupplier,
-            propagateTags, recordStartedRpcs, recordFinishedRpcs, recordRealTimeMetrics);
-    return censusStats.getServerTracerFactory();
+    return io.grpc.census.explicit.InternalCensusStatsAccessor.getServerStreamTracerFactory(
+        recordStartedRpcs, recordFinishedRpcs, recordRealTimeMetrics);
   }
 }

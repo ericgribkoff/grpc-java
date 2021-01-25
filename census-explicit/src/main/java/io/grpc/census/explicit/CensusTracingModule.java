@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.grpc.census;
+package io.grpc.census.explicit;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -39,6 +39,8 @@ import io.opencensus.trace.SpanContext;
 import io.opencensus.trace.Status;
 import io.opencensus.trace.Tracer;
 import io.opencensus.trace.propagation.BinaryFormat;
+import io.opencensus.trace.propagation.SpanContextParseException;
+import io.opencensus.trace.propagation.TextFormat;
 import io.opencensus.trace.unsafe.ContextUtils;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.logging.Level;
@@ -88,6 +90,7 @@ final class CensusTracingModule {
   private final Tracer censusTracer;
   @VisibleForTesting
   final Metadata.Key<SpanContext> tracingHeader;
+  private final TextFormat censusPropagationTextFormat;
   private final TracingClientInterceptor clientInterceptor = new TracingClientInterceptor();
   private final ServerTracerFactory serverTracerFactory = new ServerTracerFactory();
 
@@ -112,6 +115,15 @@ final class CensusTracingModule {
               }
             }
           });
+    this.censusPropagationTextFormat = null;
+  }
+
+  CensusTracingModule(
+          Tracer censusTracer, final TextFormat censusPropagationTextFormat) {
+    this.censusTracer = checkNotNull(censusTracer, "censusTracer");
+    checkNotNull(censusPropagationTextFormat, "censusPropagationTextFormat");
+    this.tracingHeader = null;
+    this.censusPropagationTextFormat = censusPropagationTextFormat;
   }
 
   /**
@@ -244,8 +256,20 @@ final class CensusTracingModule {
     public ClientStreamTracer newClientStreamTracer(
         ClientStreamTracer.StreamInfo info, Metadata headers) {
       if (span != BlankSpan.INSTANCE) {
-        headers.discardAll(tracingHeader);
-        headers.put(tracingHeader, span.getContext());
+        if (tracingHeader != null) {
+          headers.discardAll(tracingHeader);
+          headers.put(tracingHeader, span.getContext());
+        } else {
+          censusPropagationTextFormat.inject(
+              span.getContext(),
+              headers,
+              new TextFormat.Setter<Metadata>() {
+                @Override
+                public void put(Metadata carrier, String key, String value) {
+                  carrier.put(Metadata.Key.of(key, Metadata.ASCII_STRING_MARSHALLER), value);
+                }
+              });
+        }
       }
       return new ClientTracer(span);
     }
@@ -364,7 +388,25 @@ final class CensusTracingModule {
     @SuppressWarnings("ReferenceEquality")
     @Override
     public ServerStreamTracer newServerStreamTracer(String fullMethodName, Metadata headers) {
-      SpanContext remoteSpan = headers.get(tracingHeader);
+      SpanContext remoteSpan;
+      if (tracingHeader != null) {
+        remoteSpan = headers.get(tracingHeader);
+      } else {
+        try {
+          remoteSpan =
+              censusPropagationTextFormat.extract(
+                  headers,
+                  new TextFormat.Getter<Metadata>() {
+                    @Nullable
+                    @Override
+                    public String get(Metadata carrier, String key) {
+                      return carrier.get(Metadata.Key.of(key, Metadata.ASCII_STRING_MARSHALLER));
+                    }
+                  });
+        } catch (SpanContextParseException e) {
+          remoteSpan = null;
+        }
+      }
       if (remoteSpan == SpanContext.INVALID) {
         remoteSpan = null;
       }

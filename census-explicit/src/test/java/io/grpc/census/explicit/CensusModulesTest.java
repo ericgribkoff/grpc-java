@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.grpc.census;
+package io.grpc.census.explicit;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
@@ -58,7 +58,7 @@ import io.grpc.ServerServiceDefinition;
 import io.grpc.ServerStreamTracer;
 import io.grpc.ServerStreamTracer.ServerCallInfo;
 import io.grpc.Status;
-import io.grpc.census.internal.DeprecatedCensusConstants;
+import io.grpc.census.explicit.internal.DeprecatedCensusConstants;
 import io.grpc.internal.FakeClock;
 import io.grpc.internal.testing.StatsTestUtils;
 import io.grpc.internal.testing.StatsTestUtils.FakeStatsRecorder;

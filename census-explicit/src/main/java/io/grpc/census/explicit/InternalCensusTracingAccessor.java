@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The gRPC Authors
+ * Copyright 2021 The gRPC Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-package io.grpc.census;
+package io.grpc.census.explicit;
 
 import io.grpc.ClientInterceptor;
 import io.grpc.Internal;
 import io.grpc.ServerStreamTracer;
+import io.opencensus.trace.Tracing;
 
 /**
  * Accessor for getting {@link ClientInterceptor} or {@link ServerStreamTracer.Factory} with
@@ -35,13 +36,21 @@ public final class InternalCensusTracingAccessor {
    * Returns a {@link ClientInterceptor} with default tracing implementation.
    */
   public static ClientInterceptor getClientInterceptor() {
-    return io.grpc.census.explicit.InternalCensusTracingAccessor.getClientInterceptor();
+    CensusTracingModule censusTracing =
+        new CensusTracingModule(
+            Tracing.getTracer(),
+            Tracing.getPropagationComponent().getBinaryFormat());
+    return censusTracing.getClientInterceptor();
   }
 
   /**
    * Returns a {@link ServerStreamTracer.Factory} with default stats implementation.
    */
   public static ServerStreamTracer.Factory getServerStreamTracerFactory() {
-    return io.grpc.census.explicit.InternalCensusTracingAccessor.getServerStreamTracerFactory();
+    CensusTracingModule censusTracing =
+        new CensusTracingModule(
+            Tracing.getTracer(),
+            Tracing.getPropagationComponent().getBinaryFormat());
+    return censusTracing.getServerTracerFactory();
   }
 }

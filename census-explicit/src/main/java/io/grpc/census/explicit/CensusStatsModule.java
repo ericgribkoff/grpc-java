@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.grpc.census;
+package io.grpc.census.explicit;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
@@ -35,7 +35,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import io.grpc.StreamTracer;
-import io.grpc.census.internal.DeprecatedCensusConstants;
+import io.grpc.census.explicit.internal.DeprecatedCensusConstants;
 import io.opencensus.contrib.grpc.metrics.RpcMeasureConstants;
 import io.opencensus.stats.Measure.MeasureDouble;
 import io.opencensus.stats.Measure.MeasureLong;

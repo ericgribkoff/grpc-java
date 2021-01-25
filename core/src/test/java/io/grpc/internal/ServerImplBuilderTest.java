@@ -61,9 +61,9 @@ public class ServerImplBuilderTest {
 
     assertEquals(3, factories.size());
     assertThat(factories.get(0).getClass().getName())
-        .isEqualTo("io.grpc.census.CensusStatsModule$ServerTracerFactory");
+        .isEqualTo("io.grpc.census.explicit.CensusStatsModule$ServerTracerFactory");
     assertThat(factories.get(1).getClass().getName())
-        .isEqualTo("io.grpc.census.CensusTracingModule$ServerTracerFactory");
+        .isEqualTo("io.grpc.census.explicit.CensusTracingModule$ServerTracerFactory");
     assertThat(factories.get(2)).isSameInstanceAs(DUMMY_USER_TRACER);
   }
 
@@ -76,7 +76,7 @@ public class ServerImplBuilderTest {
 
     assertEquals(2, factories.size());
     assertThat(factories.get(0).getClass().getName())
-        .isEqualTo("io.grpc.census.CensusTracingModule$ServerTracerFactory");
+        .isEqualTo("io.grpc.census.explicit.CensusTracingModule$ServerTracerFactory");
     assertThat(factories.get(1)).isSameInstanceAs(DUMMY_USER_TRACER);
   }
 
@@ -89,7 +89,7 @@ public class ServerImplBuilderTest {
 
     assertEquals(2, factories.size());
     assertThat(factories.get(0).getClass().getName())
-        .isEqualTo("io.grpc.census.CensusStatsModule$ServerTracerFactory");
+        .isEqualTo("io.grpc.census.explicit.CensusStatsModule$ServerTracerFactory");
     assertThat(factories.get(1)).isSameInstanceAs(DUMMY_USER_TRACER);
   }
 

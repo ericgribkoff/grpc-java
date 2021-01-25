@@ -418,9 +418,9 @@ public class ManagedChannelImplBuilderTest {
     List<ClientInterceptor> effectiveInterceptors = builder.getEffectiveInterceptors();
     assertEquals(3, effectiveInterceptors.size());
     assertThat(effectiveInterceptors.get(0).getClass().getName())
-        .isEqualTo("io.grpc.census.CensusTracingModule$TracingClientInterceptor");
+        .isEqualTo("io.grpc.census.explicit.CensusTracingModule$TracingClientInterceptor");
     assertThat(effectiveInterceptors.get(1).getClass().getName())
-        .isEqualTo("io.grpc.census.CensusStatsModule$StatsClientInterceptor");
+        .isEqualTo("io.grpc.census.explicit.CensusStatsModule$StatsClientInterceptor");
     assertThat(effectiveInterceptors.get(2)).isSameInstanceAs(DUMMY_USER_INTERCEPTOR);
   }
 
@@ -431,7 +431,7 @@ public class ManagedChannelImplBuilderTest {
     List<ClientInterceptor> effectiveInterceptors = builder.getEffectiveInterceptors();
     assertEquals(2, effectiveInterceptors.size());
     assertThat(effectiveInterceptors.get(0).getClass().getName())
-        .isEqualTo("io.grpc.census.CensusTracingModule$TracingClientInterceptor");
+        .isEqualTo("io.grpc.census.explicit.CensusTracingModule$TracingClientInterceptor");
     assertThat(effectiveInterceptors.get(1)).isSameInstanceAs(DUMMY_USER_INTERCEPTOR);
   }
 
@@ -442,7 +442,7 @@ public class ManagedChannelImplBuilderTest {
     List<ClientInterceptor> effectiveInterceptors = builder.getEffectiveInterceptors();
     assertEquals(2, effectiveInterceptors.size());
     assertThat(effectiveInterceptors.get(0).getClass().getName())
-        .isEqualTo("io.grpc.census.CensusStatsModule$StatsClientInterceptor");
+        .isEqualTo("io.grpc.census.explicit.CensusStatsModule$StatsClientInterceptor");
     assertThat(effectiveInterceptors.get(1)).isSameInstanceAs(DUMMY_USER_INTERCEPTOR);
   }
 

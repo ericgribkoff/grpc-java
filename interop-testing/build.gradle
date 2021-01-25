@@ -19,6 +19,7 @@ dependencies {
     implementation project(path: ':grpc-alts', configuration: 'shadow'),
             project(':grpc-auth'),
             project(':grpc-census'),
+            project(':grpc-census-explicit'),
             project(':grpc-core'),
             project(':grpc-netty'),
             project(':grpc-okhttp'),
