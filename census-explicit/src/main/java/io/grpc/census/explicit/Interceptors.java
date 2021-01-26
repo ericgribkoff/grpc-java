@@ -57,13 +57,13 @@ public class Interceptors {
   }
 
   /** Returns {@link ServerInterceptor2} that adds stats instrumentation. */
-  public static ServerInterceptor2 getStatsServerInterceptor2() {
+  public static ServerInterceptor2 getStatsServerInterceptor() {
     return new ServerTracerFactoryInterceptor(
         InternalCensusStatsAccessor.getServerStreamTracerFactory(true, true, true));
   }
 
   /** Returns {@link ServerInterceptor2} that adds tracing. */
-  public static ServerInterceptor2 getTracingServerInterceptor2() {
+  public static ServerInterceptor2 getTracingServerInterceptor() {
     return new ServerTracerFactoryInterceptor(
         InternalCensusTracingAccessor.getServerStreamTracerFactory());
   }
